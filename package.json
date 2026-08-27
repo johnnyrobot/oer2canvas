@@ -1,0 +1,64 @@
+{
+  "name": "oer2canvas",
+  "version": "1.0.0",
+  "description": "Open textbook chapters into accessible Canvas pages",
+  "type": "module",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "vite",
+    "dev:relay": "wrangler dev",
+    "deploy": "npm run build && wrangler deploy",
+    "catalog:libretexts": "node scripts/fetch-libretexts-catalog.mjs",
+    "catalog:pressbooks": "node scripts/fetch-pressbooks-catalog.mjs",
+    "catalogs": "npm run catalog:libretexts && npm run catalog:pressbooks",
+    "benchmark:vlm:preflight": "node scripts/vlm-preflight.mjs",
+    "benchmark:vlm": "node scripts/benchmark-vlm.mjs",
+    "benchmark:vlm:review": "node scripts/vlm-review.mjs",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "build": "npm run typecheck && vite build",
+    "test": "vitest run",
+    "test:dist": "node scripts/smoke-dist.mjs",
+    "verify:production": "node scripts/verify-production.mjs",
+    "verify:edge-rate-limit": "node scripts/verify-edge-rate-limit.mjs",
+    "verify:canvas-live": "node --env-file-if-exists=.env.local scripts/verify-canvas-release.mjs",
+    "test:watch": "vitest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
+    "axe-core": "^4.13.0",
+    "lucide-react": "^1.33.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "temml": "^0.13.4"
+  },
+  "overrides": {
+    "@huggingface/transformers": {
+      "onnxruntime-node": "1.29.0",
+      "sharp": "0.35.4"
+    }
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^22.20.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "@vitest/browser": "^4.1.11",
+    "@vitest/browser-playwright": "^4.1.11",
+    "jsdom": "^30.0.1",
+    "playwright": "^1.62.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.125.0"
+  }
+}

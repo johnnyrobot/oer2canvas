@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>oer2canvas</title>
+  <rect width="512" height="512" rx="96" fill="#1f4e79"/>
+  <path fill="#fff" d="M128 128h184c40 0 72 32 72 72v112c0 40-32 72-72 72H128c-18 0-32-14-32-32V160c0-18 14-32 32-32Zm32 64v128h152c9 0 16-7 16-16v-96c0-9-7-16-16-16H160Zm240 0h24c18 0 32 14 32 32v128c0 18-14 32-32 32h-24V192Z"/>
+  <path fill="#7ab0e0" d="M176 224h96v32h-96zm0 56h128v32H176z"/>
+</svg>

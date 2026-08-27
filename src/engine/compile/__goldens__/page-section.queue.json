@@ -1,0 +1,42 @@
+[
+  {
+    "kind": "confirm-decorative",
+    "elementId": "b2c-img-3",
+    "hash": "f30414a10cb5f0a0369b27a897885a5341b96a42",
+    "context": {
+      "src": "https://openstax.org/apps/archive/20260604.144757/resources/f30414a10cb5f0a0369b27a897885a5341b96a42",
+      "reference": "Find the product of the first terms."
+    },
+    "sectionId": "f7978ad8-ed27-4fe4-8a19-26a031ba97ad"
+  },
+  {
+    "kind": "confirm-decorative",
+    "elementId": "b2c-img-4",
+    "hash": "3db0a720e09548bef88bf021bb23400fdfe66d01",
+    "context": {
+      "src": "https://openstax.org/apps/archive/20260604.144757/resources/3db0a720e09548bef88bf021bb23400fdfe66d01",
+      "reference": "Find the product of the outer terms."
+    },
+    "sectionId": "f7978ad8-ed27-4fe4-8a19-26a031ba97ad"
+  },
+  {
+    "kind": "confirm-decorative",
+    "elementId": "b2c-img-5",
+    "hash": "8127ac7a8c394aad06b078d6586d5ac1e554d214",
+    "context": {
+      "src": "https://openstax.org/apps/archive/20260604.144757/resources/8127ac7a8c394aad06b078d6586d5ac1e554d214",
+      "reference": "Find the product of the inner terms."
+    },
+    "sectionId": "f7978ad8-ed27-4fe4-8a19-26a031ba97ad"
+  },
+  {
+    "kind": "confirm-decorative",
+    "elementId": "b2c-img-6",
+    "hash": "0ec512ba5b7719f3326f1622da7f918868bdfcb1",
+    "context": {
+      "src": "https://openstax.org/apps/archive/20260604.144757/resources/0ec512ba5b7719f3326f1622da7f918868bdfcb1",
+      "reference": "Find the product of the last terms."
+    },
+    "sectionId": "f7978ad8-ed27-4fe4-8a19-26a031ba97ad"
+  }
+]

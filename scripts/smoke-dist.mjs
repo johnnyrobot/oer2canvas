@@ -1,0 +1,314 @@
+/**
+ * Smoke test for the BUILT bundle.
+ *
+ * WHY THIS EXISTS. Every other test in this repo runs `src/` through Vite's dev
+ * transform. `npm run build` type-checks and bundles but never executes what it
+ * produced, so the one artifact a user actually receives would otherwise go
+ * unexecuted. Minification can rewrite the
+ * function whose `.toString()` became the axe payload, and the injected script
+ * threw `ReferenceError: t is not defined` inside the audit frame. 357 green
+ * tests and a clean build said nothing about it, because none of them loaded
+ * `dist/`.
+ *
+ * WHAT IT DOES. Serves `dist/` over loopback, stubs every upstream request with
+ * the committed fixtures, and drives the real UI: pick a book, pick a chapter,
+ * wait for the compiled chapter to render. It asserts the audit actually ran —
+ * a rendered chapter with no accessibility verdict would be the degenerate pass.
+ *
+ * It touches NO network. Any request that is not a `dist/` asset and not one of
+ * the stubs below is failed loudly rather than allowed through, so this cannot
+ * quietly start depending on openstax.org being up.
+ *
+ * Run with `npm run test:dist` (build first).
+ */
+import { createServer } from 'node:http'
+import { readFile } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { rmSync, existsSync } from 'node:fs'
+import { extname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { chromium } from 'playwright'
+
+const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)))
+const DIST = join(ROOT, 'dist')
+const FIXTURES = join(ROOT, 'src/sources/fixtures/openstax')
+const PORT = 4173
+
+/** The fixture book: Algebra and Trigonometry, the uuid `release.json` maps. */
+const BOOK = 'Algebra and Trigonometry'
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json',
+  '.svg': 'image/svg+xml',
+  '.jpg': 'image/jpeg',
+  '.png': 'image/png',
+}
+
+function serveDist() {
+  return createServer(async (req, res) => {
+    const path = decodeURIComponent((req.url ?? '/').split('?')[0])
+    // SPA fallback, matching `not_found_handling: "single-page-application"`.
+    const candidate = join(DIST, path === '/' ? 'index.html' : path)
+    const file = existsSync(candidate) && extname(candidate) ? candidate : join(DIST, 'index.html')
+    try {
+      const body = await readFile(file)
+      res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' })
+      res.end(body)
+    } catch (e) {
+      res.writeHead(500)
+      res.end(String(e))
+    }
+  })
+}
+
+const fixture = (name) => readFile(join(FIXTURES, name))
+
+/**
+ * Stub every upstream hop with a committed fixture.
+ *
+ * The page fixture is the Preface for EVERY section id. That is deliberate: this
+ * is a smoke test for "does the built bundle work at all", not a milestone
+ * measurement, and the Preface is the cheapest page we have. `golden.test.ts`
+ * owns output correctness.
+ */
+async function stubUpstream(page, failures) {
+  await page.route('**/*', async (route) => {
+    const url = route.request().url()
+    if (url.startsWith(`http://localhost:${PORT}/relay`)) {
+      return route.fulfill({ contentType: 'application/json', body: await fixture('release.json') })
+    }
+    if (url.startsWith(`http://localhost:${PORT}/`)) return route.continue()
+    const contents = url.match(/\/contents\/[^/]+@[^/]+?(:[^/]+)?\.json$/)
+    if (contents) {
+      const body = await fixture(contents[1] ? 'page.json' : 'book-toc.json')
+      return route.fulfill({ contentType: 'application/json', body })
+    }
+    // Committed on disk with a `.jpg` extension the content URL does not carry.
+    const image = url.match(/\/resources\/([0-9a-f]{40})$/)
+    if (image) {
+      try {
+        return await route.fulfill({
+          contentType: 'image/jpeg',
+          body: await fixture(join('resources', `${image[1]}.jpg`)),
+        })
+      } catch {
+        failures.push(`no committed fixture image for ${image[1]}`)
+        return route.abort()
+      }
+    }
+    // Anything else would be a real network call. Record it and fail the request
+    // rather than letting the suite silently acquire a dependency on the internet.
+    failures.push(`unstubbed request escaped to the network: ${url}`)
+    return route.abort()
+  })
+}
+
+async function main() {
+  if (!existsSync(join(DIST, 'index.html'))) {
+    throw new Error('dist/index.html not found — run `npm run build` first')
+  }
+
+  const builtHtml = await readFile(join(DIST, 'index.html'), 'utf8')
+  if (!builtHtml.includes('<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex"')) {
+    throw new Error('dist/index.html does not opt out of search indexing')
+  }
+  const builtHeaders = await readFile(join(DIST, '_headers'), 'utf8')
+  if (!builtHeaders.includes('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet, noimageindex')) {
+    throw new Error('dist/_headers does not opt every static asset out of search indexing')
+  }
+  const serviceWorker = await readFile(join(DIST, 'sw.js'), 'utf8')
+  // The generated Workbox navigation route must keep Worker-controlled
+  // responses out of the app HTML cache. Checking the built artifact catches a
+  // config change that looks correct in TypeScript but serializes a broader
+  // matcher into the shipped service worker.
+  for (const path of ['/relay', '/healthz']) {
+    if (!serviceWorker.includes(path)) {
+      throw new Error(`service worker does not mention the non-cacheable ${path} route`)
+    }
+  }
+  if (!serviceWorker.includes('oer2canvas-html')) {
+    throw new Error('service worker navigation cache is missing')
+  }
+  const robots = await readFile(join(DIST, 'robots.txt'), 'utf8')
+  if (
+    !robots.includes('User-agent: *') ||
+    !robots.includes('Content-Signal: search=no, ai-input=no, ai-train=no, use=immediate') ||
+    !robots.includes('Allow: /') ||
+    /^Sitemap:/im.test(robots)
+  ) {
+    throw new Error('dist/robots.txt must expose noindex headers without advertising a sitemap')
+  }
+
+  const manifest = JSON.parse(await readFile(join(DIST, 'manifest.webmanifest'), 'utf8'))
+  if (!Array.isArray(manifest.icons) || manifest.icons.length < 2) {
+    throw new Error('PWA manifest has fewer than two install icons')
+  }
+  for (const icon of manifest.icons) {
+    if (!existsSync(join(DIST, icon.src.replace(/^\//, '')))) {
+      throw new Error(`PWA manifest icon is missing from dist: ${icon.src}`)
+    }
+  }
+
+  const server = serveDist()
+  await new Promise((r) => server.listen(PORT, r))
+
+  const browser = await chromium.launch()
+  // Service workers would serve a PRECACHED bundle, which is not necessarily the
+  // one just built. Block them so this always exercises the current dist.
+  const context = await browser.newContext({ serviceWorkers: 'block' })
+  const page = await context.newPage()
+
+  const failures = []
+  const consoleErrors = []
+  page.on('pageerror', (e) => consoleErrors.push(String(e)))
+  await stubUpstream(page, failures)
+
+  try {
+    await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'domcontentloaded' })
+
+    // This assertion runs against the compiled artifact, so a source-level
+    // conditional that is accidentally enabled or dropped by deployment
+    // configuration cannot pass unnoticed.
+    const expectedCanvasOrigin = process.env.OER2CANVAS_EXPECT_SELF_HOSTED_CANVAS_ORIGIN?.trim()
+    if (expectedCanvasOrigin) {
+      const canvasButton = page.getByRole('button', { name: /A Canvas course/i })
+      if (await canvasButton.count() !== 1) failures.push('self-host build has no Canvas destination')
+      else await canvasButton.click()
+
+      const address = page.getByLabel('Canvas address')
+      if (await address.count() !== 1 || await address.inputValue() !== expectedCanvasOrigin) {
+        failures.push('self-host build did not expose the configured Canvas origin')
+      } else if (await address.isEditable()) {
+        failures.push('self-host build left the pinned Canvas origin editable')
+      }
+      if (await page.getByLabel('Access token').count() !== 1) {
+        failures.push('self-host build has no Canvas access-token field')
+      }
+    } else {
+      if (await page.getByRole('button', { name: /A Canvas course/i }).count()) {
+        failures.push('public build exposes the direct Canvas destination')
+      }
+      if (await page.getByLabel('Canvas address').count()) {
+        failures.push('public build exposes the Canvas address field')
+      }
+      if (await page.getByLabel('Access token').count()) {
+        failures.push('public build exposes the Canvas access-token field')
+      }
+    }
+
+    // The workflow opens on Destination now: "where does this go?" is asked
+    // before anything is picked. Cartridge is the credential-free answer, so
+    // this smoke test still runs entirely offline against committed fixtures.
+    await page.getByRole('button', { name: /A cartridge file/i }).click()
+    await page.getByRole('button', { name: BOOK, exact: true }).click()
+    // Selection is a set: tick the chapter, then commit it. The two steps are
+    // the point — the set is visible and changeable before anything runs.
+    await page.getByRole('checkbox', { name: /^Chapter 1\b/ }).click()
+    await page.getByRole('button', { name: /^Prepare 1 chapter$/ }).click()
+
+    // The compiled chapter, or the error region, whichever arrives first.
+    const verdict = page.getByText(/No blocking issues found\.|blocking issue/i).first()
+    await Promise.race([
+      verdict.waitFor({ state: 'visible', timeout: 120_000 }),
+      page
+        .getByRole('alert')
+        .filter({ hasText: /\S/ })
+        .waitFor({ state: 'visible', timeout: 120_000 }),
+    ])
+
+    const alert = (await page.getByRole('alert').textContent())?.trim()
+    if (alert) failures.push(`app reported an error: ${alert}`)
+
+    // Not just "a chapter rendered" — the audit has to have produced a verdict.
+    // Without this, a build that renders content and audits nothing would pass.
+    if (!(await verdict.isVisible().catch(() => false))) {
+      failures.push('the compiled chapter rendered no accessibility verdict — the audit did not run')
+    }
+
+    /*
+     * ...and then all the way to a real file on disk.
+     *
+     * The unit tests prove the zip writer and the manifest builder in isolation,
+     * against synthetic sections. This is the only check that runs the whole
+     * chain over REAL publisher markup — fetch, compile, audit, plan, zip — and
+     * then hands the bytes to a third-party `unzip` rather than to the writer
+     * that produced them. A cartridge verified only by its own writer is marking
+     * its own homework.
+     *
+     * It runs LAST because it navigates to Plan, which takes the Review screen
+     * the assertions above read out from under them.
+     */
+    await page.getByRole('button', { name: /^Plan$/ }).click()
+    const download = page.waitForEvent('download', { timeout: 60_000 })
+    await page.getByRole('button', { name: /^Download cartridge/ }).click()
+    const file = await download
+    const saved = join(tmpdir(), file.suggestedFilename())
+    await file.saveAs(saved)
+
+    if (!/\.imscc$/.test(file.suggestedFilename())) {
+      failures.push(`cartridge filename is not an .imscc: ${file.suggestedFilename()}`)
+    }
+    try {
+      execFileSync('unzip', ['-t', saved], { stdio: 'pipe' })
+      const listed = execFileSync('unzip', ['-Z1', saved], { encoding: 'utf8' }).trim().split('\n')
+      if (!listed.includes('imsmanifest.xml')) {
+        failures.push(`cartridge has no imsmanifest.xml (has: ${listed.slice(0, 5).join(', ')})`)
+      }
+      const pages = listed.filter((n) => n.startsWith('wiki_content/'))
+      // One page would mean a chapter collapsed into a single resource, which is
+      // the modelling error the Plan screen exists to have got right.
+      if (pages.length < 2) {
+        failures.push(`cartridge has ${pages.length} page(s); a real chapter has one per section`)
+      }
+      const manifest = execFileSync('unzip', ['-p', saved, 'imsmanifest.xml'], { encoding: 'utf8' })
+      if (!manifest.includes('imsccv1p1')) failures.push('manifest is not CC 1.1')
+      /*
+       * The marker, guarded end to end because losing it is SILENT: the import
+       * still succeeds, still builds the modules, still stores every byte — and
+       * creates no pages at all. That is how it was found in the first place, by
+       * importing into a live Canvas and looking at an empty Pages list.
+       */
+      if (!listed.includes('course_settings/canvas_export.txt')) {
+        failures.push('cartridge has no canvas_export.txt — Canvas will import pages as file attachments')
+      }
+      // Shipping the marker is not enough; Canvas finds it through the manifest.
+      // Measured: without this element every page imports as a file attachment.
+      if (!manifest.includes('learning-application-resource')) {
+        failures.push('manifest does not declare course_settings — Canvas will import pages as file attachments')
+      }
+      const moduleMeta = execFileSync('unzip', ['-p', saved, 'course_settings/module_meta.xml'], { encoding: 'utf8' })
+      const wikiItems = (moduleMeta.match(/<content_type>WikiPage<\/content_type>/g) ?? []).length
+      if (wikiItems !== pages.length) {
+        failures.push(`module_meta declares ${wikiItems} WikiPage items for ${pages.length} pages`)
+      }
+      for (const path of pages) {
+        if (!manifest.includes(path)) failures.push(`manifest does not reference ${path}`)
+      }
+    } catch (e) {
+      failures.push(`the downloaded cartridge is not a readable zip: ${e.message}`)
+    } finally {
+      rmSync(saved, { force: true })
+    }
+  } catch (e) {
+    failures.push(`driving the built app failed: ${e.message}`)
+  }
+
+  for (const e of consoleErrors) failures.push(`uncaught error in the page: ${e}`)
+
+  await browser.close()
+  await new Promise((r) => server.close(r))
+
+  if (failures.length) {
+    console.error(`\ndist smoke test FAILED (${failures.length}):`)
+    for (const f of failures) console.error(`  - ${f}`)
+    process.exit(1)
+  }
+  console.log('dist smoke test passed: the built bundle compiles and audits a chapter.')
+}
+
+await main()

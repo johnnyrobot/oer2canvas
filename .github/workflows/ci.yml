@@ -1,0 +1,88 @@
+# Every check this repo has, run by something other than memory.
+#
+# `npm run test:dist` guards a failure mode the source-level checks cannot see:
+# minification can rewrite the function behind `axe.source`, and the ordinary
+# test suite does not load `dist/`. `scripts/smoke-dist.mjs` closes that gap.
+#
+# It is deliberately NOT in `npm run build`, which would launch Chromium on every
+# build. Here is where it belongs instead.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A superseded push has nothing left to say. Cancel it rather than paying for it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # Matches the version this is developed against. Vite 8 / Vitest 4 /
+          # TypeScript 7 all want a current Node.
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      # BEFORE the test run, not after it. The issue's suggested ordering put
+      # this at step 5, which would not work: `vitest.config.ts` declares two
+      # projects and the `browser` one runs every `*.browser.test.*` in headless
+      # Chromium through the Playwright provider. `scripts/smoke-dist.mjs`
+      # imports `chromium` from `playwright` directly and needs it too. Without
+      # this step both fail, and the failure looks like a broken test rather
+      # than a missing binary.
+      #
+      # Not cached, on purpose. The binary caches well but `--with-deps` also
+      # installs OS packages that a cache hit would skip, and a runner image
+      # that drifts out from under a warm cache produces exactly the kind of
+      # intermittent failure that teaches people to re-run CI until it passes.
+      # Buying speed with flakiness here would be a bad trade in the one place
+      # that is supposed to be trustworthy.
+      #
+      # MEASURED, from the first green run: this step is 25s of a 2m15s job.
+      # The tests are 77s of it — six seconds locally, so the runner is where
+      # the time goes, not this. If caching is ever revisited, revisit it with
+      # those numbers rather than the assumption that the install dominates.
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      # Run separately from `npm run build`, which also type-checks, so that a
+      # type error is reported by a step named "typecheck" rather than one named
+      # "build". It costs about half a second to say the true thing.
+      #
+      # BOTH tsconfig projects, and that is load-bearing: `src/no-node-globals.ts`
+      # is a compile-time tripwire that only fires when this runs, and reducing
+      # this to a single `tsc --noEmit` would silently drop the node project.
+      - name: Typecheck (app and node projects)
+        run: npm run typecheck
+
+      - name: Tests (unit in jsdom, browser in headless Chromium)
+        run: npx vitest run
+
+      - run: npm run build
+
+      # The point of this file. Serves the built bundle over loopback, stubs
+      # every upstream request with the committed fixtures, and drives the real
+      # UI until a chapter is compiled AND audited — a rendered chapter with no
+      # verdict is the degenerate pass it explicitly rejects.
+      #
+      # It touches no network by design: any request that is not a `dist/` asset
+      # and not one of its stubs is failed loudly. If this ever goes red because
+      # of a network call, the fix is the call, not the stub list.
+      - name: Smoke-test the built bundle
+        run: npm run test:dist

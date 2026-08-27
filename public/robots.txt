@@ -1,0 +1,48 @@
+# Keep the site crawlable only so search engines can read the stronger
+# X-Robots-Tag and HTML noindex directives. Disallowing the page here can leave
+# a bare URL indexed when another site links to it.
+User-agent: *
+Content-Signal: search=no, ai-input=no, ai-train=no, use=immediate
+Allow: /
+
+# Keep common AI search, assistant, training, and archiving crawlers out as a
+# second layer. These directives are advisory; Cloudflare's noindex response
+# header is the site-wide indexing control.
+User-agent: Amazonbot
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Claude-SearchBot
+Disallow: /
+
+User-agent: CloudflareBrowserRenderingCrawler
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: meta-externalagent
+Disallow: /
+
+User-agent: OAI-SearchBot
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /

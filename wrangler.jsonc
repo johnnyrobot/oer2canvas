@@ -1,0 +1,54 @@
+{
+  "name": "oer2canvas",
+  "main": "worker/relay.ts",
+  "compatibility_date": "2026-08-01",
+  // The one public origin. `custom_domain` makes wrangler create and own the
+  // DNS record for this hostname on deploy, so the zone needs no hand-editing.
+  "routes": [{ "pattern": "oer2canvas.johnnyrobot.dev", "custom_domain": true }],
+  // No second origin. A `*.workers.dev` url would serve the same app — including
+  // the relay — from a host the allowlist reasoning never considered, and this
+  // origin's IndexedDB holds the user's Canvas API token. One name, one origin.
+  "workers_dev": false,
+  // Explicitly overrides any stale remote SELF_HOSTED_CANVAS_ORIGIN variable or
+  // secret: the maintained deployment is always cartridge-only. Independent
+  // operators must change this to self-hosted-canvas AND provide one exact
+  // SELF_HOSTED_CANVAS_ORIGIN, as documented in README.md.
+  "vars": { "DEPLOYMENT_MODE": "public-cartridge-only" },
+  "assets": {
+    // Static asset requests are FREE AND UNLIMITED and must stay that way.
+    // Do NOT enable Workers Caching: it makes normally-free static-asset
+    // requests billable at the standard per-request rate.
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/relay", "/healthz"]
+  },
+  // The relay is intentionally public for browser CORS. This in-Worker binding
+  // limits upstream use after an invocation starts. The zone WAF rule documented
+  // in OPERATIONS.md is the separate pre-invocation boundary that protects the
+  // account's Worker-request quota.
+  // Namespace IDs are account-local positive integers; 1001 is reserved for
+  // this Worker and must not be reused by another rate-limit binding.
+  "ratelimits": [
+    {
+      "name": "RELAY_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 60, "period": 60 }
+    }
+  ],
+  // NO `limits.cpu_ms` HERE, AND THAT IS NOT AN OVERSIGHT.
+  //
+  // It used to read `"limits": { "cpu_ms": 10 }`, to make a body-parsing
+  // regression fail loudly rather than silently cost money on a paid plan later.
+  // The Cloudflare API REJECTS the field outright on the Free plan — deploy fails
+  // with "CPU limits are not supported for the Free plan" [code: 100328] — so the
+  // guard could not ship and be deployed at the same time.
+  //
+  // Nothing is lost while this account is on Free: 10ms is the plan's own enforced
+  // ceiling, so the pin was restating a limit the platform already imposes. It
+  // starts mattering the moment the account moves to a paid plan, where the ceiling
+  // rises and a runaway relay becomes billable instead of fatal. PUT IT BACK THEN.
+  "observability": {
+    // Constraint 2: the relay writes nothing, including logs.
+    "enabled": false
+  }
+}

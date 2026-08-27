@@ -1,0 +1,36 @@
+{
+  /*
+   * THE APP PROJECT — everything that ships to a browser, and the tripwire.
+   *
+   * `types` deliberately omits "node". This is a PWA whose whole premise is that
+   * the work happens in the user's browser: a `process`/`Buffer` reference in
+   * `src/` or `worker/` is a bug, and this is what makes it a COMPILE error
+   * rather than a runtime one. Adding "node" here to make some test typecheck
+   * silently re-opens that hole for every shipped file — put the test in
+   * `tsconfig.node.json` instead. `tsconfig.tripwire.test.ts` pins this.
+   */
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "paths": {
+      "@huggingface/transformers": ["./src/transformers-browser.d.ts"]
+    },
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["vitest/globals", "@testing-library/jest-dom"]
+  },
+  "include": ["src", "worker"],
+  /*
+   * The files that legitimately need node, checked by `tsconfig.node.json`
+   * instead: one reads and writes the golden files from disk, the other shells
+   * out to a real `unzip` — which is the entire point of it, since a zip
+   * verified only by its own writer is marking its own homework.
+   */
+  "exclude": ["src/engine/compile/golden.test.ts", "src/engine/export/zip.test.ts"]
+}

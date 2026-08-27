@@ -1,0 +1,19 @@
+{
+  "networks": [
+    { "host": "ecampusontario.pressbooks.pub", "name": "eCampusOntario Open Authoring Platform", "bookCount": 3057 },
+    { "host": "pressbooks.online.ucf.edu", "name": "University of Central Florida Pressbooks", "bookCount": 1938 },
+    { "host": "boisestate.pressbooks.pub", "name": "Boise State Pressbooks", "bookCount": 320 },
+    { "host": "open.maricopa.edu", "name": "Maricopa Open Digital Press", "bookCount": 256 },
+    { "host": "uen.pressbooks.pub", "name": "UEN Pressbooks Consortium", "bookCount": 241 },
+    { "host": "kpu.pressbooks.pub", "name": "Kwantlen Polytechnic University Publishing", "bookCount": 189 },
+    { "host": "ohiostate.pressbooks.pub", "name": "The Ohio State University Pressbooks", "bookCount": 114 },
+    { "host": "louis.pressbooks.pub", "name": "LOUIS Pressbooks", "bookCount": 103 },
+    { "host": "milnepublishing.geneseo.edu", "name": "Milne Publishing", "bookCount": 90, "isDefault": true },
+    { "host": "iastate.pressbooks.pub", "name": "Iowa State University Open Books", "bookCount": 85 },
+    { "host": "viva.pressbooks.pub", "name": "VIVA Open Publishing", "bookCount": 79 },
+    { "host": "open.library.okstate.edu", "name": "Open OKState", "bookCount": 62 },
+    { "host": "oer.pressbooks.pub", "name": "PressbooksOER", "bookCount": 43 },
+    { "host": "rotel.pressbooks.pub", "name": "Remixing Open Textbooks through an Equity Lens (ROTEL)", "bookCount": 38 },
+    { "host": "ncstate.pressbooks.pub", "name": "NC State University Libraries Sites", "bookCount": 34 }
+  ]
+}

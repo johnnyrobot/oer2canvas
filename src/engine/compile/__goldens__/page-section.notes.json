@@ -1,0 +1,59 @@
+[
+  {
+    "step": "strip-chrome",
+    "message": "Removed 2 publisher chrome element(s)",
+    "count": 2
+  },
+  {
+    "step": "absolutize",
+    "message": "Resolved 10 relative url(s)",
+    "count": 10
+  },
+  {
+    "step": "absolutize",
+    "message": "Upgraded 3 url(s) from http to https",
+    "count": 3
+  },
+  {
+    "step": "math",
+    "message": "132 equation(s) already MathML; left as real math. Contrast inside them is measured by computed style rather than by axe, which cannot judge operator glyphs.",
+    "count": 132
+  },
+  {
+    "step": "figures",
+    "message": "Caption for Figure_01_04_001 is label-only (\"Figure 1\"); kept so the cross-reference resolves, not used as an alt source"
+  },
+  {
+    "step": "figures",
+    "message": "Restructured 1 figure(s) into allowlist-safe markup",
+    "count": 1
+  },
+  {
+    "step": "tables",
+    "message": "Table declares role=\"presentation\"; left as the publisher marked it"
+  },
+  {
+    "step": "tables",
+    "message": "Applied Canvas table guidance: 100% width, visible borders, centered captions, and ledger-style row striping where missing.",
+    "count": 5
+  },
+  {
+    "step": "links",
+    "message": "Resolved 29 intra-book link(s)",
+    "count": 29
+  },
+  {
+    "step": "alt",
+    "message": "3 image alt text value(s) shortened to Canvas's 120-character limit",
+    "count": 3
+  },
+  {
+    "step": "attribution",
+    "message": "Added the source and license block required by D9"
+  },
+  {
+    "step": "canvasTemplate",
+    "message": "Applied the Canvas page template: title banner, heading rules, and footer.",
+    "count": 61
+  }
+]

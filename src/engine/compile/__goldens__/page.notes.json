@@ -1,0 +1,26 @@
+[
+  {
+    "step": "strip-chrome",
+    "message": "Removed 2 publisher chrome element(s)",
+    "count": 2
+  },
+  {
+    "step": "absolutize",
+    "message": "Resolved 1 relative url(s)",
+    "count": 1
+  },
+  {
+    "step": "headings",
+    "message": "Re-levelled 25 heading(s) so none skips a level",
+    "count": 25
+  },
+  {
+    "step": "attribution",
+    "message": "Added the source and license block required by D9"
+  },
+  {
+    "step": "canvasTemplate",
+    "message": "Applied the Canvas page template: title banner, heading rules, and footer.",
+    "count": 5
+  }
+]

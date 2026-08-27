@@ -1,0 +1,27 @@
+{
+  /*
+   * THE NODE PROJECT — the build tooling and the one test that touches the disk.
+   *
+   * Extends the app project so the compiler options cannot drift apart, and adds
+   * exactly one thing: node types. `include` names files individually because
+   * this list is meant to be hard to grow by accident — anything added here opts
+   * out of the app project's no-node-globals guarantee.
+   *
+   * NOT composite, deliberately. Composite requires every transitively imported
+   * file to be listed, which would mean re-listing most of `src/` here; without
+   * it the ~40 modules `golden.test.ts` pulls in come along on their own. They
+   * are still checked WITHOUT node types by the app project, so the tripwire
+   * holds for every one of them.
+   */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "vitest/globals", "@testing-library/jest-dom"]
+  },
+  "include": [
+    "vite.config.ts",
+    "vitest.config.ts",
+    "src/engine/compile/golden.test.ts",
+    "src/engine/export/zip.test.ts"
+  ],
+  "exclude": []
+}

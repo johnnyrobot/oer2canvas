@@ -1,0 +1,158 @@
+/*
+ * The queue screen's own rules. Not one of them is a colour.
+ *
+ * `App.css` leaves colour to the user agent, because inventing a palette takes
+ * on a 1.4.3 obligation for no benefit. Nothing here reopens that.
+ */
+
+/*
+ * Region B: present in the accessibility tree, absent from the screen.
+ *
+ * NOT `display: none` and NOT `visibility: hidden` — both remove the element
+ * from the accessibility tree, which is where a live region does its entire
+ * job. This is the clip idiom precisely because it leaves the node announced
+ * and unseen.
+ *
+ * It matters visually too: a refusal is delivered BOTH here and inline on the
+ * card (§4). Without this rule the instructor reads the same sentence twice.
+ */
+.b2c-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * Region E: publisher content, set apart by geometry (A10).
+ *
+ * Everything above this block is our tool asking a question; everything inside
+ * it is somebody else's book quoted inside our interface. That boundary carries
+ * information rather than grouping — an instructor answering "does the text
+ * already say this?" is using it — which is why the render gets chrome and the
+ * card and the jump list deliberately do not.
+ *
+ * `currentColor`, so this inherits whatever the user agent, the user's theme or
+ * a forced-colors mode has decided text should be. It is the same "geometry,
+ * not colour" move the element highlight makes below.
+ */
+.b2c-queue-render {
+  border-inline-start: 3px solid currentColor;
+  padding-inline-start: 1rem;
+  margin-inline-start: 0.25rem;
+}
+
+/*
+ * The element the card is asking about.
+ *
+ * Kept separable from the focus ring BY GEOMETRY ALONE. With no palette both are
+ * near-black and they mean different things — one is what you are judging, the
+ * other is what your keystroke will hit — so the levers are weight and offset:
+ * this is thicker than any UA focus ring and stands further off the element.
+ *
+ * `outline` rather than `border`, because it must not move the publisher's
+ * layout by a single pixel. The instructor is judging how the element sits in
+ * the text, and a highlight that reflows the paragraph changes the evidence.
+ */
+.b2c-queue-target {
+  outline: 3px solid currentColor;
+  outline-offset: 6px;
+}
+
+/*
+ * The control cluster: a row, with the safe spacing SC 2.5.8 asks for between
+ * adjacent targets.
+ */
+.b2c-queue-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* E9: a draft is a tool inside the writing card, never an accepted answer. */
+.b2c-vlm-draft {
+  margin-block: 1rem;
+  padding: 0.75rem;
+  border: 1px dashed currentColor;
+}
+
+.b2c-vlm-draft label,
+.b2c-vlm-draft select {
+  display: block;
+}
+
+.b2c-vlm-draft select {
+  max-width: 100%;
+  min-height: 2.75rem;
+  margin-block: 0.25rem 0.75rem;
+}
+
+/*
+ * Narrow: the cluster is pinned to the bottom edge and held to 44px (A7).
+ *
+ * The hard problem this solves is the element preview. The outlined image sits
+ * in the middle of a rendered section, so on a phone the card that answers it
+ * has scrolled off the top: pinning the whole card would eat half the screen
+ * and occlude the evidence, and pinning nothing costs a scroll round-trip per
+ * item, which is the whole rhythm the queue exists for.
+ *
+ * BY POSITION, NEVER BY MOVING IT IN THE MARKUP. DOM order is reading order is
+ * focus order on this screen, and a second copy of these controls would be two
+ * live instances of one action — an ARIA and focus bug farm. `position: fixed`
+ * takes the cluster out of flow without touching any of the three orders.
+ *
+ * 44px, not the 24px floor SC 2.5.8 sets: `App.css`'s padding yields about 33px,
+ * which clears AA and misses SC 2.5.5 and every touch convention. This is the
+ * one control an instructor hits twelve times in a row with a thumb, and raising
+ * it costs padding, not colour.
+ *
+ * `Canvas`/`CanvasText` are system colours, not a palette — they are whatever
+ * the user agent, the user's theme or a forced-colors mode says a page is, which
+ * is exactly the 1.4.3 obligation this project declines to take on.
+ */
+@media (max-width: 40rem) {
+  .b2c-queue-card .b2c-queue-controls {
+    position: fixed;
+    /* The imported-content preview is an isolated paint container. Keep this
+       app-owned fixed cluster explicitly above that later DOM sibling so the
+       preview can never intercept the primary actions on a narrow screen. */
+    z-index: 1;
+    inset-inline: 0;
+    inset-block-end: 0;
+    margin: 0;
+    padding: 0.5rem;
+    background: Canvas;
+    color: CanvasText;
+    border-block-start: 1px solid currentColor;
+  }
+
+  .b2c-queue-card .b2c-queue-controls button {
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
+
+  /*
+    Room under the page for the pinned cluster, so it never sits on the render.
+    The height is measured and published by `QueueView` — see the comment there
+    for why this is not a constant. The fallback is what applies for the one
+    frame before the observer reports, and while there is no card at all.
+  */
+  .b2c-queue {
+    padding-block-end: calc(var(--b2c-cluster-height, 7rem) + 1rem);
+  }
+
+  /*
+    No `scroll-padding` to go with it, deliberately. It would shift every
+    `scrollIntoView({ block: 'center' })` up by half the reserved height, and
+    "centred" would quietly stop meaning centred — for an element the cluster
+    could never have covered anyway, since the viewport centre is far above it.
+    What stops the cluster hiding anything is the padding above: the document is
+    long enough that everything can be scrolled clear of it.
+  */
+}

@@ -1,0 +1,43 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run test:dist
+      - run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - run: npm run verify:production
+        env:
+          PRODUCTION_ORIGIN: https://oer2canvas.johnnyrobot.dev
+      # Runs last because it deliberately triggers the zone WAF's ten-second
+      # mitigation window. Its requests have no target and no Authorization
+      # header, so none can reach a publisher or Canvas.
+      - run: npm run verify:edge-rate-limit
+        env:
+          PRODUCTION_ORIGIN: https://oer2canvas.johnnyrobot.dev

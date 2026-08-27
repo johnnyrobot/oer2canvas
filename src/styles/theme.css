@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+/*
+ * The design language follows `johnnylibretexts/libretexts-reader` while
+ * preserving this app's accessibility floor. The app withholds output from
+ * nonconforming chapters, so its own interface clears the bar it enforces.
+ * Where the reference and the floor disagree, the floor wins — see `--color-brand-700`.
+ *
+ * NO WEBFONT IS FETCHED. Inter is used when the reader already has it and falls
+ * back to the system stack otherwise. That keeps the reference's typography
+ * without buying a network dependency, a licensing artefact and a flash of
+ * unstyled text for a wordmark.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-brand-50: #f0f4ff;
+  --color-brand-300: #7ab0e0;
+  /*
+   * MEASURED, not eyeballed: #2e75b6 on white is ~4.6:1 — over the 4.5:1 body
+   * floor but with almost no margin, and under 3:1 against nothing. It is used
+   * for icons, focus rings and large text. Body-size text uses brand-700.
+   */
+  --color-brand-500: #2e75b6;
+  --color-brand-700: #1f4e79; /* ~7.5:1 on white. The safe one for text. */
+  --font-display: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-stone-50 text-neutral-900 font-display;
+  }
+
+  .dark body {
+    @apply bg-neutral-950 text-neutral-100;
+  }
+
+  /*
+   * SC 2.4.7 and 1.4.11. Tailwind's preflight clears the UA focus ring, so a
+   * replacement is not decoration — without this rule the app becomes unusable
+   * by keyboard, which is the failure mode it exists to prevent in other people's
+   * content.
+   */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+  }
+}
