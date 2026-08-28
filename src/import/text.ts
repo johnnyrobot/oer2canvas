@@ -1,5 +1,7 @@
 import type { ImportMetadata, ImportResult } from './types'
 import { capabilityForFilename } from './capability'
+import { documentIds, importProvenance, sha256Hex, validateImportMetadata } from './common'
+import { escapeHtml } from './html'
 
 export type TextImportInput =
   | { kind: 'paste'; text: string }
@@ -21,20 +23,11 @@ function assertWithinLimit(bytes: number): void {
   }
 }
 
-function escapeText(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
-}
-
 function semanticHtml(text: string): string {
   return text
     .trim()
     .split(/\n[\t ]*\n+/)
-    .map((paragraph) => `<p>${paragraph.split('\n').map(escapeText).join('<br>')}</p>`)
+    .map((paragraph) => `<p>${paragraph.split('\n').map(escapeHtml).join('<br>')}</p>`)
     .join('')
 }
 
@@ -47,31 +40,13 @@ async function readUtf8(file: File): Promise<string> {
   }
 }
 
-async function sha256(bytes: Uint8Array): Promise<string> {
-  const owned = new ArrayBuffer(bytes.byteLength)
-  new Uint8Array(owned).set(bytes)
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', owned)
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
-}
-
 export async function importText(
   input: TextImportInput,
   options: TextImportOptions,
 ): Promise<ImportResult> {
   options.signal?.throwIfAborted()
+  validateImportMetadata(options.metadata)
   const title = options.metadata.title.trim()
-  if (!title) throw new Error('Enter a document title before creating the preview.')
-  if (!['own', 'permission', 'public-domain', 'open-license'].includes(options.metadata.rightsAuthority)) {
-    throw new Error('Choose why you have permission to republish this content.')
-  }
-  if (!options.metadata.rightsAcknowledged) {
-    throw new Error('Confirm responsibility for rights and the final accessibility review.')
-  }
-  const licenseName = options.metadata.licenseName?.trim()
-  const licenseUrl = options.metadata.licenseUrl?.trim()
-  if (licenseUrl && !licenseName) {
-    throw new Error('Enter a license name when you provide a license URL.')
-  }
   if (input.kind === 'file') {
     if (capabilityForFilename(input.file.name)?.format !== 'text') {
       throw new Error('Choose a plain-text file with a .txt extension.')
@@ -85,29 +60,13 @@ export async function importText(
   if (!text.trim()) throw new Error('Add some text before creating the preview.')
   const bytes = new TextEncoder().encode(text)
   assertWithinLimit(bytes.byteLength)
-  const sourceSha256 = await sha256(bytes)
+  const sourceSha256 = await sha256Hex(bytes)
   options.signal?.throwIfAborted()
 
-  const id = `document-${sourceSha256.slice(0, 24)}`
-  const sectionId = `${id}-page-1`
-  const license = licenseName
-    ? {
-        name: licenseName,
-        ...(licenseUrl ? { url: licenseUrl } : {}),
-      }
-    : undefined
-  const provenance = {
-    kind: input.kind === 'paste' ? 'paste' as const : 'local-file' as const,
-    ...(input.kind === 'file' ? { originalName: input.file.name } : {}),
-    ...(options.metadata.author ? { author: options.metadata.author } : {}),
-    ...(options.metadata.sourceName ? { sourceName: options.metadata.sourceName } : {}),
-    ...(options.metadata.sourceUrl ? { sourceUrl: options.metadata.sourceUrl } : {}),
-    ...(license ? { license } : {}),
-    rights: {
-      authority: options.metadata.rightsAuthority,
-      acknowledged: options.metadata.rightsAcknowledged,
-    },
-  }
+  const { id, sectionId } = documentIds(sourceSha256)
+  const provenance = importProvenance(options.metadata, input.kind === 'paste'
+    ? { kind: 'paste' }
+    : { kind: 'local-file', originalName: input.file.name })
 
   return {
     work: {

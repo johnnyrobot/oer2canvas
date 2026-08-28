@@ -4,7 +4,8 @@ export type ImportedFormat =
   | 'xls' | 'xlsx' | 'ods' | 'csv'
   | 'text' | 'markdown' | 'html' | 'web'
 
-export type RightsAuthority = 'own' | 'permission' | 'public-domain' | 'open-license'
+export const RIGHTS_AUTHORITIES = ['own', 'permission', 'open-license', 'public-domain'] as const
+export type RightsAuthority = typeof RIGHTS_AUTHORITIES[number]
 
 export interface ImportMetadata {
   title: string

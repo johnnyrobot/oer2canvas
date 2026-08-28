@@ -13,6 +13,7 @@ import type {
   ParserProbeRequest,
   ParserProbeResponse,
 } from '../parsers/probe'
+import { normalizeAnyDocDocument } from '../parsers/anydoc-html'
 
 const ANYDOC_VERSION = '0.2.4'
 const workerScope = self as DedicatedWorkerGlobalScope
@@ -57,7 +58,7 @@ function failure(error: unknown): { code: ParserProbeFailureCode; message: strin
     ? 'needs-ocr'
     : rawCode === 'resourceLimit'
       ? 'resource-limit'
-      : rawCode === 'unsupported' || rawCode === 'malformed' || rawCode === 'encrypted'
+      : rawCode === 'unsupported' || rawCode === 'unsupported-version' || rawCode === 'malformed' || rawCode === 'encrypted'
         ? rawCode
         : 'parse-failed'
   const message = typeof candidate?.message === 'string' && candidate.message.trim()
@@ -104,7 +105,8 @@ workerScope.addEventListener('message', (event: MessageEvent<ParserProbeRequest>
       const hintedFormat = request.formatHint
         ? formatFromExtension(request.formatHint.replace(/^.*\./, ''))
         : undefined
-      const detectedFormat = formatFromBytes(bytes) ?? hintedFormat
+      const contentFormat = formatFromBytes(bytes)
+      const detectedFormat = contentFormat ?? hintedFormat
       const document = toDocument(bytes, detectedFormat)
       const counts = countBlocks(document.blocks)
       const assetBytes = document.assets.reduce((total, asset) => total + asset.data.byteLength, 0)
@@ -119,6 +121,7 @@ workerScope.addEventListener('message', (event: MessageEvent<ParserProbeRequest>
           parser: 'anydoc',
           parserVersion: ANYDOC_VERSION,
           detectedFormat: detectedFormat ?? 'unknown',
+          formatDetection: contentFormat ? 'content' : 'hint',
           inputBytes: request.bytes.byteLength,
           outputBytes: outputBytes(document),
           parseMs: performance.now() - parseStarted,
@@ -126,6 +129,7 @@ workerScope.addEventListener('message', (event: MessageEvent<ParserProbeRequest>
           assetBytes,
           largestAssetBytes,
           counts: { ...counts, assets: document.assets.length },
+          normalized: normalizeAnyDocDocument(document),
         },
       })
     } catch (error) {

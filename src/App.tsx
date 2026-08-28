@@ -504,7 +504,7 @@ export default function App() {
    * seam as publisher content. Parsing and metadata stay above this boundary;
    * the compiler receives only the normalized Chapter.
    */
-  async function prepareImportedText(result: ImportResult) {
+  async function prepareImportedContent(result: ImportResult) {
     const ch = toChapter(result.work)
     run.current?.abort()
     clearDerivedOutput()
@@ -688,7 +688,8 @@ export default function App() {
       {phase === 'chapters' && !book && (
         <SourceBrowser
           onPick={(book) => { void pickBook(book) }}
-          onImportText={(result) => { void prepareImportedText(result) }}
+          onImportText={(result) => { void prepareImportedContent(result) }}
+          onImportDocx={(result) => { void prepareImportedContent(result) }}
         />
       )}
       {phase === 'chapters' && book && (
@@ -735,7 +736,10 @@ export default function App() {
           destination={destination}
           chapters={prepared}
           unansweredCount={partial?.queue.length ?? 0}
-          {...(imported ? { assetCount: imported.work.assets.length } : {})}
+          {...(imported ? {
+            assetCount: imported.work.assets.length,
+            importFindings: imported.report.findings,
+          } : {})}
           {...(existingPages ? { existingPages } : {})}
           /*
            * Offered only for a destination that can actually be produced. The

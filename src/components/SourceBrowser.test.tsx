@@ -81,3 +81,22 @@ test('plain text is a content choice without removing the publisher catalogs', (
   fireEvent.click(screen.getByRole('tab', { name: 'OpenStax' }))
   expect(screen.getByRole('button', { name: 'Algebra and Trigonometry' })).toBeVisible()
 })
+
+test('DOCX upload is a content choice beside plain text and publisher catalogs', () => {
+  render(
+    <SourceBrowser
+      onPick={() => {}}
+      onImportText={() => {}}
+      onImportDocx={() => {}}
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('tab', { name: 'Word document' }))
+  expect(screen.getByLabelText('Word document')).toHaveAttribute('accept', expect.stringContaining('.docx'))
+  expect(screen.getByRole('button', { name: 'Inspect DOCX' })).toBeVisible()
+
+  fireEvent.click(screen.getByRole('tab', { name: 'Plain text' }))
+  expect(screen.getByLabelText('Text to import')).toBeVisible()
+  fireEvent.click(screen.getByRole('tab', { name: 'OpenStax' }))
+  expect(screen.getByRole('button', { name: 'Algebra and Trigonometry' })).toBeVisible()
+})

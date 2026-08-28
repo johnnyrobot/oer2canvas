@@ -33,7 +33,7 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
     extensions: ['.docx'],
     mediaTypes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
     parser: 'anydoc',
-    status: 'probe-only',
+    status: 'enabled',
     probe: parserProbe('anydoc', 'docx'),
   },
   {
@@ -72,6 +72,8 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
 
 const plainText = DOCUMENT_FORMAT_CAPABILITIES.find((entry) => entry.format === 'text')!
 export const PLAIN_TEXT_FILE_ACCEPT = [...plainText.extensions, ...plainText.mediaTypes].join(',')
+const docx = DOCUMENT_FORMAT_CAPABILITIES.find((entry) => entry.format === 'docx')!
+export const DOCX_FILE_ACCEPT = [...docx.extensions, ...docx.mediaTypes].join(',')
 
 export function releaseEnabledFormats(): ImportedFormat[] {
   return DOCUMENT_FORMAT_CAPABILITIES

@@ -4,11 +4,32 @@
 
 **Blocked by:** 01 — Import plain text into a Canvas cartridge; 02 — Prove browser parser workers and establish import budgets.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Format detection validates file content and does not rely solely on the filename extension or MIME type.
-- [ ] Headings, paragraphs, lists, links, and simple tables retain document order and meaningful semantics for the approved fixture corpus.
-- [ ] Parsing occurs in a cancellable browser worker and obeys the established import budgets.
-- [ ] Unsupported or embedded content creates visible findings instead of disappearing silently.
-- [ ] The preview, accessibility audit, plan, and exported cartridge all use the shared document-import path.
-- [ ] Text-only DOCX fixtures complete the workflow without any server-side parsing or document upload.
+- [x] Format detection validates file content and does not rely solely on the filename extension or MIME type.
+- [x] Headings, paragraphs, lists, links, and simple tables retain document order and meaningful semantics for the approved fixture corpus.
+- [x] Parsing occurs in a cancellable browser worker and obeys the established import budgets.
+- [x] Unsupported or embedded content creates visible findings instead of disappearing silently.
+- [x] The preview, accessibility audit, plan, and exported cartridge all use the shared document-import path.
+- [x] Text-only DOCX fixtures complete the workflow without any server-side parsing or document upload.
+
+## Answer
+
+Implemented release-enabled, text-oriented DOCX import for desktop Chrome and Firefox. DOCX bytes
+are content-signature checked, hashed locally, transferred to a fresh cancellable AnyDoc WebAssembly
+Worker, and converted from the AnyDoc model into controlled semantic HTML. The approved corpus
+preserves ordered headings, paragraphs, styled text, external and internal links, lists, and data
+tables. Layout tables are linearized with a warning; embedded images, equations, notes, and other
+recognized-but-unsupported content become visible blockers rather than disappearing. A future
+AnyDoc document-model kind fails explicitly as an unsupported parser version.
+
+The accessible Word-document form captures the shared attribution and rights metadata, reports
+progress and recoverable errors, summarizes extraction counts/findings, and prevents preparation
+when blockers exist. Recoverable warnings remain visible in Plan. Confirmed imports converge at the
+existing `Chapter` compile, accessibility gate, Review, Plan, and Common Cartridge writer; no source
+bytes or derived output are uploaded or persisted.
+
+Verification: TypeScript checks, 97 test files / 860 tests, production build, and built-bundle smoke
+test all pass. The built smoke loads parser assets only on demand, drives a real DOCX through the UI
+to a downloaded cartridge, and unzips the artifact to inspect its semantic page bytes. The production
+build retains its pre-existing chunk-size warning.

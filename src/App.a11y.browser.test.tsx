@@ -4,6 +4,7 @@ import App from './App'
 import { ChapterPicker } from './components/ChapterPicker'
 import { ChapterView } from './components/ChapterView'
 import { PlainTextImporter } from './components/PlainTextImporter'
+import { DocxImporter } from './components/DocxImporter'
 import { QueueView } from './components/queue/QueueView'
 import { newSession, reduce, type QueueSession } from './components/queue/session'
 import { fetchChapter, flattenToc } from './sources/openstax'
@@ -18,6 +19,7 @@ import { queueKeyOf } from './engine/compile/answers'
 import { mergeQueues } from './engine/compile/index'
 import { TABLE_REFUSAL } from './engine/compile/steps/tables'
 import type { CompiledChapter, CompiledSection, QueueItem } from './contracts/index'
+import { semanticDocxFixture } from './import/testing/docx-fixture'
 // The screens under audit are styled by App.css — it is what carries the WCAG 2.2
 // SC 2.5.8 target sizes. Imported explicitly rather than relying on `App` pulling
 // it in, so that auditing a component in isolation still sees the real styling.
@@ -215,6 +217,24 @@ test('screen 1b — the plain-text form and preview have no accessibility violat
   fireEvent.click(screen.getByRole('checkbox', { name: /I am responsible for rights/i }))
   fireEvent.click(screen.getByRole('button', { name: 'Create one-page preview' }))
   await screen.findByRole('heading', { name: 'Preview: Accessible notes' })
+
+  expect(await violationsIn(container)).toEqual([])
+  expect(duplicateIds(container)).toEqual([])
+})
+
+test('screen 1c — the DOCX form and extracted preview have no accessibility violations', async () => {
+  const { container } = render(<DocxImporter onConfirm={() => {}} />)
+  expect(await violationsIn(container)).toEqual([])
+  expect(duplicateIds(container)).toEqual([])
+
+  const file = new File([await semanticDocxFixture()], 'accessible.docx', {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  })
+  fireEvent.change(screen.getByLabelText('Word document'), { target: { files: [file] } })
+  fireEvent.click(screen.getByRole('radio', { name: 'I created or own this content' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: /I am responsible for rights/i }))
+  fireEvent.click(screen.getByRole('button', { name: 'Inspect DOCX' }))
+  await screen.findByRole('heading', { name: 'Preview: accessible' })
 
   expect(await violationsIn(container)).toEqual([])
   expect(duplicateIds(container)).toEqual([])

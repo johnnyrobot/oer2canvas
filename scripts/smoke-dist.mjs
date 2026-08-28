@@ -30,6 +30,7 @@ import { extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { pdfFixture } from '../src/import/testing/pdf-fixture.ts'
+import { semanticDocxFixture } from '../src/import/testing/docx-fixture.ts'
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const DIST = join(ROOT, 'dist')
@@ -198,18 +199,26 @@ async function main() {
       failures.push('initial application load fetched an on-demand parser asset')
     }
 
+    const docxBytes = await semanticDocxFixture()
     const anydoc = await page.evaluate(async ({ probeUrl, source }) => {
       const { probeParser } = await import(probeUrl)
       return probeParser({
         parser: 'anydoc',
         bytes: new Uint8Array(source).buffer,
-        formatHint: 'rtf',
+        formatHint: 'docx',
       })
     }, {
       probeUrl: `/assets/${probeAsset}`,
-      source: Array.from(new TextEncoder().encode('{\\rtf1 Production AnyDoc probe.}')),
+      source: Array.from(docxBytes),
     })
-    if (anydoc.detectedFormat !== 'rtf' || anydoc.parserVersion !== '0.2.4') {
+    if (
+      anydoc.detectedFormat !== 'docx' ||
+      anydoc.formatDetection !== 'content' ||
+      anydoc.parserVersion !== '0.2.4' ||
+      !anydoc.normalized?.html.includes('Cell Biology</h1>') ||
+      !anydoc.normalized?.html.includes('href="#cell-biology"') ||
+      !anydoc.normalized?.html.includes('<table>')
+    ) {
       failures.push(`built AnyDoc probe returned unexpected evidence: ${JSON.stringify(anydoc)}`)
     }
     if (!parserRequest(/anydoc\.worker/) || !parserRequest(/anydoc_wasm_bg/)) {
@@ -264,6 +273,51 @@ async function main() {
         failures.push('public build exposes the Canvas access-token field')
       }
     }
+
+    // Drive the release-enabled DOCX path through the built UI and inspect the
+    // file it downloads. The direct parser probe above proves artifact loading;
+    // this proves the production UI actually connects parsing to audit, Plan,
+    // and the same cartridge writer used by publisher content.
+    await page.getByRole('button', { name: /A cartridge file/i }).click()
+    await page.getByRole('tab', { name: 'Word document' }).click()
+    await page.getByLabel('Word document').setInputFiles({
+      name: 'production-docx.docx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      buffer: Buffer.from(docxBytes),
+    })
+    await page.getByRole('radio', { name: 'I created or own this content' }).click()
+    await page.getByRole('checkbox', { name: /I am responsible for rights/i }).click()
+    await page.getByRole('button', { name: 'Inspect DOCX' }).click()
+    await page.getByRole('heading', { name: 'Preview: production-docx' }).waitFor()
+    await page.getByRole('button', { name: 'Prepare this document' }).click()
+    await page.getByText('Stores DNA').waitFor({ state: 'visible', timeout: 120_000 })
+    await page.getByRole('button', { name: /^Plan$/ }).click()
+
+    const docxDownload = page.waitForEvent('download', { timeout: 60_000 })
+    await page.getByRole('button', { name: /^Download cartridge/ }).click()
+    const docxFile = await docxDownload
+    const savedDocxCartridge = join(tmpdir(), `docx-${docxFile.suggestedFilename()}`)
+    await docxFile.saveAs(savedDocxCartridge)
+    try {
+      execFileSync('unzip', ['-t', savedDocxCartridge], { stdio: 'pipe' })
+      const listed = execFileSync('unzip', ['-Z1', savedDocxCartridge], { encoding: 'utf8' }).trim().split('\n')
+      const pages = listed.filter((name) => name.startsWith('wiki_content/'))
+      if (pages.length !== 1) failures.push(`built DOCX cartridge has ${pages.length} page(s), expected 1`)
+      if (pages[0]) {
+        const html = execFileSync('unzip', ['-p', savedDocxCartridge, pages[0]], { encoding: 'utf8' })
+        if (!html.includes('Cell Biology') || !html.includes('Stores DNA') || !html.includes('<table')) {
+          failures.push('built DOCX cartridge did not retain its heading, table text, and table semantics')
+        }
+      }
+    } catch (e) {
+      failures.push(`built DOCX workflow downloaded an unreadable cartridge: ${e.message}`)
+    } finally {
+      rmSync(savedDocxCartridge, { force: true })
+    }
+
+    // Start a fresh UI session for the independent publisher smoke below.
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.waitForLoadState('networkidle')
 
     // The workflow opens on Destination now: "where does this go?" is asked
     // before anything is picked. Cartridge is the credential-free answer, so

@@ -146,6 +146,32 @@ test('cancellation from the first progress callback stops before bytes enter the
   expect(worker.terminated).toBe(true)
 })
 
+test('a future AnyDoc model kind becomes a non-retryable unsupported-version failure', async () => {
+  const worker = new FakeWorker()
+  const run = createParserProbeRunner({
+    createWorker: () => worker,
+    requestId: () => 'future-model',
+  })
+  const pending = run({ parser: 'anydoc', bytes: new ArrayBuffer(16) })
+
+  worker.emit({
+    kind: 'failure',
+    requestId: 'future-model',
+    error: {
+      code: 'unsupported-version',
+      message: 'AnyDoc returned an unsupported document-model kind: futureBlock.',
+    },
+  })
+
+  await expect(pending).rejects.toMatchObject({
+    name: 'ParserProbeError',
+    code: 'unsupported-version',
+    retryable: false,
+    message: expect.stringMatching(/unsupported document-model kind: futureBlock/i),
+  })
+  expect(worker.terminated).toBe(true)
+})
+
 test('a failing progress consumer cannot strand a parser Worker', async () => {
   const worker = new FakeWorker()
   const run = createParserProbeRunner({ createWorker: () => worker })

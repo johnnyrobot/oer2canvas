@@ -6,13 +6,16 @@ stateless Cloudflare Worker used only where browser CORS prevents a direct reque
 
 ## Release scope
 
-The public web app supports OpenStax, LibreTexts, Pressbooks, pasted plain text, and local
-UTF-8 `.txt` files through one output path:
+The public web app supports OpenStax, LibreTexts, Pressbooks, pasted plain text, local UTF-8
+`.txt` files, and text-oriented `.docx` files through one output path:
 
 - a Common Cartridge 1.1 download, with no Canvas address, account, or token access.
 
 Plain-text imports are processed entirely in the browser, are limited to 2 MiB, and start as
-one Canvas page. The import preview requires a title, a stated basis for republishing the
+one Canvas page. Text-oriented DOCX imports are limited to 16 MiB and parsed locally in a
+disposable AnyDoc WebAssembly Worker. Headings, paragraphs, lists, links, and simple tables are
+converted to controlled semantic HTML. Embedded images and other unsupported content are shown
+as blocking findings instead of being omitted silently. The import preview requires a title, a stated basis for republishing the
 material, and acknowledgement that the user remains responsible for rights and final
 accessibility review. Optional author, source, public URL, and license metadata become the
 page's source-and-license attribution; the app never invents a URL or an open license.
@@ -28,11 +31,12 @@ verified networks and 6,639 books. The optional local VLM alt-text draft runs in
 with WebGPU; the first use downloads and caches the selected Florence-2 base model (about
 318 MiB) and no image or draft is sent to an inference service.
 
-The repository also contains probe-only AnyDoc and PDF Inspector module Workers for DOCX, ODT,
-RTF, EPUB, and PDF feasibility testing. Their parser code and WASM are fetched only when a probe
-starts, and source bytes stay in the browser. These formats are not yet exposed in the release UI;
-the initial document-import release matrix is desktop Chrome and Firefox. Playwright WebKit remains
-diagnostic cross-engine evidence; Safari and mobile browsers are not supported for document import.
+The repository also contains probe-only AnyDoc and PDF Inspector module Workers for ODT, RTF,
+EPUB, and PDF feasibility testing. Parser code and WASM are fetched only after the user starts a
+matching import or probe, and source bytes stay in the browser. ODT, RTF, EPUB, and PDF are not yet
+exposed in the release UI. The document-import release matrix is desktop Chrome and Firefox.
+Playwright WebKit remains diagnostic cross-engine evidence; Safari and mobile browsers are not
+supported for document import.
 
 ## Local development
 

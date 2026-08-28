@@ -3,6 +3,7 @@ import type { CompiledChapter } from '../contracts/index'
 import type { CanvasPage } from '../canvas/client'
 import { buildPlan, commitLabel, reRunBehaviour, type PageStatus } from './plan'
 import type { Destination } from './phases'
+import type { ImportFinding } from '../import/types'
 
 /**
  * What committing would do, before it does it.
@@ -16,7 +17,7 @@ import type { Destination } from './phases'
  * would lose the only structure the user actually chose.
  */
 export function PlanScreen({
-  destination, chapters, unansweredCount, onCommit, existingPages, assetCount,
+  destination, chapters, unansweredCount, onCommit, existingPages, assetCount, importFindings,
 }: {
   destination?: Destination
   chapters: readonly CompiledChapter[]
@@ -29,6 +30,8 @@ export function PlanScreen({
   existingPages?: readonly CanvasPage[]
   /** Present for browser imports, whose packaged assets must be disclosed exactly. */
   assetCount?: number
+  /** Parser uncertainty remains visible after the import preview is left behind. */
+  importFindings?: readonly ImportFinding[]
 }) {
   const plan = buildPlan(chapters, destination, unansweredCount, existingPages)
   const behaviour = reRunBehaviour(destination)
@@ -55,6 +58,25 @@ export function PlanScreen({
         <p className="mt-1 text-sm text-neutral-700 dark:text-neutral-300">
           Packaged assets: {assetCount.toLocaleString()}.
         </p>
+      )}
+      {importFindings && importFindings.length > 0 && (
+        <section
+          aria-labelledby="import-findings-heading"
+          className="mt-4 rounded-lg border border-amber-400 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+        >
+          <h3 id="import-findings-heading" className="font-semibold">Import findings</h3>
+          <p className="mt-1">
+            These extraction findings remain part of the plan and require attention during final review.
+          </p>
+          <ul role="list" className="mt-2 list-disc space-y-1 pl-5">
+            {importFindings.map((finding) => (
+              <li key={`${finding.code}-${finding.sectionId ?? ''}`}>
+                <strong>{finding.severity === 'blocker' ? 'Blocker' : 'Warning'}:</strong>{' '}
+                {finding.message}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {behaviour && (

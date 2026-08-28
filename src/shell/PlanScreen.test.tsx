@@ -69,3 +69,21 @@ test('a ready plan with no way to commit says the course is not connected', () =
   expect(screen.getByText(/Connect Canvas on the Destination screen/)).toBeInTheDocument()
   expect(screen.queryByText(/not built yet/)).not.toBeInTheDocument()
 })
+
+test('browser-import warnings remain visible in the plan summary', () => {
+  render(
+    <PlanScreen
+      destination={{ kind: 'cartridge' }}
+      chapters={CHAPTERS}
+      unansweredCount={0}
+      importFindings={[{
+        code: 'unresolved-link',
+        severity: 'warning',
+        message: 'A relative link could not be preserved; its visible text remains.',
+      }]}
+    />,
+  )
+
+  expect(screen.getByRole('heading', { name: 'Import findings' })).toBeInTheDocument()
+  expect(screen.getByText(/relative link could not be preserved/i)).toBeInTheDocument()
+})

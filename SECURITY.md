@@ -29,9 +29,13 @@ credential, revoke it in Canvas immediately and mention only that it was revoked
 - Pasted and file-selected plain text is decoded as strict UTF-8, limited to 2 MiB, escaped before
   semantic HTML is created, and then subjected to the same allowlist and accessibility gate as
   publisher content. Source files and derived document data remain browser-local.
-- Probe-only AnyDoc and PDF Inspector parsers run in disposable module Workers with transferred
-  buffers, a 30-second timeout, and measured input/page/asset/memory budgets. Parser output remains
-  untrusted, a cancelled or failed Worker is terminated, and these formats are not release-enabled.
+- Release-enabled text-oriented DOCX is limited to 16 MiB and parsed by AnyDoc in a disposable
+  module Worker with a transferred buffer, a 30-second timeout, and measured input/asset/memory
+  budgets. Content signatures must identify DOCX regardless of its filename or reported MIME type.
+  Parser text is escaped into a fixed semantic HTML vocabulary; unsupported or embedded content
+  blocks preparation instead of disappearing. Source files and derived document data remain local.
+- Probe-only ODT, RTF, EPUB, and PDF parsers use the same disposable-Worker boundary. Parser output
+  remains untrusted, and a cancelled or failed Worker is terminated.
 
 ## Operational requirements before launch
 

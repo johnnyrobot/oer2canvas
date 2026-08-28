@@ -21,10 +21,25 @@ export interface ParserProbeCounts {
   assets: number
 }
 
+export interface ParserProbeFinding {
+  code: string
+  severity: 'warning' | 'blocker'
+  message: string
+}
+
+export interface ParserProbeNormalizedContent {
+  html: string
+  findings: ParserProbeFinding[]
+  equations: number
+  notes: number
+  unavailableAssets: number
+}
+
 export interface ParserProbeResult {
   parser: ParserKind
   parserVersion: string
   detectedFormat: string
+  formatDetection?: 'content' | 'hint'
   inputBytes: number
   outputBytes: number
   parseMs: number
@@ -37,11 +52,13 @@ export interface ParserProbeResult {
   pagesNeedingOcr?: number[]
   layoutComplex?: boolean
   hasEncodingIssues?: boolean
+  normalized?: ParserProbeNormalizedContent
 }
 
 export type ParserProbeFailureCode =
   | 'initialization'
   | 'unsupported'
+  | 'unsupported-version'
   | 'needs-ocr'
   | 'malformed'
   | 'encrypted'
@@ -124,7 +141,7 @@ function actionableFailure(
   return new ParserProbeError(
     failure.code,
     `${PARSER_LABEL[parser]} could not inspect this file. ${failure.message}`,
-    failure.code !== 'encrypted' && failure.code !== 'unsupported',
+    failure.code !== 'encrypted' && failure.code !== 'unsupported' && failure.code !== 'unsupported-version',
   )
 }
 
