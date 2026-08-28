@@ -129,8 +129,9 @@ the packaged type is decided by sniffing the actual signature; a claimed/actual 
 dimension decoder reads the same header, so an image whose intrinsic size cannot be decoded also
 blocks rather than shipping without `width`/`height`.
 
-**Limits.** A per-asset cap and a per-document total cap live in `src/import/limits.ts` beside the
-existing parser limits. The anydoc worker already reports `assetBytes` and `largestAssetBytes`.
+**Limits.** No new limits are needed. `PARSER_PROBE_LIMITS` already carries `maximumAssetCount` (64),
+`maximumAssetBytes` (8 MiB) and `maximumIndividualAssetBytes` (4 MiB), each backed by the measured
+2026-08-27 parser benchmark. This work enforces them at packaging time rather than redefining them.
 
 ## Failure modes
 
@@ -173,7 +174,6 @@ own proven upload design, which is issue 09's business.
 | `src/import/parsers/anydoc-html.ts` | Split the image branch by `source.kind`; emit packaged refs |
 | `src/import/assets.ts` *(new)* | Identity, naming, dedup, signature sniffing, dimension decoding |
 | `src/import/types.ts` | Populate `ImportedAsset`; `mediaType` and `extension` hold the **sniffed** values, never the document's declared ones |
-| `src/import/limits.ts` | Per-asset and per-document asset caps |
 | `src/import/to-chapter.ts` | Carry `assets` onto `Chapter` |
 | `src/sources/types.ts` | Optional `assets` on `Chapter` |
 | `src/engine/allowlist.ts` | Packaged-reference predicate for `img.src` |
