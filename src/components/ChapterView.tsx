@@ -1,9 +1,17 @@
 import type { CompiledChapter } from '../contracts/index'
 import { AuditPanel } from './AuditPanel'
 import { CanvasShellStyles } from './CanvasShellStyles'
+import { usePackagedAssetUrls } from './usePackagedAssetUrls'
 
 export function ChapterView({ compiled }: { compiled: CompiledChapter }) {
   const { chapter } = compiled
+  // Display-only resolution of `$IMS-CC-FILEBASE$/oer2canvas/…` tokens to
+  // `blob:` urls. Canvas resolves that token itself at cartridge import time;
+  // a browser never can, so without this every embedded image in this app's
+  // own preview would render broken. `chapter.assets` is absent for catalog
+  // sources (OpenStax/LibreTexts/Pressbooks) — `usePackagedAssetUrls`
+  // defaults to `[]` and `resolve` becomes a no-op pass-through for them.
+  const resolve = usePackagedAssetUrls(chapter.assets)
   return (
     <section aria-labelledby="chapter-heading">
       {/* Without this, every `.b2c-section-body` below renders publisher content
@@ -55,11 +63,14 @@ export function ChapterView({ compiled }: { compiled: CompiledChapter }) {
               things innerHTML would otherwise wire up are already gone. This is
               the same invariant the audit iframe rests on, and it is why neither
               the raw publisher html nor `s.html` (compiled but un-audited) may
-              ever be rendered here — only `s.gate.html`.
+              ever be rendered here — only `s.gate.html`. It is passed through
+              `resolve` for DISPLAY ONLY: `s.gate.html` itself, held in state,
+              is never touched, so the bytes the accessibility gate approved
+              are exactly the bytes the exported cartridge ships.
             */
             <div
               className="b2c-section-body"
-              dangerouslySetInnerHTML={{ __html: s.gate.html }}
+              dangerouslySetInnerHTML={{ __html: resolve(s.gate.html) }}
             />
           )}
         </article>

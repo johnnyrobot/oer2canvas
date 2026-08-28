@@ -16,6 +16,7 @@ import {
 } from '../import/page-plan'
 import type { ImportFinding, ImportReport, ImportResult } from '../import/types'
 import { messageOf } from '../errors'
+import { usePackagedAssetUrls } from './usePackagedAssetUrls'
 import {
   completeImportMetadata,
   ImportMetadataFields,
@@ -131,6 +132,12 @@ export function ImportPlanEditor({
   }, [focusKey])
 
   const { source, plan, metadata } = draft
+  // Display-only resolution of `$IMS-CC-FILEBASE$/oer2canvas/…` tokens to
+  // `blob:` urls for the page previews below. Canvas resolves that token
+  // itself at cartridge import time; a browser never can, and `source.work`
+  // (the parsed document, held in `draft`) is never touched by this — only
+  // the string handed to `dangerouslySetInnerHTML` is resolved.
+  const resolve = usePackagedAssetUrls(source.work.assets)
   const title = metadata.title.trim() || source.work.title
   const capability = capabilityForFormat(source.work.format)
   const findings = [...source.report.findings, ...draft.planFindings]
@@ -364,8 +371,12 @@ export function ImportPlanEditor({
                 <summary className="cursor-pointer text-sm">Preview {name}</summary>
                 {previews.has(page.id) && (
                   /* Page html is a verbatim slice of the importer's inert,
-                     sanitized output; no source markup is parsed live here. */
-                  <div className="mt-2 rounded-md border border-neutral-200 p-3 dark:border-neutral-800" dangerouslySetInnerHTML={{ __html: pageHtml(plan, page) }} />
+                     sanitized output; no source markup is parsed live here.
+                     `resolve` only swaps packaged-image tokens for `blob:`
+                     urls in what gets painted — `pageHtml(plan, page)`'s
+                     return value is not stored anywhere, so `plan` itself
+                     still carries the untouched token. */
+                  <div className="mt-2 rounded-md border border-neutral-200 p-3 dark:border-neutral-800" dangerouslySetInnerHTML={{ __html: resolve(pageHtml(plan, page)) }} />
                 )}
               </details>
             </li>
