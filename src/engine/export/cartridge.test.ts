@@ -1,13 +1,38 @@
 import type { CompiledChapter, CompiledSection } from '../../contracts/index'
-import { buildCartridge, buildManifest, buildModuleMeta, cartridgeFilename } from './cartridge'
+import type { ImportedAsset } from '../../import/types'
+import {
+  buildCartridge,
+  buildManifest,
+  buildModuleMeta,
+  cartridgeFilename,
+  collectPackagedAssets,
+  UnresolvedPackagedReferenceError,
+} from './cartridge'
 import { writeZip } from './zip'
 
 const section = (id: string, title: string, over: Partial<CompiledSection> = {}): CompiledSection => ({
   id, title, html: `<p>body of ${id}</p>`, notes: [], queue: [], ...over,
 })
 
-const chapter = (title: string, sections: CompiledSection[]): CompiledChapter => ({
-  chapter: { title } as CompiledChapter['chapter'], sections, queue: [],
+// `assets` defaults to `[]` so every existing `chapter(...)` call — none of
+// which cares about assets — keeps working unchanged.
+const chapter = (title: string, sections: CompiledSection[], assets: ImportedAsset[] = []): CompiledChapter => ({
+  chapter: { title, assets } as unknown as CompiledChapter['chapter'], sections, queue: [],
+})
+
+// A minimal `ImportedAsset`. `sha256` is padded to a full 64 hex chars because
+// real assets carry a full digest, even though these tests only ever look at
+// its first 8 characters (the resource id and, by convention, the name's
+// suffix).
+const asset = (name: string, sha256: string, over: Partial<ImportedAsset> = {}): ImportedAsset => ({
+  id: name,
+  mediaType: 'image/png',
+  extension: 'png',
+  bytes: new Uint8Array([1, 2, 3]),
+  sha256: sha256.padEnd(64, '0'),
+  originPart: 'image1.png',
+  name,
+  ...over,
 })
 
 const decode = (b: Uint8Array) => new TextDecoder().decode(b)
@@ -184,4 +209,131 @@ test('the manifest declares the Canvas settings resource, not just ships the fil
   expect(xml).toContain('href="course_settings/canvas_export.txt"')
   expect(xml).toContain('<file href="course_settings/module_meta.xml"/>')
   expect(new DOMParser().parseFromString(xml, 'application/xml').querySelector('parsererror')).toBeNull()
+})
+
+// ---------------------------------------------------------------------------
+// Embedded-image packaging (Task 7). Fixtures use the `asset(...)` helper
+// above, an `ImportedAsset` whose `name` embeds the archive filename the
+// import parser already assigned.
+// ---------------------------------------------------------------------------
+
+const imageRefHtml =
+  '<p><img src="$IMS-CC-FILEBASE$/oer2canvas/image1-a3f91c2e.png" alt="A" width="16" height="16"></p>'
+
+test('packages each asset once, at the validated archive path', () => {
+  const chaptersWithAsset = [
+    chapter('Ch 1', [section('a', 'Intro', { html: imageRefHtml })], [asset('image1-a3f91c2e.png', 'a3f91c2e')]),
+  ]
+  const entries = buildCartridge(chaptersWithAsset)
+  const assetEntries = entries.filter((entry) => entry.name.startsWith('web_resources/'))
+  expect(assetEntries.map((entry) => entry.name)).toEqual(['web_resources/oer2canvas/image1-a3f91c2e.png'])
+})
+
+test('declares each asset as a standalone webcontent resource', () => {
+  const chaptersWithAsset = [
+    chapter('Ch 1', [section('a', 'Intro', { html: imageRefHtml })], [asset('image1-a3f91c2e.png', 'a3f91c2e')]),
+  ]
+  const manifest = buildManifest(chaptersWithAsset)
+  expect(manifest).toContain(
+    '<resource identifier="asset-a3f91c2e" type="webcontent" href="web_resources/oer2canvas/image1-a3f91c2e.png">',
+  )
+  expect(manifest).toContain('<file href="web_resources/oer2canvas/image1-a3f91c2e.png"/>')
+  // Issue 07 measured page dependencies as optional and changed nothing —
+  // don't "improve" the manifest toward a layout that measured no better.
+  expect(manifest).not.toContain('<dependency')
+})
+
+test('dedupes one asset shared across two chapters', () => {
+  const twoChaptersSameAsset = [
+    chapter(
+      'Ch 1',
+      [section('a', 'Intro', { html: imageRefHtml })],
+      [asset('image1-a3f91c2e.png', 'a3f91c2e', { originPart: 'one.docx' })],
+    ),
+    chapter(
+      'Ch 2',
+      [section('b', 'Two', { html: imageRefHtml })],
+      [asset('image1-a3f91c2e.png', 'a3f91c2e', { originPart: 'two.docx' })],
+    ),
+  ]
+  const entries = buildCartridge(twoChaptersSameAsset)
+  expect(entries.filter((entry) => entry.name.startsWith('web_resources/'))).toHaveLength(1)
+})
+
+// THE bug the brief's own draft code would have reintroduced: rebuilding the
+// archive name from `packagedAssetName(asset.originPart, ...)` instead of
+// using `asset.name` verbatim. Chapter 2's record carries `originPart:
+// 'two.docx'` — recomputed, that origin would slug to `two-a3f91c2e.png`,
+// disagreeing with the `one-a3f91c2e.png` reference already burned into both
+// pages' gated html. Using `asset.name` keeps both chapters agreeing on one
+// archive entry regardless of which occurrence's origin happens to be present.
+test('a shared asset packages under its assigned name, never one recomputed from a later occurrence’s originPart', () => {
+  const chapters = [
+    chapter(
+      'Ch 1',
+      [section('a', 'Intro', { html: imageRefHtml })],
+      [asset('image1-a3f91c2e.png', 'a3f91c2e', { originPart: 'one.docx' })],
+    ),
+    chapter(
+      'Ch 2',
+      [section('b', 'Two', { html: imageRefHtml })],
+      [asset('image1-a3f91c2e.png', 'a3f91c2e', { originPart: 'two.docx' })],
+    ),
+  ]
+  const entries = buildCartridge(chapters)
+  const assetEntries = entries.filter((entry) => entry.name.startsWith('web_resources/'))
+  expect(assetEntries.map((entry) => entry.name)).toEqual(['web_resources/oer2canvas/image1-a3f91c2e.png'])
+})
+
+test('refuses to build when a reference resolves to nothing', () => {
+  // The reference survives the gate but no asset backs it — a hand-written
+  // token in publisher markup, or a naming bug on our side.
+  const html = '<p><img src="$IMS-CC-FILEBASE$/oer2canvas/ghost-00000000.png" alt="" width="1" height="1"></p>'
+  const chaptersWithDanglingReference = [chapter('Ch 1', [section('a', 'Intro', { html })])]
+  expect(() => buildCartridge(chaptersWithDanglingReference)).toThrow(UnresolvedPackagedReferenceError)
+  expect(() => buildCartridge(chaptersWithDanglingReference)).toThrow(
+    /\$IMS-CC-FILEBASE\$\/oer2canvas\/ghost-00000000\.png/,
+  )
+})
+
+test('an asset nothing references is simply not packaged', () => {
+  const chapters = [
+    chapter('Ch 1', [section('a', 'Intro')], [asset('unused-00000000.png', '00000000')]),
+  ]
+  const entries = buildCartridge(chapters)
+  expect(entries.filter((entry) => entry.name.startsWith('web_resources/'))).toHaveLength(0)
+  expect(collectPackagedAssets(chapters)).toHaveLength(0)
+})
+
+// THE invariant this task must not weaken: the html written into the archive
+// is the exact bytes that passed the gate, not the pre-gate `section.html`.
+// `gate.html` here carries the image reference and a DIFFERENT string that
+// must never reach the archive; if `buildCartridge` ever started re-deriving
+// or re-serialising the page it would either lose the gated reference (and
+// this test's first assertion would fail) or leak the pre-gate string back in
+// (and the second assertion would).
+test('page html is written byte-identically to the gated bytes, not re-derived from pre-gate html', () => {
+  const chaptersWithAsset = [
+    chapter(
+      'Ch 1',
+      [
+        section('a', 'Intro', {
+          html: '<p>pre-gate html that must never reach the cartridge</p>',
+          gate: {
+            html: imageRefHtml,
+            conformance: { passedChecks: true, blockers: [], warnings: [], needsHumanReview: [] },
+            badgeWithheld: false,
+          },
+        }),
+      ],
+      [asset('image1-a3f91c2e.png', 'a3f91c2e')],
+    ),
+  ]
+  const entries = buildCartridge(chaptersWithAsset)
+  const page = entries.find((entry) => entry.name.startsWith('wiki_content/'))!
+  const doc = new TextDecoder().decode(page.data)
+  expect(doc).toContain(
+    '<img src="$IMS-CC-FILEBASE$/oer2canvas/image1-a3f91c2e.png" alt="A" width="16" height="16">',
+  )
+  expect(doc).not.toContain('pre-gate html that must never reach the cartridge')
 })

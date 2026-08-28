@@ -1,4 +1,5 @@
 import { auditedHtml, type CompiledChapter, type CompiledSection } from '../../contracts/index'
+import { FILEBASE, PACKAGED_ASSET_DIRECTORY, packagedArchivePath, packagedReference } from '../../import/assets'
 import { pageTargetsByChapter, slug } from './page-identity'
 import type { ZipEntry } from './zip'
 
@@ -92,6 +93,118 @@ function pagesOf(chapters: readonly CompiledChapter[]): Page[][] {
   )
 }
 
+/** One asset actually shipped in the archive, keyed by content once per cartridge. */
+export interface PackagedAsset {
+  sha256: string
+  archivePath: string
+  mediaType: string
+  bytes: Uint8Array
+  resourceId: string
+}
+
+/**
+ * Thrown by `collectPackagedAssets` when the gated html carries a
+ * `$IMS-CC-FILEBASE$/oer2canvas/...` reference that no asset backs.
+ *
+ * This is not defensive paranoia against code that "shouldn't" produce such a
+ * thing. The allowlist admits this exact token shape into `img.src` (see
+ * `allowlist.ts`), and the Markdown/HTML import path accepts arbitrary author
+ * markup, so a hand-typed token can legitimately reach this point. It also
+ * catches our own naming bugs — a reference and its archive entry disagreeing
+ * is exactly the failure mode the "use `asset.name` verbatim" rule below
+ * exists to prevent. Either way, shipping a cartridge with a dangling
+ * reference would hand the instructor a page with a broken image and no
+ * signal of why; throwing here fails the export loudly instead, while there
+ * is still a stack trace attached to the cause.
+ */
+export class UnresolvedPackagedReferenceError extends Error {
+  constructor(references: readonly string[]) {
+    super(
+      'Cartridge references no packaged file: ' +
+        references.join(', ') +
+        '. Every $IMS-CC-FILEBASE$ reference must resolve to an entry in this archive.',
+    )
+    this.name = 'UnresolvedPackagedReferenceError'
+  }
+}
+
+// Escape `FILEBASE` (`$IMS-CC-FILEBASE$`) for use inside a RegExp source, and
+// build the scan pattern from it and `PACKAGED_ASSET_DIRECTORY` rather than
+// re-typing the literal token and directory name a second time — the same
+// reasoning `FILEBASE`'s own export comment gives for why `allowlist.ts`
+// imports it instead of keeping its own copy. Two independently-typed copies
+// of a reserved token are a standing invitation for them to drift apart.
+const FILEBASE_SOURCE = FILEBASE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const PACKAGED_REFERENCE_IN_HTML = new RegExp(`${FILEBASE_SOURCE}/${PACKAGED_ASSET_DIRECTORY}/[^"'\\s>]+`, 'g')
+
+/**
+ * Every distinct asset the emitted pages actually reference, deduped by
+ * archive path, plus a hard check that every reference the gated html carries
+ * resolves to one of them.
+ *
+ * THE NAME COMES FROM `asset.name`, NEVER RECOMPUTED. `prepareAssets`
+ * (src/import/assets.ts) already decided each asset's one true archive name
+ * at import time, deduping by content hash: the FIRST-SEEN occurrence's
+ * origin wins the slug, and every later occurrence of that same content keeps
+ * its OWN `originPart` (where that particular occurrence came from) while
+ * carrying the already-decided shared `name`. Rerunning `packagedAssetName`
+ * on a non-winning occurrence's `originPart` would happily produce a
+ * DIFFERENT, perfectly plausible-looking slug — and a cartridge whose archive
+ * entry disagrees with the reference already burned into the gated HTML,
+ * e.g. shipping `two-<hash>.png` for a page that asks for `one-<hash>.png`.
+ * `asset.name` is the one value the reference and the archive entry are
+ * both required to agree on, so it is the only thing used to derive either.
+ *
+ * Dedup happens across the WHOLE cartridge (all chapters), not per chapter —
+ * one export can carry several chapters that embed the same image, and
+ * Canvas itself resolves duplicate uploads sharing content to one `File`, so
+ * shipping the same bytes twice would just be dead weight with two names
+ * fighting over the same content.
+ *
+ * An asset that nothing in the emitted pages references is simply left out:
+ * the archive holds exactly what the pages ask for, no more. An asset that
+ * IS referenced but missing from `Chapter.assets` (or renamed out from under
+ * the reference) throws `UnresolvedPackagedReferenceError` instead of
+ * silently shipping a page with a broken image.
+ */
+export function collectPackagedAssets(chapters: readonly CompiledChapter[]): PackagedAsset[] {
+  const byReference = new Map<string, PackagedAsset>()
+  for (const compiled of chapters) {
+    for (const asset of compiled.chapter.assets ?? []) {
+      const reference = packagedReference(asset.name)
+      if (byReference.has(reference)) continue
+      byReference.set(reference, {
+        sha256: asset.sha256,
+        archivePath: packagedArchivePath(asset.name),
+        mediaType: asset.mediaType,
+        bytes: asset.bytes,
+        resourceId: `asset-${asset.sha256.slice(0, 8)}`,
+      })
+    }
+  }
+
+  // Scan `pagesOf(chapters)`, NOT every section in `chapters` directly — this
+  // is deliberate, not an oversight. `pagesOf` (via `pageTargetsByChapter` in
+  // `page-identity.ts`) already filters sections through `publishable`,
+  // dropping any section that failed to compile (`error` set, `html` empty
+  // per contract). Those never become a `wiki_content/*.html` entry in the
+  // loop at the bottom of `buildCartridge`, so a stray reference trapped
+  // inside one is not in the cartridge either and must not be able to fail
+  // this build. Scanning `compiled.sections` instead would check html that is
+  // never shipped — checking a superset of what actually goes in the archive,
+  // rather than the archive's own contents.
+  const referenced = new Set<string>()
+  for (const page of pagesOf(chapters).flat()) {
+    for (const reference of auditedHtml(page.section).match(PACKAGED_REFERENCE_IN_HTML) ?? []) {
+      referenced.add(reference)
+    }
+  }
+  const unresolved = [...referenced].filter((reference) => !byReference.has(reference))
+  if (unresolved.length > 0) throw new UnresolvedPackagedReferenceError(unresolved)
+
+  return [...byReference.entries()].filter(([reference]) => referenced.has(reference)).map(([, asset]) => asset)
+}
+
 /**
  * Wrap the compiled fragment in the minimal document a cartridge resource needs.
  *
@@ -170,6 +283,28 @@ export function buildManifest(chapters: readonly CompiledChapter[]): string {
     )
     .join('\n')
 
+  /*
+   * ONE STANDALONE `webcontent` RESOURCE PER ASSET, WITH NO `<dependency>`
+   * FROM ITS PAGE — MEASURED, not the more "obviously structured" option.
+   * `docs/evidence/canvas-image-probes-2026-08-28.md` imported four candidate
+   * cartridge layouts into a live Canvas. This one is the only one that
+   * works. The two layouts that look at least as principled — nesting the
+   * asset as a second `<file>` under the PAGE's resource, or wrapping it in
+   * `associatedcontent` — both measured as Canvas reporting "Completed" and
+   * then attaching zero course files. A page resource declaring
+   * `<dependency identifierref="...">` on its asset was measured as optional:
+   * present or absent, the import outcome was identical. Do not add either
+   * "improvement" back without new evidence.
+   */
+  const assetResources = collectPackagedAssets(chapters)
+    .map(
+      (asset) =>
+        `    <resource identifier="${asset.resourceId}" type="webcontent" href="${asset.archivePath}">\n` +
+        `      <file href="${asset.archivePath}"/>\n` +
+        `    </resource>`,
+    )
+    .join('\n')
+
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<manifest identifier="oer2canvas-cartridge"\n` +
@@ -190,6 +325,10 @@ export function buildManifest(chapters: readonly CompiledChapter[]): string {
     `  <resources>\n` +
     `${canvasSettings}\n` +
     `${resources}\n` +
+    // Omitted rather than spliced in blank when a cartridge packages no
+    // assets at all, so a plain text-only export keeps the tidy manifest it
+    // always produced instead of gaining a stray empty line.
+    (assetResources ? `${assetResources}\n` : '') +
     `  </resources>\n` +
     `</manifest>\n`
   )
@@ -264,6 +403,12 @@ export function buildCartridge(chapters: readonly CompiledChapter[]): ZipEntry[]
   ]
   for (const page of pagesOf(chapters).flat()) {
     entries.push({ name: page.path, data: encoder.encode(documentFor(page.section, page.id)) })
+  }
+  // Raw bytes, not re-encoded text: `asset.bytes` is already the exact raster
+  // `prepareAssets` sniffed and hashed, so writing it verbatim is what keeps
+  // the shipped file's sha256 the one Canvas would compute back from it.
+  for (const asset of collectPackagedAssets(chapters)) {
+    entries.push({ name: asset.archivePath, data: asset.bytes })
   }
   return entries
 }
