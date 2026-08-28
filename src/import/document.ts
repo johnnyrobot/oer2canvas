@@ -58,8 +58,19 @@ export async function importStructuredDocument(
   }
   if (!parsed.normalized) throw new Error('AnyDoc returned no normalized document content.')
   const visibleText = parsed.normalized.html.replace(/<[^>]*>/g, '').trim()
+  // A figure-only document (a cover page, a plate section) now normalizes to
+  // something like `<p><img ...></p>` with no visible TEXT at all, since a
+  // packageable image no longer leaves an `[Embedded image: ...]` text
+  // placeholder behind. This guard used to be safe assuming every image left
+  // text; it is not safe to assume that anymore, so it must also check for
+  // real rendered media (`<img>`/`<hr>`) before declaring the document
+  // empty — mirroring the identical check the sibling HTML/Markdown importer
+  // already applies (`markup.ts`'s `!textContent?.trim() && !querySelector('img, hr')`).
   if (!visibleText) {
-    throw new Error(`AnyDoc found no readable structured content in this ${capability.label} file.`)
+    const rendered = new DOMParser().parseFromString(parsed.normalized.html, 'text/html')
+    if (!rendered.querySelector('img, hr')) {
+      throw new Error(`AnyDoc found no readable structured content in this ${capability.label} file.`)
+    }
   }
 
   const title = options.metadata.title.trim()

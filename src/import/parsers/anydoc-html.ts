@@ -1,6 +1,7 @@
 import type { Block, Document, Inline } from '@firecrawl/anydoc-wasm'
 import type { AssetRejection, PreparedAsset } from '../assets'
 import type { PackagedAssetRecord, ParserProbeFinding, ParserProbeNormalizedContent } from './probe'
+import { isPublicNetworkUrl } from '../common'
 import { escapeHtml } from '../html'
 
 export class UnsupportedAnyDocVersionError extends Error {
@@ -55,6 +56,15 @@ export function normalizeAnyDocDocument(
   // entry here too, rather than the parser re-fragmenting what asset
   // preparation just unified.
   const packaged = new Map<string, PackagedAssetRecord>()
+  // Every asset id an inline image actually looked up, whether it packaged,
+  // was rejected, or was simply absent from `prepared`. `Document.assets` can
+  // carry entries no image ever points at — anydoc documents `Asset` as any
+  // embedded binary payload, including non-image object payloads, and
+  // `counts.assets` is deliberately tracked apart from `counts.images` for
+  // exactly this reason. Removing the old document-level blocker (which used
+  // to fire on ANY non-empty `document.assets`) means that case now needs its
+  // own, narrower signal instead of silently producing zero findings.
+  const consultedAssetIds = new Set<number>()
 
   // Exactly the four media types `prepareAssets` can ever produce a
   // `PreparedAsset` for. There is no `undecodable` entry: the byte sniffer
@@ -147,18 +157,53 @@ export function normalizeAnyDocDocument(
       return attribute ? `<span${attribute}></span>` : ''
     }
     if (inline.kind === 'image') {
-      const alt = inline.alt ?? ''
-      // External images stay remote http(s)/mailto URLs: they are not embedded
-      // bytes at all, so there is nothing here for `prepareAssets` to have seen
-      // and nothing to package into the cartridge.
+      // `alt === undefined` (no attribute at all in the source) and
+      // `alt === ''` (an author-declared decorative image) are opposite
+      // signals to the audit this HTML eventually reaches: axe's `image-alt`
+      // rule blocks on a genuinely MISSING attribute, while this project's
+      // own alt-text audit treats `alt=""` as "the correct decorative
+      // marker — not an issue" (see `engine/audit/alt-text.test.ts`). Folding
+      // `undefined` into `''` here would make every undescribed image look
+      // deliberately decorative and sail through the gate unremediated — so
+      // the attribute itself is only ever emitted when the source document
+      // actually had one, empty or not.
+      const altText = inline.alt ?? ''
+      const altAttribute = inline.alt === undefined ? '' : ` alt="${escapeHtml(inline.alt)}"`
+
+      // External images are not embedded bytes at all — there is nothing for
+      // `prepareAssets` to have seen and nothing to package into the
+      // cartridge — but before this feature every image blocked, so no
+      // external image ever reached exported output. Now that one can, this
+      // importer must apply the same public-host fence the sibling
+      // HTML/Markdown importer already does (`markup.ts`), or the two
+      // importers disagree about the same SSRF/local-network exposure: a
+      // `<img src="http://169.254.169.254/...">`-shaped payload must not be
+      // able to ride an "external image" through this path unfenced.
       if (inline.source?.kind === 'external' && inline.source.url) {
-        const href = safeHref(inline.source.url)
-        if (href) return `<img src="${escapeHtml(href)}" alt="${escapeHtml(alt)}">`
+        let externalUrl: URL | undefined
+        try {
+          externalUrl = new URL(inline.source.url)
+        } catch {
+          externalUrl = undefined
+        }
+        if (externalUrl && isPublicNetworkUrl(externalUrl)) {
+          // Even a public host is a THIRD-PARTY dependency the exported page
+          // now silently relies on staying up — worth a warning, not a
+          // blocker, since the reference itself is safe to publish.
+          finding(
+            'external-image',
+            'warning',
+            `This ${sourceLabel} references an external image hosted elsewhere; the exported page depends on that server remaining available.`,
+          )
+          return `<img src="${escapeHtml(externalUrl.toString())}"${altAttribute}>`
+        }
       }
 
-      const entry = inline.source?.kind === 'asset' && inline.source.assetId !== undefined
-        ? prepared.get(inline.source.assetId)
-        : undefined
+      let entry: PreparedAsset | { rejected: AssetRejection } | undefined
+      if (inline.source?.kind === 'asset' && inline.source.assetId !== undefined) {
+        consultedAssetIds.add(inline.source.assetId)
+        entry = prepared.get(inline.source.assetId)
+      }
 
       if (entry && !('rejected' in entry)) {
         // Dedupe by content hash: identical bytes become one archive entry,
@@ -180,25 +225,32 @@ export function normalizeAnyDocDocument(
           })
         }
         return (
-          `<img src="${escapeHtml(entry.reference)}" alt="${escapeHtml(alt)}"` +
+          `<img src="${escapeHtml(entry.reference)}"${altAttribute}` +
           ` width="${entry.width}" height="${entry.height}">`
         )
       }
 
       // Anything that reaches here cannot be packaged: the bytes were never
-      // available, or `prepareAssets` rejected them. Either way this image
-      // keeps blocking publication AND keeps a visible placeholder — nothing
-      // may disappear silently.
-      if (inline.source?.kind === 'unavailable') unavailableAssets += 1
+      // available, `prepareAssets` rejected them, or the source was an
+      // external URL this importer refuses to hotlink. Either way this
+      // image keeps blocking publication AND keeps a visible placeholder —
+      // nothing may disappear silently. It also becomes a placeholder in the
+      // rendered page rather than a real picture, so it counts toward
+      // `unavailableAssets` regardless of which of those reasons applied —
+      // that count is shown to users before export and must reflect every
+      // image that did not make it, not just the `unavailable`-kind subset.
+      unavailableAssets += 1
       const reason = entry && 'rejected' in entry
         ? BLOCKED_REASON[entry.rejected]
-        : BLOCKED_REASON.unavailable
+        : inline.source?.kind === 'external'
+          ? 'an external image at a network address that cannot be safely embedded'
+          : BLOCKED_REASON.unavailable
       finding(
         'embedded-content',
         'blocker',
         `This ${sourceLabel} contains ${reason}. Remove or replace it before publishing.`,
       )
-      return `<span>[Embedded image${alt ? `: ${escapeHtml(alt)}` : ''}]</span>`
+      return `<span>[Embedded image${altText ? `: ${escapeHtml(altText)}` : ''}]</span>`
     }
     if (inline.kind === 'math') {
       equations += 1
@@ -294,6 +346,21 @@ export function normalizeAnyDocDocument(
   // makes the dependency explicit instead of leaving it as a property-order
   // trap for the next person editing this literal.
   const html = renderBlocks(document.blocks)
+
+  // An asset no inline image ever looked up cannot be an image the reader is
+  // missing from the page — by definition nothing on the page pointed at
+  // it — so this is a warning, not the `embedded-content` blocker: something
+  // was dropped, but not necessarily something the reader needed. One
+  // dedup-by-code finding covers the whole document rather than one per
+  // orphaned asset, matching how `duplicate-anchor`/`layout-table` already
+  // summarize a class of occurrences instead of enumerating them.
+  if (document.assets.some((asset) => !consultedAssetIds.has(asset.id))) {
+    finding(
+      'unreferenced-asset',
+      'warning',
+      `This ${sourceLabel} contains an embedded asset (for example, an object payload) that no visible content refers to. It was not included in the export.`,
+    )
+  }
 
   if (document.notes.length > 0) {
     finding('unsupported-note', 'blocker', `This ${sourceLabel} contains notes that the text-oriented workflow cannot publish it yet.`)

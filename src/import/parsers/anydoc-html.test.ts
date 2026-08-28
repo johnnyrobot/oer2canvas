@@ -205,6 +205,10 @@ test('an unsupported asset keeps the blocker and the visible placeholder', async
   expect(result.html).toContain('[Embedded image: Figure 0]')
   expect(result.findings.some((finding) => finding.code === 'embedded-content')).toBe(true)
   expect(result.packagedAssets).toHaveLength(0)
+  // A rejected asset becomes a placeholder just like a genuinely unavailable
+  // one, so it must move the same user-facing counter — not just images
+  // whose `source.kind` is literally `'unavailable'`.
+  expect(result.unavailableAssets).toBe(1)
 })
 
 test('an unavailable image still blocks even when other assets package', async () => {
@@ -223,7 +227,7 @@ test('an unavailable image still blocks even when other assets package', async (
   expect(result.findings.some((finding) => finding.code === 'embedded-content')).toBe(true)
 })
 
-test('an external image is left as a remote url, not packaged', async () => {
+test('an external image at a public host is left as a remote url, not packaged, with a hotlink warning', async () => {
   const document = {
     kind: 'document',
     blocks: [{ kind: 'paragraph', content: [
@@ -234,4 +238,72 @@ test('an external image is left as a remote url, not packaged', async () => {
   const result = normalizeAnyDocDocument(document, 'epub', await prepareAssets([]))
   expect(result.html).toContain('src="https://example.org/a.png"')
   expect(result.packagedAssets).toHaveLength(0)
+  expect(result.findings).toContainEqual(expect.objectContaining({
+    code: 'external-image',
+    severity: 'warning',
+  }))
+})
+
+test('an external image at a non-public host is refused, not hotlinked', async () => {
+  const document = {
+    kind: 'document',
+    blocks: [{ kind: 'paragraph', content: [
+      { kind: 'image', alt: 'Internal', source: { kind: 'external', url: 'http://localhost/internal.png' } },
+    ] }],
+    assets: [], notes: [],
+  } as never
+  const result = normalizeAnyDocDocument(document, 'epub', await prepareAssets([]))
+  expect(result.html).not.toContain('<img')
+  expect(result.html).toContain('[Embedded image: Internal]')
+  expect(result.findings).toContainEqual(expect.objectContaining({
+    code: 'embedded-content',
+    severity: 'blocker',
+  }))
+  expect(result.findings.some((finding) => finding.code === 'external-image')).toBe(false)
+})
+
+test('an asset no image ever refers to raises a warning instead of vanishing silently', async () => {
+  // anydoc documents `Asset` as any embedded binary payload, not only images
+  // (an OLE object payload lands in `document.assets` too, with no inline
+  // image ever pointing at it). Removing the old blanket "any assets present"
+  // blocker must not also remove the only signal this case had.
+  const assets = [{ id: 0, mediaType: 'application/octet-stream', originPart: 'objects/embed1.bin', data: new Uint8Array([1, 2, 3]) }]
+  const document = {
+    kind: 'document',
+    blocks: [{ kind: 'paragraph', content: [{ kind: 'text', text: 'No image here.' }] }],
+    assets, notes: [],
+  } as never
+  const result = normalizeAnyDocDocument(document, 'docx', await prepareAssets(assets))
+  expect(result.findings).toContainEqual(expect.objectContaining({
+    code: 'unreferenced-asset',
+    severity: 'warning',
+  }))
+})
+
+test('missing alt, explicit empty alt, and real alt text are all rendered distinctly', async () => {
+  // Missing (`undefined`) and empty (`''`) alt are opposite signals to the
+  // audit downstream: a genuinely missing `alt` attribute is an axe
+  // `image-alt` blocker, while `alt=""` is the correct decorative marker and
+  // not an issue at all. Folding one into the other here would make an
+  // undescribed image sail through the gate as if deliberately decorative.
+  const assets = [
+    { id: 0, mediaType: 'image/png', originPart: 'no-alt.png', data: RASTER_FIXTURES.png.bytes },
+    { id: 1, mediaType: 'image/gif', originPart: 'empty-alt.gif', data: RASTER_FIXTURES.gif.bytes },
+    { id: 2, mediaType: 'image/jpeg', originPart: 'real-alt.jpg', data: RASTER_FIXTURES.jpeg.bytes },
+  ]
+  const document = {
+    kind: 'document',
+    blocks: [{ kind: 'paragraph', content: [
+      { kind: 'image', source: { kind: 'asset', assetId: 0 } },
+      { kind: 'image', alt: '', source: { kind: 'asset', assetId: 1 } },
+      { kind: 'image', alt: 'A photograph of a cell wall', source: { kind: 'asset', assetId: 2 } },
+    ] }],
+    assets, notes: [],
+  } as never
+  const result = normalizeAnyDocDocument(document, 'docx', await prepareAssets(assets))
+  const images = [...new DOMParser().parseFromString(result.html, 'text/html').querySelectorAll('img')]
+  expect(images).toHaveLength(3)
+  expect(images[0]!.hasAttribute('alt')).toBe(false)
+  expect(images[1]!.getAttribute('alt')).toBe('')
+  expect(images[2]!.getAttribute('alt')).toBe('A photograph of a cell wall')
 })

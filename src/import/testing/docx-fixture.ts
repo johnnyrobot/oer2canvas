@@ -20,6 +20,54 @@ const EMBEDDED_IMAGE_PNG = RASTER_FIXTURES.png.bytes
 // the embedded-image split this fixture needs to pin.
 const UNSUPPORTED_IMAGE_SVG = utf8('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"/>')
 
+/**
+ * A minimal DOCX whose body contains ONLY an embedded image — no heading, no
+ * paragraph text, no table. This is the "figure-only" shape `document.ts`'s
+ * no-readable-content guard used to reject outright, back when every image
+ * left an `[Embedded image: ...]` text placeholder behind regardless of
+ * whether it could be packaged. Now that a packageable image renders as a
+ * bare `<img>` with no surrounding text, a real cover-page or plate-section
+ * document must still import successfully.
+ */
+export async function imageOnlyDocxFixture(): Promise<Uint8Array<ArrayBuffer>> {
+  const entries = [
+    {
+      name: '[Content_Types].xml',
+      data: utf8(`<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="png" ContentType="image/png"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`),
+    },
+    {
+      name: '_rels/.rels',
+      data: utf8(`<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`),
+    },
+    {
+      name: 'word/_rels/document.xml.rels',
+      data: utf8(`<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>
+</Relationships>`),
+    },
+    {
+      name: 'word/document.xml',
+      data: utf8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>
+  <w:p><w:r><w:drawing><wp:inline><wp:extent cx="9525" cy="9525"/><wp:docPr id="1" name="Cover" descr="Cover plate"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr/><pic:blipFill><a:blip r:embed="rId2"/></pic:blipFill><pic:spPr/></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
+  <w:sectPr/>
+</w:body></w:document>`),
+    },
+    { name: 'word/media/image1.png', data: EMBEDDED_IMAGE_PNG },
+  ]
+  return new Uint8Array(await writeZip(entries))
+}
+
 export async function semanticDocxFixture(
   {
     embeddedImage = false,

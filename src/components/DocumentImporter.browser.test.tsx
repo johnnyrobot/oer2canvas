@@ -65,6 +65,7 @@ test('embedded content the workflow cannot package is handed off as a blocking f
   expect(result.report.findings).toContainEqual(expect.objectContaining({
     code: 'embedded-content',
     severity: 'blocker',
+    message: expect.stringMatching(/cannot package|corrupt/i),
   }))
   expect(result.work.sections[0]?.html).toContain('[Embedded image: Unsupported diagram]')
 })

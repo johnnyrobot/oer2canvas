@@ -1,4 +1,4 @@
-import { semanticDocxFixture } from './testing/docx-fixture'
+import { imageOnlyDocxFixture, semanticDocxFixture } from './testing/docx-fixture'
 import { importStructuredDocument } from './document'
 import { toChapter } from './to-chapter'
 import { compileAndAuditChapter } from '../engine'
@@ -87,9 +87,22 @@ test('an embedded DOCX image the workflow cannot package stays a visible blockin
     code: 'embedded-content',
     severity: 'blocker',
     sectionId: imported.work.sections[0]?.id,
+    message: expect.stringMatching(/cannot package|corrupt/i),
   }))
   expect(imported.work.sections[0]?.html).toContain('[Embedded image: Unsupported diagram]')
   expect(imported.work.assets).toEqual([])
+})
+
+test('a figure-only DOCX with no readable text still imports, not a hard failure', async () => {
+  const file = new File([await imageOnlyDocxFixture()], 'cover.docx', {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  })
+
+  const imported = await importStructuredDocument(file, { metadata })
+
+  expect(imported.report.counts.images).toBe(1)
+  expect(imported.report.findings.some((finding) => finding.code === 'embedded-content')).toBe(false)
+  expect(imported.work.sections[0]?.html).toContain('$IMS-CC-FILEBASE$/oer2canvas/')
 })
 
 test('a DOCX parse can be cancelled at the public progress seam and retried cleanly', async () => {
