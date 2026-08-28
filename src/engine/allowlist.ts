@@ -16,7 +16,7 @@
  * semantic loss and is not reported. See README for the documented assumptions.
  */
 import type { AllowlistResult, AllowlistValidator } from '../contracts/index';
-import { isPackagedReference } from '../import/assets';
+import { FILEBASE, isPackagedReference } from '../import/assets';
 
 // --- Appendix B data ---------------------------------------------------------
 
@@ -85,15 +85,6 @@ const PER_ELEMENT_ATTRS: Readonly<Record<string, ReadonlySet<string>>> = {
 
 const A_HREF_SCHEMES = new Set(['ftp', 'http', 'https', 'mailto', 'skype']);
 const HTTP_SCHEMES = new Set(['http', 'https']);
-
-/**
- * The prefix of the packaged-cartridge reference token (see `src/import/assets.ts`).
- * Duplicated here (rather than imported) because it is only needed as a cheap
- * fence -- "does this value merely resemble our reserved token" -- ahead of the
- * real, anchored check in `isPackagedReference`; the token's exact grammar
- * still lives in one place.
- */
-const FILEBASE_TOKEN_PREFIX = '$IMS-CC-FILEBASE$';
 
 /** B.4 URL-bearing attributes per element -> the schemes permitted on them. */
 const URL_ATTRS: Readonly<Record<string, Readonly<Record<string, ReadonlySet<string>>>>> = {
@@ -515,7 +506,18 @@ function filterAttrs(tag: string, attrs: Attr[]): Attr[] {
 
     const schemeSet = urlAttrs?.[name];
     if (schemeSet && value !== null) {
-      if (value.startsWith(FILEBASE_TOKEN_PREFIX)) {
+      /*
+       * Fence on the value with control characters and whitespace stripped --
+       * the same normalization `isSchemeAllowed` applies below -- not on the
+       * raw value. Canvas's `$IMS-CC-FILEBASE$` substitution is a literal
+       * substring replacement and still fires even with a leading space or
+       * newline in front of it, so a raw `startsWith` fence here could be
+       * stepped around: the value would fall through to `isSchemeAllowed`,
+       * land in its permissive "no scheme -> relative" bucket, and its tail
+       * (e.g. a `../` traversal out of `oer2canvas/`) would never be
+       * validated, on ANY url-bearing element.
+       */
+      if (value.replace(/[\u0000-\u0020]/g, '').startsWith(FILEBASE)) {
         /*
          * A packaged cartridge asset has no scheme, so a well-formed reference
          * would otherwise fall into `isSchemeAllowed`'s "no scheme -> relative,
@@ -527,8 +529,10 @@ function filterAttrs(tag: string, attrs: Attr[]): Attr[] {
          * `src`. Admitting it by widening the scheme check would be wrong
          * too: `HTTP_SCHEMES` is shared with iframe, embed, object, audio and
          * video, so widening it would widen all of them, not just img.
-         * `isPackagedReference` is anchored to our own prefix and rejects
-         * traversal, queries and encoded separators.
+         * `isPackagedReference` runs against the RAW value (not the
+         * normalized one used for the fence above): intercept broadly, admit
+         * narrowly. It is anchored to our own prefix and rejects traversal,
+         * queries, encoded separators and any leading noise.
          */
         if (!(tag === 'img' && name === 'src' && isPackagedReference(value))) continue;
       } else if (!isSchemeAllowed(value, schemeSet)) {

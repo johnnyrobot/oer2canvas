@@ -12,7 +12,10 @@ import { sha256Hex } from './common'
 import { PARSER_PROBE_LIMITS } from './parser-limit-values'
 
 export const PACKAGED_ASSET_DIRECTORY = 'oer2canvas'
-const FILEBASE = '$IMS-CC-FILEBASE$'
+// Exported so `allowlist.ts` can fence on the same literal it validates
+// against here, rather than keeping a second copy that could drift out of
+// sync and silently loosen that boundary.
+export const FILEBASE = '$IMS-CC-FILEBASE$'
 
 export type AssetRejection = 'unavailable' | 'unsupported-type' | 'too-large' | 'too-many'
 

@@ -357,3 +357,21 @@ test('the packaged form does not leak to other url-bearing elements', async () =
   )
   expect(html).not.toContain('IMS-CC-FILEBASE')
 })
+
+// ── Whitespace/control-character fence bypass (leading noise before the token) ──
+
+test.each([
+  ['leading space', ' $IMS-CC-FILEBASE$/oer2canvas/a.png'],
+  ['leading newline', '\n$IMS-CC-FILEBASE$/oer2canvas/a.png'],
+])('drops an img src with a %s before the token, not a valid packaged reference', async (_label, src) => {
+  const { html } = await validateAllowlist(`<p><img src="${src}" alt="x"></p>`)
+  expect(html).not.toContain('IMS-CC-FILEBASE')
+})
+
+test.each([
+  ['leading space', ' $IMS-CC-FILEBASE$/oer2canvas/a.png'],
+  ['leading newline', '\n$IMS-CC-FILEBASE$/oer2canvas/a.png'],
+])('drops an iframe src with a %s before the token', async (_label, src) => {
+  const { html } = await validateAllowlist(`<p><iframe src="${src}"></iframe></p>`)
+  expect(html).not.toContain('IMS-CC-FILEBASE')
+})
