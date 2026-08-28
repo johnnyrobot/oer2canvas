@@ -2,7 +2,11 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { fileURLToPath, URL as NodeURL } from 'node:url'
 import { describe, it, expect } from 'vitest'
 import { compileSection } from './index'
+import { DOCUMENT } from './context'
+import type { CompileContext } from './context'
+import type { Section } from '../../sources/types'
 import { fixtureContext, type FixtureName } from './fixture-context'
+import { packagedAssetName, packagedReference } from '../../import/assets'
 
 // `fileURLToPath(new URL(...))` rather than `import.meta.dirname`: this module
 // goes through Vite's transform, and only `import.meta.url` is guaranteed there.
@@ -58,5 +62,75 @@ describe.each<FixtureName>(['page', 'page-section'])('compile %s', (name) => {
 
   it('matches the queue golden', () => {
     golden(`${name}.queue.json`, `${JSON.stringify(out.queue, null, 2)}\n`)
+  })
+})
+
+/**
+ * A DOCUMENT-profile page carrying one packaged image, exercised separately
+ * from the OpenStax fixtures above because it is not an OpenStax page at
+ * all: no `fixtureContext` entry can produce it without dragging in a real
+ * archive url and a real book from the catalog.
+ *
+ * `contentBaseUrl` is set (unlike a plain local-file import, which has
+ * none) specifically so `absolutize` does NOT take its early
+ * `!ctx.contentBaseUrl` return and actually walks the document's urls — the
+ * one place a packaged `$IMS-CC-FILEBASE$/...` reference could accidentally
+ * get rewritten into an absolute url pointing at the wrong host. Without a
+ * base url that whole code path is skipped and this golden would prove
+ * nothing about it.
+ *
+ * The reference itself is built through the SAME `packagedAssetName` /
+ * `packagedReference` helpers `prepareAssets` calls in production, rather
+ * than a hand-typed string, so a future change to that naming format shows
+ * up here as a diff instead of this fixture silently drifting from reality.
+ */
+describe('compile page-packaged-image', () => {
+  const imageName = packagedAssetName('word/media/image1.png', 'a1b2c3d4e5f6a7b89c0d1e2f3a4b5c6d', 'png')
+  const imageReference = packagedReference(imageName)
+
+  const html = `<h2 id="cell-biology">Cell Biology</h2>
+<p>Cells are the basic building blocks of all living things.</p>
+<p><img src="${imageReference}" alt="Cell diagram" width="16" height="16"></p>`
+
+  const section: Section = {
+    id: 's-packaged-image',
+    title: 'Cell Biology',
+    order: 0,
+    html,
+    contentBaseUrl: 'https://example.edu/biology.docx',
+  }
+
+  const ctx: CompileContext = {
+    profile: DOCUMENT,
+    contentBaseUrl: section.contentBaseUrl,
+    sectionTitle: section.title,
+    sectionId: section.id,
+    xrefs: new Map(),
+    attribution: { bookTitle: 'Cell Biology', publisher: 'Ada Instructor', authors: [] },
+  }
+
+  const out = compileSection(section, ctx)
+
+  it('compiles without error', () => {
+    expect(out.error).toBeUndefined()
+  })
+
+  // Belt-and-suspenders on top of the golden itself: a disappeared reference
+  // fails with a message that names exactly what went missing, rather than
+  // only showing up as an opaque multi-line html diff.
+  it('keeps the packaged reference intact', () => {
+    expect(out.html).toContain(imageReference)
+  })
+
+  it('matches the html golden', () => {
+    golden('page-packaged-image.compiled.html', `${out.html}\n`)
+  })
+
+  it('matches the notes golden', () => {
+    golden('page-packaged-image.notes.json', `${JSON.stringify(out.notes, null, 2)}\n`)
+  })
+
+  it('matches the queue golden', () => {
+    golden('page-packaged-image.queue.json', `${JSON.stringify(out.queue, null, 2)}\n`)
   })
 })

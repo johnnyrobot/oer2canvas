@@ -2,26 +2,54 @@
 // requires explicit source extensions for its ESM imports.
 // @ts-expect-error -- shared browser/Node test fixture.
 import { writeZip } from '../../engine/export/zip.ts'
+// @ts-expect-error -- shared browser/Node test fixture; see above.
+import { RASTER_FIXTURES } from './raster-fixtures.ts'
 
 const utf8 = (value: string) => new TextEncoder().encode(value)
+
+// The same Canvas-proven 16x16 PNG the DOCX fixture embeds (see
+// `docx-fixture.ts`'s `EMBEDDED_IMAGE_PNG`), reused here so all four formats
+// exercise packaging against IDENTICAL bytes rather than four fixtures that
+// each merely claim to carry "an image".
+const EMBEDDED_IMAGE_PNG = RASTER_FIXTURES.png.bytes
 
 function longParagraphs(count: number, tag: (index: number) => string): string {
   return Array.from({ length: count }, (_unused, index) => tag(index + 1)).join('')
 }
 
 export async function semanticOdtFixture(
-  { additionalParagraphs = 0 }: { additionalParagraphs?: number } = {},
+  {
+    additionalParagraphs = 0,
+    embeddedImage = false,
+  }: { additionalParagraphs?: number; embeddedImage?: boolean } = {},
 ): Promise<Uint8Array<ArrayBuffer>> {
+  // ODT stores an embedded picture as an ordinary file inside the package
+  // (conventionally under `Pictures/`) and references it from a
+  // `<draw:frame><draw:image xlink:href="...">` pair — there is no inline
+  // binary encoding the way RTF needs. `<svg:desc>` is the ODT alt-text
+  // carrier anydoc reads into `Inline.alt`.
+  const imageParagraph = embeddedImage
+    ? '<text:p><draw:frame draw:name="Diagram" svg:width="1cm" svg:height="1cm">' +
+      '<draw:image xlink:href="Pictures/diagram.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>' +
+      '<svg:desc>Cell diagram</svg:desc></draw:frame></text:p>'
+    : ''
+  const imageManifestEntry = embeddedImage
+    ? '<manifest:file-entry manifest:full-path="Pictures/diagram.png" manifest:media-type="image/png"/>'
+    : ''
+
   const content = `<?xml version="1.0" encoding="UTF-8"?>
 <office:document-content
   xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
   xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
   xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+  xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0"
   xmlns:xlink="http://www.w3.org/1999/xlink"
   office:version="1.2">
   <office:body><office:text>
     <text:h text:outline-level="1">Cell Biology</text:h>
     <text:p>Cells are organized. <text:a xlink:href="https://example.edu/cells">Read the cell guide</text:a></text:p>
+    ${imageParagraph}
     <text:list>
       <text:list-item><text:p>Membrane</text:p></text:list-item>
       <text:list-item><text:p>Cytoplasm</text:p></text:list-item>
@@ -48,20 +76,37 @@ export async function semanticOdtFixture(
 <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">
   <manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/>
   <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
+  ${imageManifestEntry}
 </manifest:manifest>`),
     },
     { name: 'content.xml', data: utf8(content) },
+    ...(embeddedImage ? [{ name: 'Pictures/diagram.png', data: EMBEDDED_IMAGE_PNG }] : []),
   ]))
 }
 
 export async function semanticEpubFixture(
-  { additionalParagraphs = 0 }: { additionalParagraphs?: number } = {},
+  {
+    additionalParagraphs = 0,
+    embeddedImage = false,
+  }: { additionalParagraphs?: number; embeddedImage?: boolean } = {},
 ): Promise<Uint8Array<ArrayBuffer>> {
+  // EPUB is ordinary XHTML plus an OPF manifest: the image is a real
+  // `<img>` referencing a package-relative file, which the manifest must
+  // also list (a real EPUB reader — and anydoc — trusts the manifest's
+  // declared media type over guessing from the extension).
+  const imageParagraph = embeddedImage
+    ? '<p><img src="images/diagram.png" alt="Cell diagram"/></p>'
+    : ''
+  const imageManifestItem = embeddedImage
+    ? '<item id="diagram" href="images/diagram.png" media-type="image/png"/>'
+    : ''
+
   const chapter = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml"><head><title>Cell Biology</title></head><body>
   <h1 id="cell-biology">Cell Biology</h1>
   <p>Cells are organized. <a href="https://example.edu/cells">Read the cell guide</a></p>
+  ${imageParagraph}
   <ul><li>Membrane</li><li>Cytoplasm</li></ul>
   <table><thead><tr><th>Structure</th><th>Function</th></tr></thead>
     <tbody><tr><td>Nucleus</td><td>Stores DNA</td></tr></tbody></table>
@@ -85,22 +130,44 @@ export async function semanticEpubFixture(
     <dc:identifier id="book-id">urn:uuid:oer2canvas-epub-fixture</dc:identifier>
     <dc:title>Biology Reader</dc:title><dc:creator>Ada Instructor</dc:creator><dc:language>en</dc:language>
   </metadata>
-  <manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest>
+  <manifest>
+    <item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+    ${imageManifestItem}
+  </manifest>
   <spine><itemref idref="chapter"/></spine>
 </package>`),
     },
     { name: 'EPUB/chapter.xhtml', data: utf8(chapter) },
+    ...(embeddedImage ? [{ name: 'EPUB/images/diagram.png', data: EMBEDDED_IMAGE_PNG }] : []),
   ]))
 }
 
 export function semanticRtfFixture(
-  { additionalParagraphs = 0 }: { additionalParagraphs?: number } = {},
+  {
+    additionalParagraphs = 0,
+    embeddedImage = false,
+  }: { additionalParagraphs?: number; embeddedImage?: boolean } = {},
 ): Uint8Array<ArrayBuffer> {
   const extra = longParagraphs(
     additionalParagraphs,
     (index) => String.raw`\pard\s0 Long RTF paragraph ${index}.\par
 `,
   )
+  // RTF has no filesystem to embed a picture INTO — the bytes themselves
+  // ride in the document stream as a hex-encoded `\pict` destination.
+  // `\pngblip` names the encoding; `picw`/`pich` are the format's OWN
+  // declared dimensions, which `assets.ts` deliberately never trusts —
+  // intrinsic size always comes from sniffing the actual bytes, so a lying
+  // `picw`/`pich` here would not change what gets packaged. RTF also has no
+  // attribute that carries alt text, so this image is expected to come
+  // through with `alt === ''`, unlike its DOCX/EPUB/ODT siblings.
+  const imageHex = Array.from(EMBEDDED_IMAGE_PNG)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
+  const imageParagraph = embeddedImage
+    ? String.raw`\pard\s0{\pict\pngblip\picw16\pich16\picwgoal240\pichgoal240 ${imageHex}}\par
+`
+    : ''
   return utf8(String.raw`{\rtf1\ansi\deff0
 {\fonttbl{\f0 Arial;}}
 {\stylesheet{\s0 Normal;}{\s1\outlinelevel0\b\fs32 Heading 1;}}
@@ -109,7 +176,7 @@ export function semanticRtfFixture(
 \viewkind4\uc1
 \pard\s1 Cell Biology\par
 \pard\s0 Cells are organized. {\field{\*\fldinst{HYPERLINK "https://example.edu/cells"}}{\fldrslt{Read the cell guide}}}\par
-\pard\s0\ls1\ilvl0 Membrane\par
+${imageParagraph}\pard\s0\ls1\ilvl0 Membrane\par
 \pard\s0\ls1\ilvl0 Cytoplasm\par
 ${extra}\pard\s0\trowd\trhdr\cellx2400\cellx4800 Structure\cell Function\cell\row
 \pard\s0\trowd\cellx2400\cellx4800 Nucleus\cell Stores DNA\cell\row

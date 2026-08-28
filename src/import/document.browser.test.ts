@@ -45,6 +45,40 @@ test.each(EPUB_ODT_RTF_FIXTURE_CASES)('$format reaches deterministic ImportedWor
   expect(html.querySelector('table')).toHaveTextContent('Stores DNA')
 })
 
+// DOCX already has this exact coverage in `file.browser.test.ts` (the
+// "packageable embedded DOCX image" test); the split it pins — a
+// packageable image becomes a cartridge reference instead of the old
+// `embedded-content` blocker — needs pinning for EPUB/ODT/RTF too, since
+// nothing exercised images on those three formats before this fixture
+// gained `embeddedImage`.
+const PACKAGEABLE_IMAGE_CASES = EPUB_ODT_RTF_FIXTURE_CASES.map((entry) => ({
+  ...entry,
+  // RTF's `\pict` destination has no attribute that carries alt text at
+  // all — unlike DOCX's `descr`, EPUB's `alt`, and ODT's `<svg:desc>`,
+  // which all round-trip "Cell diagram" through anydoc. Asserting the
+  // expected alt explicitly (rather than only checking "some alt
+  // attribute exists") is what stops a regression on the other three
+  // formats from hiding behind "well, RTF doesn't have it anyway".
+  expectedAlt: entry.format === 'rtf' ? '' : 'Cell diagram',
+}))
+
+test.each(PACKAGEABLE_IMAGE_CASES)(
+  'a packageable embedded $format image becomes a cartridge reference, not a blocker',
+  async ({ format, fixture, expectedAlt }) => {
+    const imported = await importStructuredDocument(
+      new File([await fixture({ embeddedImage: true })], `diagram.${format}`),
+      { metadata },
+    )
+
+    expect(imported.report.counts.images).toBe(1)
+    expect(imported.report.findings.some((finding) => finding.code === 'embedded-content')).toBe(false)
+    expect(imported.work.sections[0]?.html).toContain('$IMS-CC-FILEBASE$/oer2canvas/')
+    expect(imported.work.sections[0]?.html).not.toContain('[Embedded image')
+    expect(imported.work.sections[0]?.html).toContain(`alt="${expectedAlt}"`)
+    expect(imported.work.assets).toHaveLength(1)
+  },
+)
+
 test('validated content rejects an RTF renamed with an ODT extension', async () => {
   const renamed = new File([semanticRtfFixture()], 'renamed.odt', {
     type: 'application/vnd.oasis.opendocument.text',

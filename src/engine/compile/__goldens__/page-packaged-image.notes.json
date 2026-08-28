@@ -1,0 +1,11 @@
+[
+  {
+    "step": "attribution",
+    "message": "Added the source and license block required by D9"
+  },
+  {
+    "step": "canvasTemplate",
+    "message": "Applied the Canvas page template: title banner, heading rules, and footer.",
+    "count": 1
+  }
+]
