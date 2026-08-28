@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach } from 'vitest'
 import { TextContentImporter } from '../components/TextContentImporter'
+import { ImportPlanEditor, createImportDraft, type ImportDraft } from '../components/ImportPlanEditor'
 import { ChapterView } from '../components/ChapterView'
 import { compileAndAuditChapter } from '../engine'
 import { DOCUMENT } from '../engine/compile/context'
@@ -38,6 +40,14 @@ const PIPELINE_HTML = HOSTILE_HTML.replace(
 const PIPELINE_MARKDOWN = HOSTILE_MARKDOWN.replace(HOSTILE_HTML, PIPELINE_HTML)
 
 type ExecutionGlobal = typeof globalThis & Record<typeof EXECUTION_FLAG, number>
+
+/** The form and the plan editor it hands off to, as `App` wires them. */
+function TextImportFlow() {
+  const [draft, setDraft] = useState<ImportDraft | undefined>()
+  return draft
+    ? <ImportPlanEditor draft={draft} onChange={setDraft} onConfirm={() => {}} onDiscard={() => setDraft(undefined)} />
+    : <TextContentImporter onImported={(result) => setDraft(createImportDraft(result))} />
+}
 const executionGlobal = globalThis as ExecutionGlobal
 
 afterEach(() => {
@@ -51,7 +61,7 @@ test.each([
   { label: 'pasted Markdown', mode: 'paste' as const, format: 'Markdown', source: HOSTILE_MARKDOWN },
 ])('hostile content from $label stays inert in the import preview and discloses every repair category', async ({ mode, format, source }) => {
   executionGlobal[EXECUTION_FLAG] = 0
-  const { container } = render(<TextContentImporter onConfirm={() => {}} />)
+  const { container } = render(<TextImportFlow />)
   fireEvent.change(screen.getByLabelText('Document title'), { target: { value: 'Hostile import' } })
   if (mode === 'paste') {
     fireEvent.click(screen.getByRole('radio', { name: format }))
@@ -64,9 +74,11 @@ test.each([
   }
   fireEvent.click(screen.getByRole('radio', { name: 'I created or own this content' }))
   fireEvent.click(screen.getByRole('checkbox', { name: /I am responsible for rights/i }))
-  fireEvent.click(screen.getByRole('button', { name: 'Create one-page preview' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Create page plan' }))
 
-  expect(await screen.findByRole('heading', { name: 'Preview: Hostile import' })).toBeVisible()
+  expect(await screen.findByRole('heading', { name: 'Page plan: Hostile import' })).toBeVisible()
+  for (const summary of screen.getAllByText(/^Preview /)) fireEvent.click(summary)
+  expect(await screen.findByText('Safe prose')).toBeVisible()
   await new Promise<void>((resolve) => setTimeout(resolve, 50))
 
   expect(executionGlobal[EXECUTION_FLAG]).toBe(0)

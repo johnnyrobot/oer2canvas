@@ -6,6 +6,7 @@ import {
 } from '../import/testing/structured-document-fixtures'
 import { DOCUMENT_FIXTURE_CASES } from '../import/testing/document-fixture-cases'
 import { capabilityForFormat } from '../import/capability'
+import type { ImportResult } from '../import/types'
 
 async function chooseFile(name: string, bytes: Uint8Array<ArrayBuffer>) {
   fireEvent.change(screen.getByLabelText('Document file'), {
@@ -18,47 +19,44 @@ function completeRights() {
   fireEvent.click(screen.getByRole('checkbox', { name: /I am responsible for rights/i }))
 }
 
-test.each(DOCUMENT_FIXTURE_CASES)('$format is exposed from the tested capability table and confirms a semantic preview', async ({ format, fixture }) => {
+test.each(DOCUMENT_FIXTURE_CASES)('$format is exposed from the tested capability table and hands off semantic content', async ({ format, fixture }) => {
   const label = capabilityForFormat(format)!.label
-  const onConfirm = vi.fn()
-  render(<DocumentImporter onConfirm={onConfirm} />)
+  const onImported = vi.fn()
+  render(<DocumentImporter onImported={onImported} />)
   await chooseFile(`cells.${format}`, await fixture())
 
   expect(screen.getByText(new RegExp(`${label} limitation`, 'i'))).toBeVisible()
   completeRights()
   fireEvent.click(screen.getByRole('button', { name: 'Inspect document' }))
 
-  expect(await screen.findByRole('heading', { name: 'Preview: cells' })).toBeVisible()
-  expect(screen.getAllByRole('heading', { name: 'Cell Biology' }).length).toBeGreaterThan(0)
-  expect(screen.getByRole('link', { name: 'Read the cell guide' })).toHaveAttribute(
-    'href',
-    'https://example.edu/cells',
-  )
-  expect(screen.getByText(new RegExp(`${label} · AnyDoc 0\.2\.4`, 'i'))).toBeVisible()
-
-  fireEvent.click(screen.getByRole('button', { name: 'Prepare this document' }))
-  await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1))
-  expect(onConfirm.mock.calls[0]?.[0]).toMatchObject({
+  await waitFor(() => expect(onImported).toHaveBeenCalledTimes(1))
+  const result = onImported.mock.calls[0]![0] as ImportResult
+  expect(result).toMatchObject({
     work: { title: 'cells', format, assets: [] },
-    report: { parser: 'anydoc', format },
+    report: { parser: 'anydoc', parserVersion: '0.2.4', format },
   })
+  const html = new DOMParser().parseFromString(result.work.sections[0]!.html, 'text/html')
+  expect([...html.querySelectorAll('h1, h2, h3')].map((heading) => heading.textContent)).toContain('Cell Biology')
+  expect(html.querySelector('a')?.getAttribute('href')).toBe('https://example.edu/cells')
 })
 
-test('embedded content remains a visible blocker in the shared document UI', async () => {
-  const onConfirm = vi.fn()
-  render(<DocumentImporter onConfirm={onConfirm} />)
+test('embedded content is handed off as a blocking finding, never dropped', async () => {
+  const onImported = vi.fn()
+  render(<DocumentImporter onImported={onImported} />)
   await chooseFile('diagram.docx', await semanticDocxFixture({ embeddedImage: true }))
   completeRights()
   fireEvent.click(screen.getByRole('button', { name: 'Inspect document' }))
 
-  expect(await screen.findByRole('heading', { name: 'Preview: diagram' })).toBeVisible()
-  expect(screen.getByText(/text-oriented document workflow cannot publish it yet/i)).toBeVisible()
-  expect(screen.getByRole('button', { name: 'Prepare this document' })).toBeDisabled()
-  expect(onConfirm).not.toHaveBeenCalled()
+  await waitFor(() => expect(onImported).toHaveBeenCalledTimes(1))
+  const result = onImported.mock.calls[0]![0] as ImportResult
+  expect(result.report.findings).toContainEqual(expect.objectContaining({
+    severity: 'blocker',
+    message: expect.stringMatching(/text-oriented document workflow cannot publish it yet/i),
+  }))
 })
 
 test.each(['epub', 'odt', 'rtf'] as const)('%s malformed input produces a focused recoverable error', async (format) => {
-  render(<DocumentImporter onConfirm={() => {}} />)
+  render(<DocumentImporter onImported={() => {}} />)
   await chooseFile(`broken.${format}`, malformedStructuredFixture(format))
   completeRights()
   fireEvent.click(screen.getByRole('button', { name: 'Inspect document' }))

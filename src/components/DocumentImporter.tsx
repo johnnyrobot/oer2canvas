@@ -5,7 +5,6 @@ import {
   STRUCTURED_DOCUMENT_FILE_ACCEPT,
   STRUCTURED_DOCUMENT_FORMAT_SUMMARY,
   capabilityForFilename,
-  capabilityForFormat,
 } from '../import/capability'
 import type { ImportResult } from '../import/types'
 import type { ParserProbeProgressPhase } from '../import/parsers/probe'
@@ -25,10 +24,14 @@ const PROGRESS_LABEL: Readonly<Record<ParserProbeProgressPhase, string>> = {
   complete: 'Document inspection complete.',
 }
 
-export function DocumentImporter({ onConfirm }: { onConfirm: (result: ImportResult) => void }) {
+/**
+ * The structured-document form. Parsing happens in the Worker; the result is
+ * handed to the owner, whose `ImportPlanEditor` shows findings, the proposed
+ * pages, and the preview. See `TextContentImporter` for the same division.
+ */
+export function DocumentImporter({ onImported }: { onImported: (result: ImportResult) => void }) {
   const [file, setFile] = useState<File | undefined>()
   const [metadata, setMetadata] = useState(emptyImportMetadata)
-  const [result, setResult] = useState<ImportResult | undefined>()
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
@@ -57,7 +60,7 @@ export function DocumentImporter({ onConfirm }: { onConfirm: (result: ImportResu
         signal: controller.signal,
         onProgress: (progress) => setStatus(PROGRESS_LABEL[progress.phase]),
       })
-      setResult(imported)
+      onImported(imported)
     } catch (caught) {
       setError(isAbortError(caught)
         ? 'Document inspection cancelled. You can choose a file and try again.'
@@ -67,73 +70,6 @@ export function DocumentImporter({ onConfirm }: { onConfirm: (result: ImportResu
       setStatus('')
       run.current = undefined
     }
-  }
-
-  if (result) {
-    const blockers = result.report.findings.filter((finding) => finding.severity === 'blocker')
-    const capability = capabilityForFormat(result.work.format)
-    return (
-      <section aria-labelledby="document-preview-heading" className="mt-5 max-w-3xl">
-        <h3 id="document-preview-heading" className="text-lg font-semibold">
-          Preview: {result.work.title}
-        </h3>
-        <p className="mt-1 text-sm text-neutral-700 dark:text-neutral-300">
-          {capability?.label ?? result.work.format.toUpperCase()} · AnyDoc {result.report.parserVersion} ·{' '}
-          One Canvas page · {result.report.counts.headings} headings ·{' '}
-          {result.report.counts.tables} tables · {result.report.counts.images} images ·{' '}
-          processed in this browser
-        </p>
-        {capability && (
-          <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300">
-            <strong>{capability.label} limitation:</strong> {capability.limitations.join(' ')}
-          </p>
-        )}
-        {result.report.findings.length === 0 ? (
-          <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300">
-            No extraction warnings or blockers.
-          </p>
-        ) : (
-          <div className="mt-3 rounded-md border border-amber-400 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
-            <p className="font-medium">
-              {blockers.length > 0
-                ? 'This document cannot be prepared until its extraction blockers are resolved.'
-                : 'Review these extraction warnings before preparing the document.'}
-            </p>
-            <ul role="list" className="mt-2 list-disc space-y-1 pl-5">
-              {result.report.findings.map((finding) => (
-                <li key={`${finding.code}-${finding.sectionId ?? ''}`}>
-                  <strong>{finding.severity === 'blocker' ? 'Blocker' : 'Warning'}:</strong>{' '}
-                  {finding.message}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        <div className="mt-4 rounded-lg border border-neutral-300 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900">
-          {/* The Worker constructs this markup only from escaped AnyDoc text and
-              a fixed semantic element/attribute vocabulary; source document
-              markup is never parsed as live HTML. */}
-          <div dangerouslySetInnerHTML={{ __html: result.work.sections[0]!.html }} />
-        </div>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <button
-            type="button"
-            disabled={blockers.length > 0}
-            className="min-h-9 rounded-md bg-brand-700 px-4 text-sm font-medium text-white disabled:opacity-60"
-            onClick={() => onConfirm(result)}
-          >
-            Prepare this document
-          </button>
-          <button
-            type="button"
-            className="min-h-9 rounded-md border border-neutral-300 px-4 text-sm font-medium dark:border-neutral-700"
-            onClick={() => setResult(undefined)}
-          >
-            Choose another document
-          </button>
-        </div>
-      </section>
-    )
   }
 
   return (
@@ -150,7 +86,6 @@ export function DocumentImporter({ onConfirm }: { onConfirm: (result: ImportResu
           onChange={(event) => {
             const chosen = event.target.files?.[0]
             setFile(chosen)
-            setResult(undefined)
             setError('')
             if (chosen && !metadata.title.trim()) {
               setMetadata((current) => ({

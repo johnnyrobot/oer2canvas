@@ -141,8 +141,8 @@ export function SourceBrowser({
 
       <div className="mt-5">
         {tab === 'openstax' && <OpenStaxBrowser onPick={onPick} />}
-        {tab === 'document' && onImportDocument && <DocumentImporter onConfirm={onImportDocument} />}
-        {tab === 'text' && onImportText && <TextContentImporter onConfirm={onImportText} />}
+        {tab === 'document' && onImportDocument && <DocumentImporter onImported={onImportDocument} />}
+        {tab === 'text' && onImportText && <TextContentImporter onImported={onImportText} />}
         {catalog && (
           <section aria-labelledby={`${tab}-catalog-heading`}>
             <h3 id={`${tab}-catalog-heading`} className="text-lg font-semibold">

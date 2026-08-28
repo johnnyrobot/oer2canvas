@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { render, screen, fireEvent } from '@testing-library/react'
 import axe from 'axe-core'
 import App from './App'
@@ -5,6 +6,7 @@ import { ChapterPicker } from './components/ChapterPicker'
 import { ChapterView } from './components/ChapterView'
 import { TextContentImporter } from './components/TextContentImporter'
 import { DocumentImporter } from './components/DocumentImporter'
+import { ImportPlanEditor, createImportDraft, type ImportDraft } from './components/ImportPlanEditor'
 import { QueueView } from './components/queue/QueueView'
 import { newSession, reduce, type QueueSession } from './components/queue/session'
 import { fetchChapter, flattenToc } from './sources/openstax'
@@ -206,24 +208,51 @@ test('screen 1 — the book browser has no accessibility violations', async () =
   expect(duplicateIds(container)).toEqual([])
 })
 
-test('screen 1b — the text and markup form and preview have no accessibility violations', async () => {
-  const { container } = render(<TextContentImporter onConfirm={() => {}} />)
+/**
+ * An import form and the page plan editor it hands off to, wired as `App`
+ * wires them. Both screens are audited: the form before parsing, the editor
+ * after, and the editor again with a split picker and a preview open.
+ */
+function ImportFlow({ form }: { form: (onImported: (result: import('./import/types').ImportResult) => void) => React.ReactNode }) {
+  const [draft, setDraft] = useState<ImportDraft | undefined>()
+  return draft
+    ? <ImportPlanEditor draft={draft} onChange={setDraft} onConfirm={() => {}} onDiscard={() => setDraft(undefined)} />
+    : form((result) => setDraft(createImportDraft(result)))
+}
+
+test('screen 1b — the text and markup form and its page plan have no accessibility violations', async () => {
+  const { container } = render(<ImportFlow form={(onImported) => <TextContentImporter onImported={onImported} />} />)
   expect(await violationsIn(container)).toEqual([])
   expect(duplicateIds(container)).toEqual([])
 
+  fireEvent.click(screen.getByRole('radio', { name: 'Markdown' }))
   fireEvent.change(screen.getByLabelText('Document title'), { target: { value: 'Accessible notes' } })
-  fireEvent.change(screen.getByLabelText('Content to import'), { target: { value: 'A useful paragraph.' } })
+  fireEvent.change(screen.getByLabelText('Content to import'), {
+    target: { value: '# Notes\n\n## Membranes\n\nA useful paragraph.\n\nAnother.\n\n## Nucleus\n\nStores DNA.' },
+  })
   fireEvent.click(screen.getByRole('radio', { name: 'I created or own this content' }))
   fireEvent.click(screen.getByRole('checkbox', { name: /I am responsible for rights/i }))
-  fireEvent.click(screen.getByRole('button', { name: 'Create one-page preview' }))
-  await screen.findByRole('heading', { name: 'Preview: Accessible notes' })
+  fireEvent.click(screen.getByRole('button', { name: 'Create page plan' }))
+  await screen.findByRole('heading', { name: 'Page plan: Accessible notes' })
+  expect(screen.getAllByLabelText(/^Title of page/)).toHaveLength(2)
+
+  expect(await violationsIn(container)).toEqual([])
+  expect(duplicateIds(container)).toEqual([])
+
+  fireEvent.click(screen.getByRole('button', { name: 'Split: Membranes' }))
+  expect(screen.getByLabelText('Start a new page at')).toBeVisible()
+  fireEvent.click(screen.getByText('Preview Nucleus'))
+  await screen.findByText('Stores DNA.')
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Include: Nucleus' }))
+  fireEvent.change(screen.getByLabelText('Title of page 1'), { target: { value: 'Nucleus' } })
+  expect(screen.getByRole('button', { name: 'Prepare 1 page' })).toBeEnabled()
 
   expect(await violationsIn(container)).toEqual([])
   expect(duplicateIds(container)).toEqual([])
 })
 
-test('screen 1c — the document form and extracted preview have no accessibility violations', async () => {
-  const { container } = render(<DocumentImporter onConfirm={() => {}} />)
+test('screen 1c — the document form and its page plan have no accessibility violations', async () => {
+  const { container } = render(<ImportFlow form={(onImported) => <DocumentImporter onImported={onImported} />} />)
   expect(await violationsIn(container)).toEqual([])
   expect(duplicateIds(container)).toEqual([])
 
@@ -234,7 +263,9 @@ test('screen 1c — the document form and extracted preview have no accessibilit
   fireEvent.click(screen.getByRole('radio', { name: 'I created or own this content' }))
   fireEvent.click(screen.getByRole('checkbox', { name: /I am responsible for rights/i }))
   fireEvent.click(screen.getByRole('button', { name: 'Inspect document' }))
-  await screen.findByRole('heading', { name: 'Preview: accessible' })
+  await screen.findByRole('heading', { name: 'Page plan: accessible' })
+  fireEvent.click(screen.getByText('Preview accessible'))
+  await screen.findByText('Stores DNA')
 
   expect(await violationsIn(container)).toEqual([])
   expect(duplicateIds(container)).toEqual([])

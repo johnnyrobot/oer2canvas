@@ -76,7 +76,7 @@ test('text and markup are a content choice without removing the publisher catalo
 
   fireEvent.click(screen.getByRole('tab', { name: 'Text / Markdown / HTML' }))
   expect(screen.getByLabelText('Content to import')).toBeVisible()
-  expect(screen.getByRole('button', { name: 'Create one-page preview' })).toBeVisible()
+  expect(screen.getByRole('button', { name: 'Create page plan' })).toBeVisible()
 
   fireEvent.click(screen.getByRole('tab', { name: 'OpenStax' }))
   expect(screen.getByRole('button', { name: 'Algebra and Trigonometry' })).toBeVisible()

@@ -12,12 +12,17 @@ test.each(DOCUMENT_FIXTURE_CASES)('a user takes a local $format document through
   fireEvent.click(screen.getByRole('radio', { name: 'I created or own this content' }))
   fireEvent.click(screen.getByRole('checkbox', { name: /I am responsible for rights/i }))
   fireEvent.click(screen.getByRole('button', { name: 'Inspect document' }))
-  fireEvent.click(await screen.findByRole('button', { name: 'Prepare this document' }))
+  expect(await screen.findByRole('heading', { name: 'Page plan: cells' })).toBeVisible()
+  // AnyDoc surfaces the EPUB package title as a heading of its own, so that
+  // format proposes two pages; the others propose one.
+  const pages = screen.getAllByLabelText(/^Title of page/).length
+  expect(pages).toBe(format === 'epub' ? 2 : 1)
+  fireEvent.click(screen.getByRole('button', { name: `Prepare ${pages} ${pages === 1 ? 'page' : 'pages'}` }))
 
   await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Review'))
   expect(await screen.findByText('Stores DNA')).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: /^Plan$/ }))
-  expect(screen.getByText('1 chapter becomes 1 page in a cartridge file.')).toBeVisible()
+  expect(screen.getByText(`1 chapter becomes ${pages} ${pages === 1 ? 'page' : 'pages'} in a cartridge file.`)).toBeVisible()
   expect(screen.getByText('Packaged assets: 0.')).toBeVisible()
 })
 
@@ -34,7 +39,7 @@ test('a recoverable DOCX extraction warning remains visible in Plan', async () =
   fireEvent.click(screen.getByRole('button', { name: 'Inspect document' }))
 
   expect(await screen.findByText(/unresolved link could not be preserved/i)).toBeVisible()
-  fireEvent.click(screen.getByRole('button', { name: 'Prepare this document' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Prepare 1 page' }))
   await screen.findByText('Stores DNA')
   fireEvent.click(screen.getByRole('button', { name: /^Plan$/ }))
 

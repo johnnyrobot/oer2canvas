@@ -12,8 +12,8 @@ UTF-8 `.txt`, `.md`, `.markdown`, `.html`, and `.htm` files, and text-oriented `
 
 - a Common Cartridge 1.1 download, with no Canvas address, account, or token access.
 
-Text, Markdown, and HTML imports are processed entirely in the browser, are limited to 2 MiB,
-and start as one Canvas page. Plain text is escaped. Markdown uses a pinned GFM parser, and both
+Text, Markdown, and HTML imports are processed entirely in the browser and are limited to 2 MiB.
+Plain text is escaped. Markdown uses a pinned GFM parser, and both
 its raw HTML and direct HTML imports pass through one inert semantic sanitizer. Scripts, event
 handlers, forms, active embeds, source styling, unsafe URLs, and unsupported elements are removed
 with visible findings before preview. A validated public HTTPS source URL can resolve relative links;
@@ -23,11 +23,19 @@ alternative text is retained and they block preparation until packaged markup as
 Text-oriented structured-document imports are limited to 16 MiB and parsed locally in a
 disposable AnyDoc WebAssembly Worker. Headings, paragraphs, lists, links, code blocks, and simple
 tables are converted to controlled semantic HTML. Embedded images and other unsupported
-structured-document content are shown as blocking findings instead of being omitted silently. The
-import preview requires a title, a stated basis for republishing the material, and acknowledgement
-that the user remains responsible for rights and final accessibility review. Optional author,
-source, public URL, and license metadata become the page's source-and-license attribution; the app
-never invents a URL or an open license.
+structured-document content are shown as blocking findings instead of being omitted silently. Every
+import then becomes a proposed page plan: the document is split at the highest heading level that
+repeats (a lone document title is not a split; content with no repeated headings starts as one
+page), up to 100 proposed pages per document. Before anything is prepared, the user can rename,
+include or exclude, split, merge, and reorder the proposed pages with keyboard-operable controls
+and preview each one, without the source being reread. Page identities derive from the source
+content hash and each page's structural position, so re-importing the same document updates the
+same Canvas pages. Changing a plan that was already prepared discards the prepared output until
+it is confirmed again. The import requires a title, a stated basis for republishing the material,
+and acknowledgement that the user remains responsible for rights and final accessibility review;
+these and the optional author, source, public URL, and license metadata stay editable on the page
+plan and become the page's source-and-license attribution. The app never invents a URL or an open
+license.
 
 The repository also retains a resumable Canvas REST push for an operator-controlled deployment.
 It is disabled in the public build and public relay. It may be enabled only when the operator

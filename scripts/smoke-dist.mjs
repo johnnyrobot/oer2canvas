@@ -290,8 +290,12 @@ async function main() {
     await page.getByRole('radio', { name: 'I created or own this content' }).click()
     await page.getByRole('checkbox', { name: /I am responsible for rights/i }).click()
     await page.getByRole('button', { name: 'Inspect document' }).click()
-    await page.getByRole('heading', { name: 'Preview: production-reader' }).waitFor()
-    await page.getByRole('button', { name: 'Prepare this document' }).click()
+    // AnyDoc surfaces the EPUB package title as a heading, so the proposal is
+    // two pages. Merging them in the built editor proves the page plan is wired
+    // in production and keeps the one-page cartridge assertion below honest.
+    await page.getByRole('heading', { name: 'Page plan: production-reader' }).waitFor()
+    await page.getByRole('button', { name: /^Merge with next page/ }).first().click()
+    await page.getByRole('button', { name: 'Prepare 1 page' }).click()
     await page.getByText('Stores DNA').waitFor({ state: 'visible', timeout: 120_000 })
     await page.getByRole('button', { name: /^Plan$/ }).click()
 

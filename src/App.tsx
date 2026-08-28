@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { SourceBrowser } from './components/SourceBrowser'
+import { ImportPlanEditor, createImportDraft, type ImportDraft } from './components/ImportPlanEditor'
 import { ChapterPicker } from './components/ChapterPicker'
 import { ChapterView } from './components/ChapterView'
 import { QueueView } from './components/queue/QueueView'
@@ -278,8 +279,17 @@ export default function App() {
   const [selected, setSelected] = useState<readonly ChapterOutline[]>([])
   /** One `CompiledChapter` per prepared chapter, kept apart so each keeps its identity. */
   const [prepared, setPrepared] = useState<readonly CompiledChapter[]>([])
-  /** Browser-imported content, retained so the shell has one source-neutral selection. */
-  const [imported, setImported] = useState<ImportResult | undefined>()
+  /**
+   * The browser import being planned: the parse result plus every edit to its
+   * proposed pages and metadata. Owned here rather than by the Content screen so
+   * it survives a visit to Review or Plan, and so a changed plan can be
+   * confirmed again without reparsing the source.
+   */
+  const [imported, setImported] = useState<ImportDraft | undefined>()
+  /** The pages that were actually sent to preparation; absent until the plan is confirmed. */
+  const [confirmedImport, setConfirmedImport] = useState<ImportResult | undefined>()
+  /** Why prepared output disappeared, shown on the plan editor until the next confirm. */
+  const [planNotice, setPlanNotice] = useState('')
   /** The filename that was produced, once something has actually been committed. */
   const [committed, setCommitted] = useState<string | undefined>()
   /** What a Canvas push did, once one has run. Absent for the cartridge path. */
@@ -344,6 +354,7 @@ export default function App() {
     setQueue(undefined)
     setCommitted(undefined)
     setPush(undefined)
+    setConfirmedImport(undefined)
   }
 
   /** Compile and audit every source through one UI/state lifecycle. */
@@ -379,6 +390,7 @@ export default function App() {
     run.current = undefined
     clearDerivedOutput()
     setImported(undefined)
+    setPlanNotice('')
     setSelected([])
     setBusy(`Loading ${b.title}…`)
     setError('')
@@ -500,9 +512,46 @@ export default function App() {
   }
 
   /**
+   * A freshly parsed browser import becomes a page plan to inspect and edit.
+   * It replaces any publisher book or earlier import outright: a stale import
+   * must never be combined with a new source by accident.
+   */
+  function stageImportedContent(result: ImportResult) {
+    run.current?.abort()
+    run.current = undefined
+    clearDerivedOutput()
+    setBook(undefined)
+    setToc(undefined)
+    setOutlines([])
+    setSelected([])
+    setImported(createImportDraft(result))
+    setPlanNotice('')
+    setBusy('')
+    setError('')
+    setPhase('chapters')
+  }
+
+  /**
+   * Any edit to a plan that has already been prepared discards the prepared
+   * output. Compiled and audited bytes describe the pages that were confirmed,
+   * and letting them stand beside a different plan would let Plan and export
+   * ship pages the user just changed or excluded.
+   */
+  function updateImportDraft(next: ImportDraft) {
+    if (confirmedImport) {
+      run.current?.abort()
+      run.current = undefined
+      clearDerivedOutput()
+      setPlanNotice('Prepared pages were discarded because the plan changed. Prepare it again when you are done.')
+    }
+    setImported(next)
+  }
+
+  /**
    * Prepare a confirmed browser import through the same Chapter-level engine
-   * seam as publisher content. Parsing and metadata stay above this boundary;
-   * the compiler receives only the normalized Chapter.
+   * seam as publisher content. Parsing, page planning, and metadata stay above
+   * this boundary; the compiler receives only the normalized Chapter of the
+   * pages the user included.
    */
   async function prepareImportedContent(result: ImportResult) {
     const ch = toChapter(result.work)
@@ -510,11 +559,8 @@ export default function App() {
     clearDerivedOutput()
     const controller = new AbortController()
     run.current = controller
-    setImported(result)
-    setBook(undefined)
-    setToc(undefined)
-    setOutlines([])
-    setSelected([])
+    setConfirmedImport(result)
+    setPlanNotice('')
     setPhase('review')
     setError('')
     setBusy(`Preparing ${ch.title}…`)
@@ -524,7 +570,8 @@ export default function App() {
       setPrepared([compiled])
     } catch (caught) {
       if (!isAbortError(caught)) setError(`Could not prepare ${ch.title}. ${messageOf(caught)}`)
-      setImported(undefined)
+      // The plan is kept: a failed or cancelled run is something to retry or
+      // adjust, not a reason to make the user parse the document again.
       clearDerivedOutput()
       setPhase('chapters')
     } finally {
@@ -539,6 +586,7 @@ export default function App() {
     run.current = undefined
     clearDerivedOutput()
     setImported(undefined)
+    setPlanNotice('')
     setBusy('')
     setError('')
     setPhase('chapters')
@@ -631,10 +679,14 @@ export default function App() {
       onCancel={busy ? () => run.current?.abort() : undefined}
       selection={{
         items: imported
-          ? [{ id: imported.work.id, title: imported.work.title, sectionCount: imported.work.sections.length }]
+          ? [{
+              id: imported.plan.workId,
+              title: imported.metadata.title.trim() || imported.source.work.title,
+              sectionCount: imported.plan.pages.filter((page) => page.included).length,
+            }]
           : selected.map((o) => ({ id: o.id, title: o.title, sectionCount: o.sections.length })),
         onRemove: (id) => {
-          if (imported?.work.id === id) clearImportedContent()
+          if (imported?.plan.workId === id) clearImportedContent()
           else setSelected((sel) => sel.filter((s) => s.id !== id))
         },
         onClear: () => {
@@ -685,11 +737,20 @@ export default function App() {
         />
       )}
 
-      {phase === 'chapters' && !book && (
+      {phase === 'chapters' && !book && !imported && (
         <SourceBrowser
           onPick={(book) => { void pickBook(book) }}
-          onImportText={(result) => { void prepareImportedContent(result) }}
-          onImportDocument={(result) => { void prepareImportedContent(result) }}
+          onImportText={stageImportedContent}
+          onImportDocument={stageImportedContent}
+        />
+      )}
+      {phase === 'chapters' && imported && (
+        <ImportPlanEditor
+          draft={imported}
+          onChange={updateImportDraft}
+          onConfirm={(result) => { void prepareImportedContent(result) }}
+          onDiscard={clearImportedContent}
+          {...(planNotice ? { notice: planNotice } : {})}
         />
       )}
       {phase === 'chapters' && book && (
@@ -727,7 +788,9 @@ export default function App() {
       )}
       {phase === 'review' && !partial && !compiling && (
         <p className="text-sm text-neutral-700 dark:text-neutral-300">
-          Nothing to prepare yet. Pick chapters first.
+          {imported
+            ? 'Nothing to prepare yet. Confirm the page plan first.'
+            : 'Nothing to prepare yet. Pick chapters first.'}
         </p>
       )}
 
@@ -736,9 +799,9 @@ export default function App() {
           destination={destination}
           chapters={prepared}
           unansweredCount={partial?.queue.length ?? 0}
-          {...(imported ? {
-            assetCount: imported.work.assets.length,
-            importFindings: imported.report.findings,
+          {...(confirmedImport ? {
+            assetCount: confirmedImport.work.assets.length,
+            importFindings: [...confirmedImport.report.findings, ...(imported?.planFindings ?? [])],
           } : {})}
           {...(existingPages ? { existingPages } : {})}
           /*
