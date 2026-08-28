@@ -3,12 +3,15 @@
 // it; TypeScript's no-emit project rejects only the spelling of the path.
 // @ts-expect-error -- shared browser/Node test fixture; see above.
 import { writeZip } from '../../engine/export/zip.ts'
+// @ts-expect-error -- shared browser/Node test fixture; see above.
+import { RASTER_FIXTURES } from './raster-fixtures.ts'
 
 const utf8 = (value: string) => new TextEncoder().encode(value)
 
-const ONE_PIXEL_PNG = Uint8Array.from(atob(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-), (character) => character.charCodeAt(0))
+// A 1x1 image is indistinguishable from a broken one and degenerate for a
+// dimension decoder, so the embedded-image case uses the same Canvas-proven
+// 16x16 PNG the raster fixtures share — not a synthetic pixel of its own.
+const EMBEDDED_IMAGE_PNG = RASTER_FIXTURES.png.bytes
 
 export async function semanticDocxFixture(
   {
@@ -88,7 +91,7 @@ export async function semanticDocxFixture(
   <w:sectPr/>
 </w:body></w:document>`),
     },
-    ...(embeddedImage ? [{ name: 'word/media/image1.png', data: ONE_PIXEL_PNG }] : []),
+    ...(embeddedImage ? [{ name: 'word/media/image1.png', data: EMBEDDED_IMAGE_PNG }] : []),
   ]
   return new Uint8Array(await writeZip(entries))
 }
