@@ -4,6 +4,8 @@
 
 **Blocked by:** 04 — Enable EPUB, ODT, and RTF structured imports; 07 — Validate embedded-image behavior in a real Canvas sandbox.
 
+**Design:** [08-embedded-image-tracer-design.md](../08-embedded-image-tracer-design.md)
+
 **Status:** ready-for-agent
 
 - [ ] A PNG extracted locally from a supported document is represented as an imported asset with stable identity and provenance.
