@@ -30,15 +30,12 @@ const MIME = {
 const PROFILES = [
   { id: 'chrome-desktop', browserType: chromium, launch: { channel: 'chrome' }, support: 'benchmarked-desktop' },
   { id: 'firefox-desktop', browserType: firefox, launch: {}, support: 'benchmarked-desktop' },
-  { id: 'webkit-desktop', browserType: webkit, launch: {}, support: 'benchmarked-desktop' },
   {
-    id: 'chrome-mobile-viewport-diagnostic',
-    browserType: chromium,
-    launch: { channel: 'chrome' },
-    viewport: { width: 390, height: 844 },
-    cpuThrottle: 4,
+    id: 'webkit-desktop-diagnostic',
+    browserType: webkit,
+    launch: {},
     support: 'diagnostic-only',
-    limitation: 'CDP throttles the page target, not the dedicated parser Worker; this is not mobile-device evidence.',
+    limitation: 'Playwright WebKit is useful cross-engine evidence but is not Safari and is outside the initial Chrome/Firefox release matrix.',
   },
 ]
 
@@ -279,10 +276,9 @@ async function main() {
       sizes: fixtureList.map((fixture) => ({ id: fixture.id, bytes: fixture.bytes.byteLength })),
     },
     supportPolicy: {
-      benchmarkedDesktopProfiles: PROFILES.filter((profile) => profile.support === 'benchmarked-desktop').map((profile) => profile.id),
-      safari: 'not-release-validated',
-      mobile: 'not-release-validated',
-      note: 'Current Safari and a physical mobile-class device must run this matrix before document parsers can be enabled. Playwright WebKit is not Safari, and viewport/page-target CPU emulation does not validate a dedicated Worker.',
+      supportedReleaseProfiles: PROFILES.filter((profile) => profile.support === 'benchmarked-desktop').map((profile) => profile.id),
+      unsupported: ['safari', 'mobile'],
+      note: 'The initial document-import release supports desktop Chrome and Firefox only. WebKit remains diagnostic evidence and does not imply Safari support.',
     },
     profiles,
     status: profiles

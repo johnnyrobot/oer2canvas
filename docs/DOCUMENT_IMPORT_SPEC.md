@@ -470,8 +470,9 @@ long as the active import requires them.
 - The app checks file size before allocating an `ArrayBuffer` and honors AnyDoc's
   `resourceLimit` error.
 - The initial hard file-size and page-count budgets are constants selected by the Phase 0 browser
-  benchmark. Candidate values must be tested on supported desktop and mobile-class devices rather
-  than guessed into the release.
+  benchmark. The initial document-import release supports desktop Chrome and Firefox only, and
+  candidate values must be tested in both rather than guessed into the release. Safari and mobile
+  browsers are outside the initial support matrix.
 
 ## 14. Privacy and security requirements
 

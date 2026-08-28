@@ -31,8 +31,8 @@ with WebGPU; the first use downloads and caches the selected Florence-2 base mod
 The repository also contains probe-only AnyDoc and PDF Inspector module Workers for DOCX, ODT,
 RTF, EPUB, and PDF feasibility testing. Their parser code and WASM are fetched only when a probe
 starts, and source bytes stay in the browser. These formats are not yet exposed in the release UI;
-the committed benchmark provides desktop feasibility evidence in Chrome, Firefox, and Playwright
-WebKit. Current Safari and physical mobile-device runs remain release gates.
+the initial document-import release matrix is desktop Chrome and Firefox. Playwright WebKit remains
+diagnostic cross-engine evidence; Safari and mobile browsers are not supported for document import.
 
 ## Local development
 

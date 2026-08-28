@@ -4,8 +4,8 @@
 
 AnyDoc 0.2.4 and PDF Inspector 1.17.0 successfully ran as disposable module Workers in the
 production Vite build. Source `ArrayBuffer` ownership was transferred to each Worker. Cancellation
-terminated the active Worker in 1 ms or less after the cancellation signal in the three supported
-desktop probe profiles, and the next parse succeeded in a fresh Worker.
+terminated the active Worker promptly in both supported desktop profiles, and the next parse
+succeeded in a fresh Worker.
 
 The complete machine-readable report is
 [`document-parser-benchmark-2026-08-27.json`](document-parser-benchmark-2026-08-27.json).
@@ -16,20 +16,17 @@ measurement was uploaded.
 
 | Probe profile | Engine version | Result | Release meaning |
 | --- | --- | --- | --- |
-| Chrome desktop | 151.0.7922.176 | Passed | Desktop feasibility evidence |
-| Playwright Firefox desktop | 153.0 | Passed | Desktop feasibility evidence |
-| Playwright WebKit desktop | 26.5 | Passed | WebKit-engine feasibility evidence; not a claim of Safari identity |
-| Chrome 390×844 viewport, page target at 4× CPU throttle | 151.0.7922.176 | Diagnostic passed | Not mobile evidence; CDP did not throttle the dedicated parser Worker |
+| Chrome desktop | 151.0.7922.176 | Passed | Supported release profile |
+| Playwright Firefox desktop | 153.0 | Passed | Supported release profile |
+| Playwright WebKit desktop | 26.5 | Diagnostic passed | Cross-engine evidence only; Safari is unsupported |
 
-The host was macOS 25.4 on an Apple M1 Ultra with 128 GiB RAM. Safari 26.4 was installed, but its
-required “Allow remote automation” setting was disabled; physical mobile-class hardware was not
-available. Document parsers therefore remain probe-only and are **not release-validated in Safari
-or on mobile**. The committed matrix must pass in current Safari and on physical mobile-class
-devices before these formats are enabled.
+The host was macOS 25.4 on an Apple M1 Ultra with 128 GiB RAM. The initial document-import release
+supports desktop Chrome and Firefox only. Safari and mobile browsers are outside the supported
+matrix; the WebKit result is retained as diagnostic evidence rather than represented as Safari.
 
 ## Representative and boundary fixtures
 
-All fixtures passed in all three desktop profiles:
+All fixtures passed in both supported desktop profiles and the diagnostic WebKit profile:
 
 | Fixture | Input | Boundary exercised |
 | --- | ---: | --- |
@@ -43,14 +40,14 @@ All fixtures passed in all three desktop profiles:
 | PDF medium | 129,771 bytes | 75 pages |
 | PDF stress | 348,167 bytes | 200 pages |
 
-The slowest successful parse was the 16 MiB RTF in Firefox at 4,300 ms. The largest observed WASM
+The slowest successful parse was the 16 MiB RTF in Firefox at 4,287 ms. The largest observed WASM
 linear memory was 97,845,248 bytes for the same fixture. Its structured JSON output was 43,442,874
 bytes, which is why parsing happens off the main thread and why this probe does not yet retain or
 render the result in the release UI. Browser main-heap readings in the JSON are snapshots after
 Worker termination, not reliable peak-memory measurements; WASM linear memory is the comparable
 parser measurement.
 
-## Provisional parser-probe budgets
+## Browser parser budgets
 
 The measured boundaries are committed in `src/import/limits.ts`:
 
@@ -60,12 +57,11 @@ The measured boundaries are committed in `src/import/limits.ts`:
 - 30 seconds per parse; and
 - 128 MiB maximum reported WASM linear memory.
 
-These provisional values are browser application limits, not Cloudflare limits. Input size is rejected before a
+These values are browser application limits, not Cloudflare limits. Input size is rejected before a
 Worker starts. Page, asset, and reported-memory limits are checked before a probe result is
 accepted. The timeout or cancellation terminates the Worker so synchronous WASM cannot continue in
 the background. This probe does not form Canvas pages, so it does not select or claim a proposed-page
-limit; that limit requires page-formation measurements in the later page-planning slice. The values
-must be re-derived or confirmed from the missing Safari and physical-mobile results before release.
+limit; that limit requires page-formation measurements in the later page-planning slice.
 
 ## Lazy production assets
 

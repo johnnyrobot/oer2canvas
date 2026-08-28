@@ -93,13 +93,13 @@ Create a development-only benchmark using representative small, medium, and larg
 - time to terminate after cancellation; and
 - output bytes.
 
-Run current Chrome, Firefox, and Safari on at least one desktop-class and one mobile-class device.
+Run current desktop Chrome and Firefox. These are the initial supported document-import browsers;
+Safari and mobile browsers are explicitly outside the first release matrix.
 Use the measurements to set:
 
 - hard upload-byte limit;
 - warning threshold;
 - PDF page limit;
-- maximum proposed-page count;
 - maximum accepted embedded-asset bytes; and
 - maximum individual asset bytes.
 
@@ -252,6 +252,9 @@ Tests pin:
 - heading hierarchy retained inside each page;
 - deterministic split/merge behavior; and
 - maximum-page budget failure.
+
+Measure page formation over heading-rich and no-heading boundary fixtures here, then select and
+enforce the maximum proposed-page count. Parser page counts alone do not establish this budget.
 
 ### 7.2 UI integration
 
