@@ -2,7 +2,7 @@ import type { ImportMetadata, ImportResult } from './types'
 import { capabilityForFilename } from './capability'
 import { documentIds, importProvenance, sha256Hex, validateImportMetadata } from './common'
 import { escapeHtml } from './html'
-import { renderMarkdown, sanitizeImportedHtml } from './markup'
+import { sanitizeImportedHtml, sanitizeImportedMarkdown } from './markup'
 import type { ImportedFormat } from './types'
 
 export type TextLikeFormat = Extract<ImportedFormat, 'text' | 'markdown' | 'html'>
@@ -83,9 +83,11 @@ export async function importText(
     ? {
         html: semanticHtml(text),
         findings: [],
-        counts: { headings: 0, tables: 0, images: 0, equations: 0, notes: 0 },
+        counts: { headings: 0, tables: 0, images: 0, equations: 0, notes: 0, unavailableAssets: 0 },
       }
-    : sanitizeImportedHtml(format === 'markdown' ? renderMarkdown(text) : text)
+    : (format === 'markdown' ? sanitizeImportedMarkdown : sanitizeImportedHtml)(text, {
+        relativeUrlsHaveBase: Boolean(options.metadata.sourceUrl?.trim()),
+      })
 
   return {
     work: {
@@ -106,7 +108,6 @@ export async function importText(
       counts: {
         sections: 1,
         ...normalized.counts,
-        unavailableAssets: 0,
       },
     },
   }

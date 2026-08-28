@@ -20,6 +20,15 @@ const HOSTILE_HTML = [
   '<form action="https://example.edu/collect"><button>Submit me</button></form>',
   '<marquee>Preserved unsupported text</marquee>',
 ].join('')
+const HOSTILE_MARKDOWN = [
+  '# Hostile Markdown lesson',
+  '',
+  '- Preserved Markdown list item',
+  '',
+  `[Unsafe Markdown link](javascript:parent.${EXECUTION_FLAG}+=1)`,
+  '',
+  HOSTILE_HTML,
+].join('\n')
 
 type ExecutionGlobal = typeof globalThis & Record<typeof EXECUTION_FLAG, number>
 const executionGlobal = globalThis as ExecutionGlobal
@@ -29,13 +38,17 @@ afterEach(() => {
   delete (globalThis as Partial<ExecutionGlobal>)[EXECUTION_FLAG]
 })
 
-test.each(['paste', 'file'] as const)('hostile HTML from %s stays inert in the import preview and discloses every repair category', async (mode) => {
+test.each([
+  { label: 'pasted HTML', mode: 'paste' as const, format: 'HTML', source: HOSTILE_HTML },
+  { label: 'an HTML file', mode: 'file' as const, format: 'HTML', source: HOSTILE_HTML },
+  { label: 'pasted Markdown', mode: 'paste' as const, format: 'Markdown', source: HOSTILE_MARKDOWN },
+])('hostile content from $label stays inert in the import preview and discloses every repair category', async ({ mode, format, source }) => {
   executionGlobal[EXECUTION_FLAG] = 0
   const { container } = render(<TextContentImporter onConfirm={() => {}} />)
   fireEvent.change(screen.getByLabelText('Document title'), { target: { value: 'Hostile import' } })
   if (mode === 'paste') {
-    fireEvent.click(screen.getByRole('radio', { name: 'HTML' }))
-    fireEvent.change(screen.getByLabelText('Content to import'), { target: { value: HOSTILE_HTML } })
+    fireEvent.click(screen.getByRole('radio', { name: format }))
+    fireEvent.change(screen.getByLabelText('Content to import'), { target: { value: source } })
   } else {
     fireEvent.click(screen.getByRole('radio', { name: 'Upload a text, Markdown, or HTML file' }))
     fireEvent.change(screen.getByLabelText(/^Content file/), {
@@ -60,13 +73,17 @@ test.each(['paste', 'file'] as const)('hostile HTML from %s stays inert in the i
   expect(screen.getByText(/Removed unsupported or unsafe attributes/i)).toBeVisible()
 })
 
-test('hostile HTML stays inert through real audit and review, and audited bytes reach the cartridge unchanged', async () => {
+test.each([
+  { format: 'html' as const, source: HOSTILE_HTML },
+  { format: 'markdown' as const, source: HOSTILE_MARKDOWN },
+])('hostile $format stays inert through real audit and review, and audited bytes reach the cartridge unchanged', async ({ format, source }) => {
   executionGlobal[EXECUTION_FLAG] = 0
   const imported = await importText(
-    { kind: 'paste', format: 'html', text: HOSTILE_HTML },
+    { kind: 'paste', format, text: source },
     {
       metadata: {
         title: 'Hostile import',
+        sourceUrl: new URL('/fixtures/hostile-source.html', location.origin).href,
         rightsAuthority: 'own',
         rightsAcknowledged: true,
       },

@@ -173,6 +173,58 @@ test('a complete HTML document excludes its head and discloses active and unsupp
   expect(result.report.findings[1]?.message).toContain('<title>')
 })
 
+test('unsafe attributes on an unsupported wrapper are disclosed before the wrapper is removed', async () => {
+  const result = await importText(
+    {
+      kind: 'paste',
+      format: 'html',
+      text: '<custom-card onclick="evil()" href="javascript:evil()" style="position:fixed">Visible text</custom-card>',
+    },
+    {
+      metadata: {
+        title: 'Custom element',
+        rightsAuthority: 'own',
+        rightsAcknowledged: true,
+      },
+    },
+  )
+
+  expect(result.work.sections[0]!.html).toBe('Visible text')
+  expect(result.report.findings.map((finding) => finding.code)).toEqual([
+    'import-active-content-removed',
+    'import-dangerous-url-removed',
+    'import-unsupported-element-removed',
+    'import-unsafe-attribute-removed',
+  ])
+  expect(result.report.findings[0]?.message).toContain('onclick handler')
+  expect(result.report.findings[1]?.message).toContain('href on <custom-card>')
+  expect(result.report.findings[3]?.message).toContain('style on <custom-card>')
+})
+
+test('a relative local image is a visible unavailable-asset blocker unless a public base URL is supplied', async () => {
+  const file = new File(['<p>Diagram:</p><img src="images/cell.png" alt="A cell">'], 'lesson.html')
+  const metadata = {
+    title: 'Image lesson',
+    rightsAuthority: 'own' as const,
+    rightsAcknowledged: true,
+  }
+
+  const local = await importText({ kind: 'file', file }, { metadata })
+  expect(local.report.findings).toContainEqual(expect.objectContaining({
+    code: 'import-relative-image-unavailable',
+    severity: 'blocker',
+  }))
+  expect(local.report.counts).toMatchObject({ images: 1, unavailableAssets: 1 })
+
+  const withBase = await importText(
+    { kind: 'file', file },
+    { metadata: { ...metadata, sourceUrl: 'https://example.edu/lessons/lesson.html' } },
+  )
+  expect(withBase.report.findings.map((finding) => finding.code))
+    .not.toContain('import-relative-image-unavailable')
+  expect(withBase.report.counts).toMatchObject({ images: 1, unavailableAssets: 0 })
+})
+
 test('empty pasted text is rejected with a recoverable explanation', async () => {
   await expect(importText(
     { kind: 'paste', text: ' \n\t ' },

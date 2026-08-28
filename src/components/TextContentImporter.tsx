@@ -21,7 +21,7 @@ export function TextContentImporter({ onConfirm }: { onConfirm: (result: ImportR
   const [result, setResult] = useState<ImportResult | undefined>()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const run = useRef<AbortController | undefined>(undefined)
+  const activeImportController = useRef<AbortController | undefined>(undefined)
   const errorElement = useImportErrorFocus(error)
 
   async function createPreview(event: FormEvent<HTMLFormElement>) {
@@ -37,7 +37,7 @@ export function TextContentImporter({ onConfirm }: { onConfirm: (result: ImportR
     }
 
     const controller = new AbortController()
-    run.current = controller
+    activeImportController.current = controller
     setBusy(true)
     try {
       const imported = await importText(
@@ -52,7 +52,7 @@ export function TextContentImporter({ onConfirm }: { onConfirm: (result: ImportR
       setError(isAbortError(caught) ? 'Import cancelled. You can edit the source and try again.' : messageOf(caught))
     } finally {
       setBusy(false)
-      run.current = undefined
+      activeImportController.current = undefined
     }
   }
 
@@ -234,7 +234,7 @@ export function TextContentImporter({ onConfirm }: { onConfirm: (result: ImportR
           Create one-page preview
         </button>
         {busy && (
-          <button type="button" className="min-h-9 rounded-md border px-4 text-sm" onClick={() => run.current?.abort()}>
+          <button type="button" className="min-h-9 rounded-md border px-4 text-sm" onClick={() => activeImportController.current?.abort()}>
             Cancel import for {metadata.title.trim() || file?.name || 'this content'}
           </button>
         )}

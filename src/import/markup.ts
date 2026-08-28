@@ -58,6 +58,11 @@ interface RepairSummary {
   dangerousUrls: Set<string>
   unsupported: Set<string>
   unsafeAttributes: Set<string>
+  unavailableImages: number
+}
+
+export interface MarkupSanitizationOptions {
+  relativeUrlsHaveBase?: boolean
 }
 
 export interface SanitizedMarkup {
@@ -69,6 +74,7 @@ export interface SanitizedMarkup {
     images: number
     equations: number
     notes: number
+    unavailableAssets: number
   }
 }
 
@@ -94,6 +100,32 @@ function isDangerousUrl(tag: string, attribute: string, value: string): boolean 
   return !allowed.has(scheme)
 }
 
+function isRelativeUrl(value: string): boolean {
+  const trimmed = value.trim()
+  return !schemeOf(trimmed) && !trimmed.startsWith('//')
+}
+
+function recordDiscardedAttributes(
+  element: Element,
+  tag: string,
+  summary: RepairSummary,
+  discloseAll: boolean,
+): void {
+  for (const attribute of element.attributes) {
+    const name = attribute.name.toLowerCase()
+    if (name.startsWith('on')) {
+      summary.active.add(`${name} handler`)
+    } else if (
+      (name === 'href' || name === 'src' || name === 'cite')
+      && isDangerousUrl(tag, name, attribute.value)
+    ) {
+      summary.dangerousUrls.add(`${name} on <${tag}>`)
+    } else if (discloseAll) {
+      summary.unsafeAttributes.add(`${name} on <${tag}>`)
+    }
+  }
+}
+
 function describe(values: ReadonlySet<string>): string {
   return [...values].sort().join(', ')
 }
@@ -112,6 +144,14 @@ function findingsFrom(summary: RepairSummary): ImportFinding[] {
       code: 'import-dangerous-url-removed',
       severity: 'warning',
       message: `Removed unsafe URL values from: ${describe(summary.dangerousUrls)}.`,
+    })
+  }
+  if (summary.unavailableImages > 0) {
+    const count = summary.unavailableImages
+    findings.push({
+      code: 'import-relative-image-unavailable',
+      severity: 'blocker',
+      message: `${count} ${count === 1 ? 'image uses' : 'images use'} a relative or removed source that cannot be packaged yet. Add an absolute HTTPS image URL or remove the image before preparing this page.`,
     })
   }
   if (summary.unsupported.size > 0) {
@@ -136,22 +176,29 @@ function findingsFrom(summary: RepairSummary): ImportFinding[] {
  * semantic subset this importer promises. The returned bytes are safe to mount;
  * the downstream Canvas allowlist still runs as the final publication gate.
  */
-export function sanitizeImportedHtml(source: string): SanitizedMarkup {
+export function sanitizeImportedHtml(
+  source: string,
+  options: MarkupSanitizationOptions = {},
+): SanitizedMarkup {
   const document = new DOMParser().parseFromString(source, 'text/html')
   const summary: RepairSummary = {
     active: new Set(),
     dangerousUrls: new Set(),
     unsupported: new Set(),
     unsafeAttributes: new Set(),
+    unavailableImages: 0,
   }
 
   for (const element of document.querySelectorAll('script, style, link, base, meta[http-equiv]')) {
-    summary.active.add(`<${element.localName}>`)
+    const tag = element.localName.toLowerCase()
+    summary.active.add(`<${tag}>`)
+    recordDiscardedAttributes(element, tag, summary, false)
   }
   for (const element of document.head.querySelectorAll('*')) {
     const tag = element.localName.toLowerCase()
     if (ACTIVE_DROP_TAGS.has(tag) || (tag === 'meta' && element.hasAttribute('http-equiv'))) continue
     summary.unsupported.add(`<${tag}>`)
+    recordDiscardedAttributes(element, tag, summary, true)
   }
 
   const elements = [...document.body.querySelectorAll('*')].reverse()
@@ -159,21 +206,25 @@ export function sanitizeImportedHtml(source: string): SanitizedMarkup {
     const tag = element.localName.toLowerCase()
     if (ACTIVE_DROP_TAGS.has(tag)) {
       summary.active.add(`<${tag}>`)
+      recordDiscardedAttributes(element, tag, summary, false)
       element.remove()
       continue
     }
     if (tag === 'meta' && element.hasAttribute('http-equiv')) {
       summary.active.add('<meta>')
+      recordDiscardedAttributes(element, tag, summary, false)
       element.remove()
       continue
     }
     if (ACTIVE_UNWRAP_TAGS.has(tag)) {
       summary.active.add(`<${tag}>`)
+      recordDiscardedAttributes(element, tag, summary, false)
       unwrap(element)
       continue
     }
     if (!ALLOWED_TAGS.has(tag)) {
       summary.unsupported.add(`<${tag}>`)
+      recordDiscardedAttributes(element, tag, summary, true)
       unwrap(element)
       continue
     }
@@ -198,6 +249,13 @@ export function sanitizeImportedHtml(source: string): SanitizedMarkup {
       if (name === 'target' && !['_blank', '_self'].includes(attribute.value.toLowerCase())) {
         summary.unsafeAttributes.add(`target on <${tag}>`)
         element.removeAttribute(attribute.name)
+      }
+    }
+
+    if (tag === 'img') {
+      const src = element.getAttribute('src')
+      if (!src || (isRelativeUrl(src) && !options.relativeUrlsHaveBase)) {
+        summary.unavailableImages += 1
       }
     }
   }
@@ -227,10 +285,14 @@ export function sanitizeImportedHtml(source: string): SanitizedMarkup {
       images: retained.querySelectorAll('img').length,
       equations: retained.querySelectorAll('math').length,
       notes: retained.querySelectorAll('aside[role="note"]').length,
+      unavailableAssets: summary.unavailableImages,
     },
   }
 }
 
-export function renderMarkdown(source: string): string {
-  return markdown.parse(source) as string
+export function sanitizeImportedMarkdown(
+  source: string,
+  options: MarkupSanitizationOptions = {},
+): SanitizedMarkup {
+  return sanitizeImportedHtml(markdown.parse(source) as string, options)
 }

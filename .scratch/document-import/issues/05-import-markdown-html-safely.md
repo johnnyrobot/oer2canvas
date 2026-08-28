@@ -19,11 +19,13 @@ Implemented paste and UTF-8 file import for Markdown and HTML through the existi
 document path. Markdown uses a pinned isolated Marked GFM parser; Markdown raw HTML and direct HTML
 then share one detached-DOM semantic sanitizer. The importer removes active content, unsafe URLs,
 unsupported elements, and unsafe attributes with stable visible findings, while preserving supported
-headings, lists, links, tables, code blocks, images, and text. Active-only input fails closed.
+headings, lists, links, tables, code blocks, externally resolvable images, and text. Relative image
+references without a public source URL remain visible blockers until packaged markup assets ship in
+issues 08 and 09. Active-only input fails closed.
 
 Hostile Chromium fixtures cover both paste and file preview, the real iframe audit/review surface,
 and cartridge generation without executing scripts, handlers, SVG, forms, or embeds. The cartridge
 test also pins the audited fragment as the exact page-body bytes exported.
 
-Verification: TypeScript checks, 100 test files / 896 tests, production build, and built-bundle smoke
+Verification: TypeScript checks, 100 test files / 900 tests, production build, and built-bundle smoke
 test all pass. The production build retains its pre-existing chunk-size warning.
