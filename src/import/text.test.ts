@@ -201,7 +201,7 @@ test('unsafe attributes on an unsupported wrapper are disclosed before the wrapp
   expect(result.report.findings[3]?.message).toContain('style on <custom-card>')
 })
 
-test('a relative local image is a visible unavailable-asset blocker unless a public base URL is supplied', async () => {
+test('markup images retain alternative text and block network loading until asset packaging ships', async () => {
   const file = new File(['<p>Diagram:</p><img src="images/cell.png" alt="A cell">'], 'lesson.html')
   const metadata = {
     title: 'Image lesson',
@@ -211,7 +211,7 @@ test('a relative local image is a visible unavailable-asset blocker unless a pub
 
   const local = await importText({ kind: 'file', file }, { metadata })
   expect(local.report.findings).toContainEqual(expect.objectContaining({
-    code: 'import-relative-image-unavailable',
+    code: 'import-image-unavailable',
     severity: 'blocker',
   }))
   expect(local.work.sections[0]!.html).toBe('<p>Diagram:</p>A cell')
@@ -221,11 +221,23 @@ test('a relative local image is a visible unavailable-asset blocker unless a pub
     { kind: 'file', file },
     { metadata: { ...metadata, sourceUrl: 'https://example.edu/lessons/lesson.html' } },
   )
-  expect(withBase.report.findings.map((finding) => finding.code))
-    .not.toContain('import-relative-image-unavailable')
-  expect(withBase.report.counts).toMatchObject({ images: 1, unavailableAssets: 0 })
-  expect(withBase.work.sections[0]!.html)
-    .toContain('src="https://example.edu/lessons/images/cell.png"')
+  expect(withBase.report.findings).toContainEqual(expect.objectContaining({
+    code: 'import-image-unavailable',
+    severity: 'blocker',
+  }))
+  expect(withBase.report.counts).toMatchObject({ images: 1, unavailableAssets: 1 })
+  expect(withBase.work.sections[0]!.html).toBe('<p>Diagram:</p>A cell')
+
+  const absolute = await importText(
+    {
+      kind: 'paste',
+      format: 'html',
+      text: '<img src="https://cdn.example.edu/cell.png" alt="External cell">',
+    },
+    { metadata },
+  )
+  expect(absolute.work.sections[0]!.html).toBe('External cell')
+  expect(absolute.report.counts).toMatchObject({ images: 1, unavailableAssets: 1 })
 })
 
 test('relative links become non-link text without a public base and resolve before preview with one', async () => {
@@ -352,8 +364,15 @@ test('a license URL cannot be silently accepted without a license name', async (
   )).rejects.toThrow('Enter a license name when you provide a license URL.')
 })
 
-test('a public source URL must be a valid HTTPS base', async () => {
-  for (const sourceUrl of ['lessons/one.html', 'http://example.edu/lessons/one.html']) {
+test('a public source URL rejects malformed, non-HTTPS, private-network, IP, and credentialed bases', async () => {
+  for (const sourceUrl of [
+    'lessons/one.html',
+    'http://example.edu/lessons/one.html',
+    'https://127.0.0.1/lessons/one.html',
+    'https://[::1]/lessons/one.html',
+    'https://router.local/lessons/one.html',
+    'https://user:password@example.edu/lessons/one.html',
+  ]) {
     await expect(importText(
       { kind: 'paste', format: 'html', text: '<p>Useful text</p>' },
       {
@@ -366,6 +385,34 @@ test('a public source URL must be a valid HTTPS base', async () => {
       },
     )).rejects.toThrow('Enter a valid HTTPS public source URL.')
   }
+})
+
+test('private-network and file relationships are removed without becoming live links', async () => {
+  const result = await importText(
+    {
+      kind: 'paste',
+      format: 'html',
+      text: '<p><a href="https://127.0.0.1/admin">Router</a> ' +
+        '<a href="https://printer.local/status">Printer</a> ' +
+        '<a href="file:///etc/passwd">File</a></p>',
+    },
+    {
+      metadata: {
+        title: 'Private relationships',
+        rightsAuthority: 'own',
+        rightsAcknowledged: true,
+      },
+    },
+  )
+
+  expect(new DOMParser().parseFromString(result.work.sections[0]!.html, 'text/html')
+    .querySelector('a[href]')).toBeNull()
+  expect(result.work.sections[0]!.html).toContain('Router')
+  expect(result.work.sections[0]!.html).toContain('Printer')
+  expect(result.work.sections[0]!.html).toContain('File')
+  expect(result.report.findings).toContainEqual(expect.objectContaining({
+    code: 'import-dangerous-url-removed',
+  }))
 })
 
 test('a UTF-8 text file is imported by name and invalid encoding is explained', async () => {

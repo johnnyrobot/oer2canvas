@@ -1,6 +1,10 @@
 import { Marked } from 'marked'
+import { isPublicNetworkUrl } from './common'
 import { escapeHtml } from './html'
 import type { ImportFinding } from './types'
+
+const DELIMITED_EQUATION_SOURCE = String.raw`\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]`
+const MARKDOWN_EQUATION = new RegExp(`^(?:${DELIMITED_EQUATION_SOURCE})`)
 
 const markdown = new Marked({
   async: false,
@@ -17,7 +21,7 @@ markdown.use({
       return index >= 0 ? index : undefined
     },
     tokenizer(source) {
-      const match = /^(?:\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\])/.exec(source)
+      const match = MARKDOWN_EQUATION.exec(source)
       return match ? { type: 'documentMath', raw: match[0] } : undefined
     },
     renderer: (token) => escapeHtml(token.raw),
@@ -113,9 +117,20 @@ function schemeOf(value: string): string | undefined {
 
 function isDangerousUrl(tag: string, attribute: string, value: string): boolean {
   const scheme = schemeOf(value)
-  if (!scheme) return false
+  const trimmed = value.trim()
+  if (!scheme && !trimmed.startsWith('//')) return false
   const allowed = tag === 'img' && attribute === 'src' ? MEDIA_SCHEMES : LINK_SCHEMES
-  return !allowed.has(scheme)
+  const effectiveScheme = scheme ?? 'https'
+  if (!allowed.has(effectiveScheme)) return true
+  if (effectiveScheme === 'http' || effectiveScheme === 'https') {
+    try {
+      const url = new URL(trimmed.startsWith('//') ? `https:${trimmed}` : trimmed)
+      return !isPublicNetworkUrl(url)
+    } catch {
+      return true
+    }
+  }
+  return false
 }
 
 function isRelativeUrl(value: string): boolean {
@@ -160,13 +175,17 @@ function recordDiscardedAttributes(
   }
 }
 
+export function countDelimitedEquationsInText(text: string): number {
+  return [...text.matchAll(new RegExp(DELIMITED_EQUATION_SOURCE, 'g'))].length
+}
+
 function countDelimitedEquations(root: ParentNode): number {
   const walker = root.ownerDocument!.createTreeWalker(root, NodeFilter.SHOW_TEXT)
   let count = 0
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const text = node as Text
     if (text.parentElement?.closest('pre, code')) continue
-    count += [...text.data.matchAll(/\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]/g)].length
+    count += countDelimitedEquationsInText(text.data)
   }
   return count
 }
@@ -202,9 +221,9 @@ function findingsFrom(summary: RepairSummary): ImportFinding[] {
   if (summary.unavailableImages > 0) {
     const count = summary.unavailableImages
     findings.push({
-      code: 'import-relative-image-unavailable',
+      code: 'import-image-unavailable',
       severity: 'blocker',
-      message: `${count} ${count === 1 ? 'image uses' : 'images use'} a relative or removed source that cannot be packaged yet. Alternative text was retained where supplied. Add an absolute HTTPS image URL or remove the image before preparing this page.`,
+      message: `${count} imported ${count === 1 ? 'image is' : 'images are'} unavailable because markup images cannot be loaded or packaged safely yet. Alternative text was retained where supplied. Remove the image before preparing this page.`,
     })
   }
   if (summary.unsupported.size > 0) {
@@ -305,6 +324,7 @@ export function sanitizeImportedHtml(
       }
       if (
         (name === 'href' || name === 'src' || name === 'cite')
+        && tag !== 'img'
         && isRelativeUrl(attribute.value)
         && !(tag === 'a' && name === 'href' && attribute.value.trim().startsWith('#'))
       ) {
@@ -328,13 +348,10 @@ export function sanitizeImportedHtml(
 
     if (tag === 'img') {
       summary.images += 1
-      const src = element.getAttribute('src')
-      if (!src || isRelativeUrl(src)) {
-        summary.unavailableImages += 1
-        const alt = element.getAttribute('alt')?.trim()
-        element.replaceWith(alt ? document.createTextNode(alt) : document.createTextNode(''))
-        continue
-      }
+      summary.unavailableImages += 1
+      const alt = element.getAttribute('alt')?.trim()
+      element.replaceWith(alt ? document.createTextNode(alt) : document.createTextNode(''))
+      continue
     }
     if (unwrapRelativeLink) unwrap(element)
   }

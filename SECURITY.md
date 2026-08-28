@@ -31,10 +31,11 @@ credential, revoke it in Canvas immediately and mention only that it was revoked
   and direct HTML imports then share one detached `DOMParser` sanitizer. That sanitizer removes
   scripts, handlers, forms, active embeds, source styles, unsafe URL schemes, and unsupported
   elements with visible findings before any preview. The controlled result still passes through
-  the same final allowlist and accessibility gate as publisher content. Relative references are
-  resolved before preview only from a validated public HTTPS source URL. Without one, relative links
-  become non-link text with a warning, and relative images retain supplied alternative text while
-  blocking preparation. Source files and derived document data remain browser-local.
+  the same final allowlist and accessibility gate as publisher content. Relative links are resolved
+  only from a public HTTPS base; private-network, IP-literal, and credential-bearing targets are
+  rejected. Markup images never issue network requests: supplied alternative text is retained and
+  preparation remains blocked until controlled asset packaging ships. Source files and derived
+  document data remain browser-local.
 - Release-enabled text-oriented DOCX, EPUB, ODT, and RTF are limited to 16 MiB and parsed by AnyDoc in a disposable
   module Worker with a transferred buffer, a 30-second timeout, and measured input/asset/memory
   budgets. Content signatures must identify the selected format regardless of its filename or reported MIME type.

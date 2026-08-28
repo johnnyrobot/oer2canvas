@@ -39,7 +39,9 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
     mediaTypes: ['text/markdown', 'text/x-markdown'],
     parser: 'native',
     status: 'enabled',
-    limitations: ['Raw HTML is untrusted and is reduced to the same controlled semantic subset as HTML imports.'],
+    limitations: [
+      'Raw HTML is reduced to the controlled HTML-import subset; images remain unavailable until asset packaging ships.',
+    ],
   },
   {
     format: 'html',
@@ -48,7 +50,9 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
     mediaTypes: ['text/html', 'application/xhtml+xml'],
     parser: 'native',
     status: 'enabled',
-    limitations: ['Scripts, active embeds, forms, source styling, and unsafe URLs are not imported.'],
+    limitations: [
+      'Scripts, active embeds, forms, source styling, unsafe URLs, and image requests are not imported.',
+    ],
   },
   {
     format: 'docx',

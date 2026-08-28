@@ -16,10 +16,11 @@ Text, Markdown, and HTML imports are processed entirely in the browser, are limi
 and start as one Canvas page. Plain text is escaped. Markdown uses a pinned GFM parser, and both
 its raw HTML and direct HTML imports pass through one inert semantic sanitizer. Scripts, event
 handlers, forms, active embeds, source styling, unsafe URLs, and unsupported elements are removed
-with visible findings before preview. A valid public HTTPS source URL resolves relative links and
-images before preview. Without one, relative links become non-link text with a warning, while
-relative images retain their alternative text and block preparation until packaged markup assets
-ship. Text-oriented structured-document imports are limited to 16 MiB and parsed locally in a
+with visible findings before preview. A validated public HTTPS source URL can resolve relative links;
+private-network, IP-literal, and credential-bearing targets are rejected. Without a base, relative
+links become non-link text with a warning. Markup images never issue network requests: their
+alternative text is retained and they block preparation until packaged markup assets ship.
+Text-oriented structured-document imports are limited to 16 MiB and parsed locally in a
 disposable AnyDoc WebAssembly Worker. Headings, paragraphs, lists, links, code blocks, and simple
 tables are converted to controlled semantic HTML. Embedded images and other unsupported
 structured-document content are shown as blocking findings instead of being omitted silently. The

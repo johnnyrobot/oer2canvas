@@ -31,6 +31,11 @@ const HOSTILE_MARKDOWN = [
   '',
   HOSTILE_HTML,
 ].join('\n')
+const PIPELINE_HTML = HOSTILE_HTML.replace(
+  `<img alt="A diagram" src="/__missing-hostile-image.png" onerror="parent.${EXECUTION_FLAG} += 1">`,
+  '',
+)
+const PIPELINE_MARKDOWN = HOSTILE_MARKDOWN.replace(HOSTILE_HTML, PIPELINE_HTML)
 
 type ExecutionGlobal = typeof globalThis & Record<typeof EXECUTION_FLAG, number>
 const executionGlobal = globalThis as ExecutionGlobal
@@ -76,8 +81,8 @@ test.each([
 })
 
 test.each([
-  { format: 'html' as const, source: HOSTILE_HTML },
-  { format: 'markdown' as const, source: HOSTILE_MARKDOWN },
+  { format: 'html' as const, source: PIPELINE_HTML },
+  { format: 'markdown' as const, source: PIPELINE_MARKDOWN },
 ])('hostile $format stays inert through real audit and review, and audited bytes reach the cartridge unchanged', async ({ format, source }) => {
   executionGlobal[EXECUTION_FLAG] = 0
   const imported = await importText(

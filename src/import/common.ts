@@ -1,6 +1,31 @@
 import { RIGHTS_AUTHORITIES, type ImportMetadata, type ImportProvenance } from './types'
 
 export const MISSING_RIGHTS_MESSAGE = 'Choose why you have permission to republish this content.'
+const IP_LITERAL = /^\d{1,3}(\.\d{1,3}){3}$|^\[?[0-9a-f:]+\]?$/i
+
+function isPrivateHostname(host: string): boolean {
+  if (!host.includes('.')) return true
+  if (
+    host.endsWith('.corp')
+    || host.endsWith('.lan')
+    || host.endsWith('.home')
+    || host.endsWith('.test')
+    || host.endsWith('.intranet')
+    || host.endsWith('.private')
+    || host === 'home.arpa'
+    || host.endsWith('.home.arpa')
+  ) return true
+  return /^(localhost|.*\.local|.*\.internal|.*\.localhost)$/i.test(host)
+}
+
+export function isPublicNetworkUrl(url: URL): boolean {
+  const host = url.hostname.toLowerCase().replace(/\.$/, '')
+  return (url.protocol === 'https:' || url.protocol === 'http:')
+    && url.username === ''
+    && url.password === ''
+    && !isPrivateHostname(host)
+    && !IP_LITERAL.test(host)
+}
 
 export function requireRightsAuthority(value: unknown): asserts value is ImportMetadata['rightsAuthority'] {
   if (!RIGHTS_AUTHORITIES.some((authority) => authority === value)) {
@@ -25,7 +50,7 @@ export function parsePublicSourceUrl(value: string | undefined): URL | undefined
   if (!source) return undefined
   try {
     const url = new URL(source)
-    if (url.protocol !== 'https:') throw new Error('not HTTPS')
+    if (url.protocol !== 'https:' || !isPublicNetworkUrl(url)) throw new Error('not public HTTPS')
     return url
   } catch {
     throw new Error('Enter a valid HTTPS public source URL.')

@@ -2,7 +2,11 @@ import type { ImportMetadata, ImportResult } from './types'
 import { capabilityForFilename } from './capability'
 import { documentIds, importProvenance, parsePublicSourceUrl, sha256Hex, validateImportMetadata } from './common'
 import { escapeHtml } from './html'
-import { sanitizeImportedHtml, sanitizeImportedMarkdown } from './markup'
+import {
+  countDelimitedEquationsInText,
+  sanitizeImportedHtml,
+  sanitizeImportedMarkdown,
+} from './markup'
 import type { ImportedFormat } from './types'
 
 export type TextLikeFormat = Extract<ImportedFormat, 'text' | 'markdown' | 'html'>
@@ -88,7 +92,7 @@ export async function importText(
           headings: 0,
           tables: 0,
           images: 0,
-          equations: [...text.matchAll(/\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]/g)].length,
+          equations: countDelimitedEquationsInText(text),
           notes: 0,
           unavailableAssets: 0,
         },
