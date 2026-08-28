@@ -97,6 +97,21 @@ export interface QueueCardProps {
   refusal?: string
   onAnswer?: (answer: QueueAnswer) => void
   onSkip?: () => void
+  /**
+   * Display-only resolution of `$IMS-CC-FILEBASE$/oer2canvas/…` tokens to
+   * `blob:` urls, from `usePackagedAssetUrls` (see `QueueView`, which is the
+   * only caller and owns the single instance of that hook for a session).
+   * `item.context.src` carries whatever the compiler put there, which for a
+   * packaged raster is that token — not a fetchable url — so both places this
+   * card hands `src` to something that fetches it (the "open the original
+   * image" link, and the local-draft seam below) need it resolved first.
+   * Optional, and identity-safe to omit: a caller with no packaged assets at
+   * all (every existing test, and every catalog-source chapter) can leave
+   * this out entirely, since an ordinary `src` (an http(s) url, as catalog
+   * sources use) contains no packaged-reference token for a resolver to act
+   * on in the first place.
+   */
+  resolve?: (value: string) => string
   /** Present only after S1 selects and wires an audited local runtime. */
   drafting?: {
     models: readonly VlmModel[]
@@ -118,6 +133,7 @@ export function QueueCard({
   refusal,
   onAnswer,
   onSkip,
+  resolve,
   drafting,
 }: QueueCardProps) {
   // "Needs a description" morphs the card in place. The item's KIND is
@@ -193,7 +209,7 @@ export function QueueCard({
       <h4 id={questionId}>{copy.question}</h4>
       <p id={bodyId}>{copy.body}</p>
 
-      <Context item={item} occurrences={occurrences} />
+      <Context item={item} occurrences={occurrences} resolve={resolve} />
 
       {/* Inline, above the controls, where the answer that caused it still is. */}
       {refusal && <p className="b2c-queue-refusal">{refusal}</p>}
@@ -253,7 +269,16 @@ export function QueueCard({
                     draftRun.current = controller
                     setDraftError('')
                     setDraftState('loading')
-                    void drafting.draft(model, item.context.src, (progress) => {
+                    // `resolve` turns a packaged reference into the `blob:` url
+                    // the runtime's `fetch`-based image loader can actually
+                    // read; canDraftLocally is true precisely when there is no
+                    // caption or reference to fall back on, which is the same
+                    // condition under which `context.src` is most often a
+                    // packaged token (DOCX import) rather than a fetchable
+                    // publisher url — so leaving this unresolved failed local
+                    // drafting for exactly the ordinary case it exists to serve.
+                    const image = resolve ? resolve(item.context.src) : item.context.src
+                    void drafting.draft(model, image, (progress) => {
                       setDraftState(progress.phase)
                     }, controller.signal).then((draft) => {
                       if (controller.signal.aborted) return
@@ -362,9 +387,12 @@ function SkipButton({ onSkip }: { onSkip?: () => void }) {
 function Context({
   item,
   occurrences,
+  resolve,
 }: {
   item: QueueItem
   occurrences?: readonly string[]
+  /** See `QueueCardProps.resolve` — same resolver, same reason. */
+  resolve?: (value: string) => string
 }) {
   const isTable = item.kind === 'table-headers'
   const { reference, caption, src } = item.context
@@ -394,7 +422,14 @@ function Context({
       )}
       {!isTable && src && (
         <p>
-          <a href={src} target="_blank" rel="noreferrer noopener">
+          {/* `resolve` turns a packaged reference (`$IMS-CC-FILEBASE$/…`, the
+              form a DOCX-sourced image's `src` actually is) into a `blob:`
+              url the browser can navigate to. Left unresolved, this token is
+              not a url the app origin serves at all, and the link 404s.
+              A catalog-source `src` is already a real publisher url with no
+              packaged-reference token in it, so `resolve` is a no-op there —
+              this is safe to apply unconditionally when a resolver is given. */}
+          <a href={resolve ? resolve(src) : src} target="_blank" rel="noreferrer noopener">
             Open the original image (new tab)
           </a>
         </p>

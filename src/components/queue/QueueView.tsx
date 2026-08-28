@@ -16,6 +16,7 @@ import type { CompiledSection, QueueItem } from '../../contracts/index'
 import type { QueueAnswer } from '../../engine/compile/answers'
 import type { VlmModel, VlmProgress } from '../../engine/vlm'
 import { queueKeyOf } from '../../engine/compile/answers'
+import { usePackagedAssetUrls } from '../usePackagedAssetUrls'
 import { QueueCard } from './QueueCard'
 import { counts, traversal, KIND_WORD, type QueueSession } from './session'
 
@@ -71,6 +72,14 @@ export function QueueView({
   onJump,
   drafting,
 }: QueueViewProps) {
+  // Lifted here, once, rather than called separately inside `QueueCard` and
+  // `SectionRender`: both need the same resolver (the card's "open the
+  // original image" link and its local-draft seam; the render's mounted
+  // html), and calling the hook twice for one session would mint two
+  // independent object-url lifecycles over the same bytes for no benefit.
+  // Display-only, per `usePackagedAssetUrls`'s own contract — nothing here
+  // ever writes back into `session.compiled` or `section.gate.html`.
+  const resolve = usePackagedAssetUrls(session.compiled.chapter.assets)
   const tally = counts(session)
   const byKey = new Map(session.compiled.queue.map((i) => [queueKeyOf(i), i]))
   const order = traversal(session.compiled.queue, session.skipped).filter(
@@ -188,6 +197,7 @@ export function QueueView({
           position={tally.answered + 1}
           total={tally.total}
           occurrences={occurrencesOf(session, current)}
+          resolve={resolve}
           skippedEarlier={session.skipped.has(session.cursor!)}
           refusal={session.refusal}
           onAnswer={(answer) => onAnswer?.(session.cursor!, answer)}
@@ -244,6 +254,7 @@ export function QueueView({
           session={session}
           section={sectionOf(current.sectionId)}
           elementId={current.elementId}
+          resolve={resolve}
         />
       )}
 
@@ -296,10 +307,24 @@ function SectionRender({
   session,
   section,
   elementId,
+  resolve,
 }: {
   session: QueueSession
   section: CompiledSection | undefined
   elementId: string
+  /**
+   * Display-only resolution of `$IMS-CC-FILEBASE$/oer2canvas/…` tokens to
+   * `blob:` urls — the same treatment `ChapterView` and `ImportPlanEditor`
+   * already give their previews, and for the same reason: a browser can never
+   * resolve the token itself, only Canvas can, at cartridge import time. The
+   * instructor answering the alt-text prompt here is looking at exactly the
+   * image the prompt is about; without this, every DOCX-sourced image (the
+   * ordinary case, since DOCX carries no alt-text field and so lands its
+   * images in this queue as kind `alt`) would render as a broken image while
+   * asking the instructor to describe it. Taken as a prop, computed once by
+   * `QueueView`, rather than called again here — see the call site's comment.
+   */
+  resolve: (html: string) => string
 }) {
   const body = useRef<HTMLDivElement>(null)
   const html = section
@@ -315,9 +340,19 @@ function SectionRender({
     innerHTML even when the bytes are identical — which throws away the parsed
     subtree, resets scroll, and flashes the evidence somebody is reading. Two
     consecutive items in one section must move the outline and touch nothing
-    else, and there is a test asserting the nodes survive.
+    else, and there is a test asserting the nodes survive. `resolve` is in the
+    deps for correctness (it is what turns `html` into what actually gets
+    mounted) but never destabilizes this memo in practice: it is a `useCallback`
+    closed only over `usePackagedAssetUrls`'s own `urls` state, which changes
+    only when this chapter's asset list actually changes, not on every render.
+    `html` itself is NEVER mutated by this — `resolve` is applied only to the
+    value handed to `dangerouslySetInnerHTML`, so `section.gate.html` remains
+    exactly the bytes that passed the gate and that the exporter will ship.
   */
-  const markup = useMemo(() => (html === undefined ? undefined : { __html: html }), [html])
+  const markup = useMemo(
+    () => (html === undefined ? undefined : { __html: resolve(html) }),
+    [html, resolve],
+  )
 
   useLayoutEffect(() => {
     const root = body.current
