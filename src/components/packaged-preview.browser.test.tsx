@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach } from 'vitest'
 import { ChapterView } from './ChapterView'
 import { ImportPlanEditor, createImportDraft, type ImportDraft } from './ImportPlanEditor'
+import { usePackagedAssetUrls } from './usePackagedAssetUrls'
 import { packagedReference } from '../import/assets'
 import { RASTER_FIXTURES } from '../import/testing/raster-fixtures'
 import type { Chapter } from '../sources/types'
@@ -286,3 +287,61 @@ describe('ImportPlanEditor', () => {
     expect(image.getAttribute('src')).toBe(DANGLING_REFERENCE)
   })
 })
+
+/**
+ * IDENTITY-UNSTABLE CALLERS.
+ *
+ * `assets={x ?? []}`, `assets={[...somethingComputed]}` — a fresh array
+ * literal built from unchanging underlying data, every render, is an
+ * ordinary React idiom, not a caller bug. The `useMemo`-based version of this
+ * hook tolerated that wastefully (recomputing urls it did not need to), but
+ * never crashed, because it never called `setState`. The effect-based
+ * version added to fix the `StrictMode` defect above turned that same caller
+ * into a hard, self-sustaining loop instead: an unstable array kept the
+ * effect's `[assets]` dependency looking different on every run, so every
+ * effect flush called `setUrls`, which re-rendered the component, which
+ * built another fresh array, forever. `usePackagedAssetUrls` now depends on
+ * a CONTENT key (each asset's `name` and `sha256`, joined) rather than the
+ * array's identity, so two arrays with the same names and hashes settle
+ * after one effect run regardless of how many distinct array objects the
+ * caller hands it.
+ */
+describe('usePackagedAssetUrls with an identity-unstable caller', () => {
+  // Generous enough that a genuinely settling hook never gets close (it
+  // should settle within 1-2 renders), tight enough that a caller which
+  // fails to settle throws almost immediately — this is a safety valve
+  // against actually spinning for real, not a measurement of exactly how
+  // long a real infinite loop would run for.
+  const RENDER_CAP = 10
+
+  function ContentStableProbe({ renderCounts }: { renderCounts: number[] }) {
+    renderCounts.push(renderCounts.length + 1)
+    if (renderCounts.length > RENDER_CAP) {
+      throw new Error(`render count exceeded ${RENDER_CAP} — the effect never settled for a content-stable caller`)
+    }
+    // A BRAND NEW array literal every single render, on purpose — built
+    // fresh from the same underlying asset data, the way a caller like
+    // `assets={x ?? []}` or `assets={[...list]}` ordinarily would.
+    const resolve = usePackagedAssetUrls([{ ...PACKAGED_ASSET }])
+    return <div dangerouslySetInnerHTML={{ __html: resolve(`<img alt="A diagram" src="${PACKAGED_REFERENCE}">`) }} />
+  }
+
+  test('a fresh inline array with unchanged content settles instead of retriggering the effect forever', async () => {
+    const renderCounts: number[] = []
+    const { container } = render(<ContentStableProbe renderCounts={renderCounts} />)
+
+    const image = container.querySelector('img')!
+    await waitForDecode(image)
+    expect(image.naturalWidth).toBe(16)
+
+    const settledCount = renderCounts.length
+    expect(settledCount).toBeLessThan(RENDER_CAP)
+
+    // Give any further self-triggered renders a chance to happen, then
+    // confirm none did: the render count actually STOPPED climbing, rather
+    // than merely being small at the one moment already checked above.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(renderCounts.length).toBe(settledCount)
+  })
+})
+

@@ -63,15 +63,10 @@ const PACKAGED_REFERENCE_PATTERN = /\$IMS-CC-FILEBASE\$\/oer2canvas\/[^"'\s>]+/g
 
 // A literal `= []` default parameter evaluates to a BRAND NEW array on every
 // call where the caller passes `undefined` (e.g. `chapter.assets` on a
-// catalog-source chapter, which has no packaged assets at all). Since the
-// effect below depends on `[assets]` by reference, a fresh array every render
-// would make that dependency look different on every render, re-running the
-// effect, calling `setUrls` with a new (still-empty) map, causing another
-// render, forever — an infinite `setState`-in-effect loop caught only by
-// React's own runaway-render guard ("Maximum update depth exceeded"). One
-// shared, stable reference for the no-assets case avoids that entirely: it
-// is `===` itself across every render, so the effect only ever reruns when a
-// caller passes an ACTUAL new asset list, not merely omits the argument.
+// catalog-source chapter, which has no packaged assets at all). One shared,
+// stable reference for the no-assets case is cheap insurance against that:
+// it is `===` itself across every render, so `assetsKey` below never even
+// needs to run for the overwhelmingly common no-assets case.
 const NO_ASSETS: readonly ImportedAsset[] = []
 
 // One shared, immutable, empty map — never mutated, only ever handed out —
@@ -84,11 +79,52 @@ const NO_ASSETS: readonly ImportedAsset[] = []
 // source, and every document import with no embedded images.
 const NO_ASSET_URLS: ReadonlyMap<string, string> = new Map()
 
+/**
+ * CONTENT, not identity. Depending the effect below directly on `assets`
+ * traded one bug for another: a caller passing a FRESH array literal every
+ * render (`assets={x ?? []}`, `assets={[...ys]}` — an entirely ordinary React
+ * idiom, not a caller bug) made the dependency look different on every
+ * render even though nothing about the assets ever changed, so every effect
+ * flush called `setUrls`, which re-rendered the component, which built
+ * another fresh array, forever. Confirmed by execution: a probe component
+ * calling this hook with a fresh `[{ ...asset }]` literal on every render
+ * reproduced a self-sustaining "Maximum update depth exceeded" loop — see
+ * `packaged-preview.browser.test.tsx`, "a fresh inline array with unchanged
+ * content settles instead of retriggering the effect forever".
+ *
+ * Each asset's `name` (the one winning archive-entry name — see the KEYING
+ * note above) and `sha256` (the hash of its actual bytes, computed once in
+ * `prepareAssets`) together fully determine the url map the effect below
+ * builds. `JSON.stringify` over just those two fields per asset, in order,
+ * gives two arrays that describe the same assets the same key string
+ * regardless of whether they are the same array instance — so depending on
+ * THIS instead of `assets` itself lets an identity-unstable caller with
+ * unchanging content settle after one effect run, exactly like a stable
+ * caller does.
+ *
+ * This trusts `sha256` to mean what `prepareAssets` defines it to mean: the
+ * hash of `bytes` at import time. If some future caller ever constructed an
+ * `ImportedAsset` whose `sha256` did not actually match its `bytes`, this key
+ * could stay unchanged across a real content change and the effect would not
+ * rerun — a narrower, already-accepted trust boundary, since
+ * `packagedReference`/`prepareAssets` themselves already rely on `sha256`
+ * alone to decide whether two occurrences share one archive entry.
+ */
+function assetsKey(assets: readonly ImportedAsset[]): string {
+  return JSON.stringify(assets.map((asset) => [asset.name, asset.sha256]))
+}
+
 export function usePackagedAssetUrls(assets: readonly ImportedAsset[] = NO_ASSETS): (html: string) => string {
   // Starts as the SAME reference the effect below sets it back to whenever
   // there is nothing to resolve, so the no-assets case never needs a second
   // render to arrive at its own already-correct starting state.
   const [urls, setUrls] = useState<ReadonlyMap<string, string>>(NO_ASSET_URLS)
+  // Computed fresh every render (cheap — a map and a stringify over what is
+  // ordinarily a handful of assets) rather than memoized on `[assets]`,
+  // because memoizing on the very identity this key exists to see past would
+  // defeat the point: the memo would recompute on every unstable-identity
+  // render anyway, just with extra bookkeeping in between.
+  const key = assets.length === 0 ? '' : assetsKey(assets)
 
   useEffect(() => {
     // Nothing to create. `setUrls(NO_ASSET_URLS)` still runs (rather than an
@@ -111,6 +147,11 @@ export function usePackagedAssetUrls(assets: readonly ImportedAsset[] = NO_ASSET
     // Built fresh on every invocation of this effect — including the second,
     // synthetic one `StrictMode` runs back-to-back with the first — so the
     // pairing below with the cleanup it returns is always exactly balanced.
+    // `assets` here is whichever render's argument happened to be attached to
+    // the render that actually triggered this run (only `key`, not `assets`,
+    // is the effect's dependency) — safe because any `assets` array sharing
+    // this `key` is defined to carry the same names and hashes, and therefore
+    // the same bytes, as any other.
     const map = new Map<string, string>()
     for (const asset of assets) {
       // `asset.bytes` is typed `Uint8Array<ArrayBufferLike>` (it may be a view
@@ -126,13 +167,17 @@ export function usePackagedAssetUrls(assets: readonly ImportedAsset[] = NO_ASSET
     // Revokes precisely the urls THIS invocation created (closed over as the
     // local `map`, never the `urls` state, which could already have moved on
     // to a newer map by the time this runs). That is what keeps a `StrictMode`
-    // remount, an `assets` change, and a genuine unmount all safe by the same
-    // rule: whichever setup made a map, the matching cleanup tears down that
-    // exact map, never a different one that might still be on screen.
+    // remount, a real content change, and a genuine unmount all safe by the
+    // same rule: whichever setup made a map, the matching cleanup tears down
+    // that exact map, never a different one that might still be on screen.
     return () => {
       for (const url of map.values()) URL.revokeObjectURL(url)
     }
-  }, [assets])
+    // `assets` is intentionally omitted from the dependency array: `key` is
+    // its content-derived proxy, and depending on `assets` itself is exactly
+    // the identity-instability bug this key exists to avoid re-introducing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
 
   return useCallback((html: string) =>
     html.replace(PACKAGED_REFERENCE_PATTERN, (reference) =>
