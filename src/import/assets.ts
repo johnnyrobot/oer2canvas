@@ -150,12 +150,26 @@ export function packagedAssetName(originPart: string, sha256: string, extension:
 export const packagedArchivePath = (name: string): string => `web_resources/${PACKAGED_ASSET_DIRECTORY}/${name}`
 export const packagedReference = (name: string): string => `${FILEBASE}/${PACKAGED_ASSET_DIRECTORY}/${name}`
 
+/** Escapes a literal for safe interpolation into a `RegExp` source string. */
+const escapeForRegExp = (literal: string): string => literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 /**
  * Exactly our own reference form and nothing else. Anchored, with no traversal,
  * query, encoded separator, or foreign prefix — this predicate is what the
  * allowlist widens `img.src` by, so every character it admits is a decision.
+ *
+ * Built from `FILEBASE` and `PACKAGED_ASSET_DIRECTORY` rather than repeating
+ * their literals a second time. A hardcoded copy here would go stale the
+ * instant either constant changed: `isPackagedReference` would then reject
+ * every reference this app itself produces, the allowlist would strip every
+ * packaged `img.src` as unrecognized, and the image would simply vanish from
+ * the page — no thrown error, no failing gate, nothing but a silently
+ * disappeared picture. Loud in any test that renders a fixture with the new
+ * constants, but nothing catches it in the product itself.
  */
-const PACKAGED_REFERENCE = /^\$IMS-CC-FILEBASE\$\/oer2canvas\/[A-Za-z0-9._-]+\.(?:png|jpe?g|gif|webp)$/
+const PACKAGED_REFERENCE = new RegExp(
+  `^${escapeForRegExp(FILEBASE)}/${escapeForRegExp(PACKAGED_ASSET_DIRECTORY)}/[A-Za-z0-9._-]+\\.(?:png|jpe?g|gif|webp)$`,
+)
 
 export function isPackagedReference(value: string): boolean {
   return PACKAGED_REFERENCE.test(value) && !value.includes('..')

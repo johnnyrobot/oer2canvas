@@ -370,7 +370,7 @@ export function normalizeAnyDocDocument(
   }
 
   if (document.notes.length > 0) {
-    finding('unsupported-note', 'blocker', `This ${sourceLabel} contains notes that the text-oriented workflow cannot publish it yet.`)
+    finding('unsupported-note', 'blocker', `This ${sourceLabel} contains notes that the text-oriented workflow cannot publish yet.`)
   }
 
   return {

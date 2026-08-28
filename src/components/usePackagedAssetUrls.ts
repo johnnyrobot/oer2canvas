@@ -58,8 +58,28 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ImportedAsset } from '../import/types'
 import { packagedReference } from '../import/assets'
 
-/** Matches this app's own packaged reference form; see `isPackagedReference` in `../import/assets.ts`. */
-const PACKAGED_REFERENCE_PATTERN = /\$IMS-CC-FILEBASE\$\/oer2canvas\/[^"'\s>]+/g
+/**
+ * Matches this app's own packaged reference form; see `isPackagedReference` in
+ * `../import/assets.ts`.
+ *
+ * Excludes `<`, not just `>`, and that exclusion is load-bearing: this runs
+ * against the raw serialized html STRING, with no tag boundary to respect, so
+ * a page that both embeds a packaged image and mentions its own path in prose
+ * — `<img src="$IMS-CC-FILEBASE$/oer2canvas/x.png"><p>The file is
+ * $IMS-CC-FILEBASE$/oer2canvas/x.png.</p>` — would otherwise have this regex
+ * run straight past the closing `"` of the attribute and the open `<` of the
+ * next tag and swallow `x.png.</p` out of the prose occurrence too. That
+ * occurrence would then never match `urls`' keys (which hold exactly
+ * `packagedReference(asset.name)`, with no trailing markup) and would render
+ * literally as `blob:…</p` text in the preview. `src/engine/export/cartridge.ts`
+ * hit this exact shape first and moved to parsing attribute values with
+ * `DOMParser` instead of a raw-text regex; that fix is not repeated here
+ * because this hook resolves a whole rendered string (prose included) rather
+ * than only attribute values, so a DOM walk would still need this same
+ * character class to bound a prose match — the minimal, sufficient fix is
+ * this one exclusion, kept in agreement with what the exporter already learned.
+ */
+const PACKAGED_REFERENCE_PATTERN = /\$IMS-CC-FILEBASE\$\/oer2canvas\/[^"'\s><]+/g
 
 // A literal `= []` default parameter evaluates to a BRAND NEW array on every
 // call where the caller passes `undefined` (e.g. `chapter.assets` on a
