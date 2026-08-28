@@ -67,7 +67,8 @@ export const fixLinks: Step = (doc, ctx, sink) => {
     } else {
       // Degrade to the book, never to a dead link. The reader still lands
       // somewhere true, and the note says which target could not be resolved.
-      anchor.setAttribute('href', ctx.attribution.url)
+      if (ctx.attribution.url) anchor.setAttribute('href', ctx.attribution.url)
+      else anchor.removeAttribute('href')
       unresolved.push(uuid)
     }
     anchor.setAttribute('data-b2c-xref', uuid)

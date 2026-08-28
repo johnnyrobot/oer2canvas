@@ -3,6 +3,7 @@ import axe from 'axe-core'
 import App from './App'
 import { ChapterPicker } from './components/ChapterPicker'
 import { ChapterView } from './components/ChapterView'
+import { PlainTextImporter } from './components/PlainTextImporter'
 import { QueueView } from './components/queue/QueueView'
 import { newSession, reduce, type QueueSession } from './components/queue/session'
 import { fetchChapter, flattenToc } from './sources/openstax'
@@ -199,6 +200,22 @@ test('screen 1 — the book browser has no accessibility violations', async () =
   // before reaching for the book list. Cartridge needs no credentials, so
   // this stays offline.
   fireEvent.click(screen.getByRole('button', { name: /A cartridge file/i }))
+  expect(await violationsIn(container)).toEqual([])
+  expect(duplicateIds(container)).toEqual([])
+})
+
+test('screen 1b — the plain-text form and preview have no accessibility violations', async () => {
+  const { container } = render(<PlainTextImporter onConfirm={() => {}} />)
+  expect(await violationsIn(container)).toEqual([])
+  expect(duplicateIds(container)).toEqual([])
+
+  fireEvent.change(screen.getByLabelText('Document title'), { target: { value: 'Accessible notes' } })
+  fireEvent.change(screen.getByLabelText('Text to import'), { target: { value: 'A useful paragraph.' } })
+  fireEvent.click(screen.getByRole('radio', { name: 'I created or own this content' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: /I am responsible for rights/i }))
+  fireEvent.click(screen.getByRole('button', { name: 'Create one-page preview' }))
+  await screen.findByRole('heading', { name: 'Preview: Accessible notes' })
+
   expect(await violationsIn(container)).toEqual([])
   expect(duplicateIds(container)).toEqual([])
 })

@@ -26,6 +26,9 @@ credential, revoke it in Canvas immediately and mention only that it was revoked
   attachment-delivered, and non-cacheable.
 - Publisher HTML is parsed in an inert detached document. Only allowlist-repaired HTML is
   placed in the audit iframe or sent to Canvas.
+- Pasted and file-selected plain text is decoded as strict UTF-8, limited to 2 MiB, escaped before
+  semantic HTML is created, and then subjected to the same allowlist and accessibility gate as
+  publisher content. Source files and derived document data remain browser-local.
 
 ## Operational requirements before launch
 

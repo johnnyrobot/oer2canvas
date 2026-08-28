@@ -7,7 +7,8 @@
  * LibreTexts needs two separate TOC strategies; Pressbooks crawls; OpenStax
  * resolves a release manifest first. They converge at `Chapter` and nowhere earlier.
  */
-export type SourceId = 'openstax' | 'libretexts' | 'pressbooks'
+export type PublisherSourceId = 'openstax' | 'libretexts' | 'pressbooks'
+export type ContentSourceId = PublisherSourceId | 'document'
 
 export interface Section {
   id: string
@@ -22,13 +23,13 @@ export interface Section {
    * runs on html whose images cannot load, so the audited layout is not the
    * published layout.
    */
-  contentBaseUrl: string
+  contentBaseUrl?: string
   /** Public, human-facing url of this section. D9 attribution links it. */
-  canonicalUrl: string
+  canonicalUrl?: string
 }
 
 export interface Chapter {
-  source: SourceId
+  source: ContentSourceId
   bookId: string
   title: string
   sections: Section[]
@@ -50,13 +51,13 @@ export interface Attribution {
   bookTitle: string
   publisher: string
   /** Canonical URL of the source book or section. */
-  url: string
+  url?: string
   authors: string[]
   license?: { name: string; url?: string }
 }
 
 export interface BookRef {
-  source: SourceId
+  source: PublisherSourceId
   id: string
   slug: string
   title: string

@@ -1,4 +1,4 @@
-import type { CompiledChapter, CompiledSection } from '../../contracts/index'
+import { auditedHtml, type CompiledChapter, type CompiledSection } from '../../contracts/index'
 import { pageTargetsByChapter, slug } from './page-identity'
 import type { ZipEntry } from './zip'
 
@@ -111,7 +111,7 @@ function documentFor(section: CompiledSection, id: string): string {
     '<meta name="workflow_state" content="active"/>' +
     '</head><body>' +
     // VERBATIM. Concatenated, never parsed.
-    section.html +
+    auditedHtml(section) +
     '</body></html>'
   )
 }

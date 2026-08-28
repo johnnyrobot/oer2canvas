@@ -6,9 +6,16 @@ stateless Cloudflare Worker used only where browser CORS prevents a direct reque
 
 ## Release scope
 
-The public web app supports OpenStax, LibreTexts, and Pressbooks through one output path:
+The public web app supports OpenStax, LibreTexts, Pressbooks, pasted plain text, and local
+UTF-8 `.txt` files through one output path:
 
 - a Common Cartridge 1.1 download, with no Canvas address, account, or token access.
+
+Plain-text imports are processed entirely in the browser, are limited to 2 MiB, and start as
+one Canvas page. The import preview requires a title, a stated basis for republishing the
+material, and acknowledgement that the user remains responsible for rights and final
+accessibility review. Optional author, source, public URL, and license metadata become the
+page's source-and-license attribution; the app never invents a URL or an open license.
 
 The repository also retains a resumable Canvas REST push for an operator-controlled deployment.
 It is disabled in the public build and public relay. It may be enabled only when the operator

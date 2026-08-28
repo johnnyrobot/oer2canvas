@@ -13,7 +13,9 @@ export function ChapterView({ compiled }: { compiled: CompiledChapter }) {
       <CanvasShellStyles />
       <h2 id="chapter-heading">{chapter.title}</h2>
       <p>
-        From <a href={chapter.attribution.url}>{chapter.attribution.bookTitle}</a> by{' '}
+        From {chapter.attribution.url
+          ? <a href={chapter.attribution.url}>{chapter.attribution.bookTitle}</a>
+          : chapter.attribution.bookTitle} by{' '}
         {chapter.attribution.publisher}
         {chapter.attribution.license ? ` — ${chapter.attribution.license.name}` : ''}
       </p>

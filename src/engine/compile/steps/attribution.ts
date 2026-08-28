@@ -28,17 +28,28 @@ export const appendAttribution: Step = (doc, ctx, sink) => {
   block.appendChild(heading)
 
   const source = doc.createElement('p')
-  const link = doc.createElement('a')
-  link.setAttribute('href', ctx.canonicalUrl)
-  link.textContent = ctx.sectionTitle
-  source.append(link, doc.createTextNode(` — from ${a.bookTitle}, published by ${a.publisher}.`))
+  if (ctx.canonicalUrl) {
+    const link = doc.createElement('a')
+    link.setAttribute('href', ctx.canonicalUrl)
+    link.textContent = ctx.sectionTitle
+    source.appendChild(link)
+  } else {
+    source.appendChild(doc.createTextNode(ctx.sectionTitle))
+  }
+  source.appendChild(doc.createTextNode(
+    ctx.profile.id === 'document'
+      ? ` — source: ${a.publisher}.`
+      : ` — from ${a.bookTitle}, published by ${a.publisher}.`,
+  ))
   block.appendChild(source)
 
   const authors = doc.createElement('p')
   authors.textContent =
     a.authors.length > 0
       ? `By ${a.authors.join(', ')}.`
-      : 'The authors of this material could not be determined from the publisher’s data.'
+      : ctx.profile.id === 'document'
+        ? 'No author or organization was supplied.'
+        : 'The authors of this material could not be determined from the publisher’s data.'
   block.appendChild(authors)
 
   const license = doc.createElement('p')
@@ -52,7 +63,9 @@ export const appendAttribution: Step = (doc, ctx, sink) => {
     license.textContent = `Licensed under the ${a.license.name}.`
   } else {
     license.textContent =
-      'The license for this material could not be determined from the publisher’s data.'
+      ctx.profile.id === 'document'
+        ? 'No license was supplied.'
+        : 'The license for this material could not be determined from the publisher’s data.'
   }
   block.appendChild(license)
 

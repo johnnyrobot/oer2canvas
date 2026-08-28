@@ -29,6 +29,7 @@ const URL_ATTRS: Readonly<Record<string, readonly string[]>> = {
 const SUBRESOURCE = new Set(['src', 'poster', 'data'])
 
 export const absolutize: Step = (doc, ctx, sink) => {
+  if (!ctx.contentBaseUrl) return
   const base = new URL(ctx.contentBaseUrl)
   let rewritten = 0
   let upgraded = 0

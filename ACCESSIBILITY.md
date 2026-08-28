@@ -7,7 +7,9 @@ accessible tables, contrast-safe colors, semantic emphasis, and the 120-characte
 limit are enforced during compilation. The publication gate withholds output while definite
 blockers or unanswered human-review items remain. The app interface is exercised with axe-core
 in headless Chromium, including the destination, chapter picker, review, and rendered chapter
-states.
+states. The browser-only plain-text authoring form and its escaped preview are exercised against
+the same WCAG rules, including keyboard-operable source, metadata, rights, preview, and
+confirmation controls.
 
 Automated checks are evidence, not a guarantee. A public-release human review covers the web
 app, the installed progressive web app, and a Common Cartridge import after Canvas sanitization.

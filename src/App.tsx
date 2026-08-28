@@ -12,7 +12,13 @@ import type { BookRef, Chapter } from './sources/types'
 import type { CompileProgress } from './engine'
 import { draftAltText, SELECTED_VLM_MODEL, type VlmModel, type VlmProgress } from './engine/vlm'
 import { createBrowserVlmRuntime } from './engine/vlm-runtime'
-import { LIBRETEXTS, OPENSTAX, PRESSBOOKS } from './engine/compile/context'
+import {
+  DOCUMENT,
+  LIBRETEXTS,
+  OPENSTAX,
+  PRESSBOOKS,
+  type PublisherProfile,
+} from './engine/compile/context'
 import { isPublishable } from './contracts/index'
 import type { CompiledChapter, CompiledSection } from './contracts/index'
 import { mergeQueues } from './engine/compile/index'
@@ -31,13 +37,21 @@ import { runPush } from './shell/push-session'
 import type { PushReport } from './shell/screens'
 import type { Destination, PhaseId, ShellState } from './shell/phases'
 import { mergeSelection, regroup, toggle } from './shell/selection'
+import type { ImportResult } from './import/types'
+import { toChapter } from './import/to-chapter'
+import { isAbortError, messageOf } from './errors'
 
 const openstaxClient = createDefaultOpenStaxClient()
 const webClients: Partial<Record<'libretexts' | 'pressbooks', WebBookClient>> = {
   libretexts: createLibreTextsClient({ fetch: (...args) => globalThis.fetch(...args), relayUrl: '/relay' }),
   pressbooks: createPressbooksClient({ fetch: (...args) => globalThis.fetch(...args), relayUrl: '/relay' }),
 }
-const publisherProfiles = { openstax: OPENSTAX, libretexts: LIBRETEXTS, pressbooks: PRESSBOOKS } as const
+const publisherProfiles = {
+  openstax: OPENSTAX,
+  libretexts: LIBRETEXTS,
+  pressbooks: PRESSBOOKS,
+  document: DOCUMENT,
+} as const
 const localVlmRuntime = createBrowserVlmRuntime()
 const localVlmDrafting = {
   models: [SELECTED_VLM_MODEL] as const,
@@ -70,24 +84,6 @@ const selfHostedCanvasOrigin =
   typeof __OER2CANVAS_SELF_HOSTED_CANVAS_ORIGIN__ === 'string'
     ? __OER2CANVAS_SELF_HOSTED_CANVAS_ORIGIN__
     : ''
-
-/** Anything at all can be thrown; only an `Error` is guaranteed to have a message. */
-function messageOf(e: unknown): string {
-  return e instanceof Error ? e.message : String(e)
-}
-
-/**
- * A cancel the user asked for, not a failure.
- *
- * Both arrive at the same `catch`, and telling them apart is what keeps
- * "Could not prepare Chapter 1" off the screen after the user pressed Cancel.
- * Matched by `name` rather than `instanceof DOMException`, because that is what
- * `AbortSignal.throwIfAborted` guarantees and what a custom `reason` is free to
- * be — `signal.abort(reason)` accepts any value at all.
- */
-function isAbort(e: unknown): boolean {
-  return e instanceof Error && e.name === 'AbortError'
-}
 
 /**
  * "Auditing 3 of 12: 1.3 Radicals…" — what the status line says mid-run.
@@ -282,6 +278,8 @@ export default function App() {
   const [selected, setSelected] = useState<readonly ChapterOutline[]>([])
   /** One `CompiledChapter` per prepared chapter, kept apart so each keeps its identity. */
   const [prepared, setPrepared] = useState<readonly CompiledChapter[]>([])
+  /** Browser-imported content, retained so the shell has one source-neutral selection. */
+  const [imported, setImported] = useState<ImportResult | undefined>()
   /** The filename that was produced, once something has actually been committed. */
   const [committed, setCommitted] = useState<string | undefined>()
   /** What a Canvas push did, once one has run. Absent for the cartridge path. */
@@ -332,7 +330,56 @@ export default function App() {
     setQueue(partial)
   }, [partial])
 
+  /**
+   * Clear every value derived from a prepared source. Source acquisition state
+   * is intentionally separate, so changing a book can replace its TOC without
+   * ever leaving an old document's audited bytes available to Plan or export.
+   */
+  function clearDerivedOutput() {
+    opened.current = false
+    setChapter(undefined)
+    setAudited([])
+    setCompiling(undefined)
+    setPrepared([])
+    setQueue(undefined)
+    setCommitted(undefined)
+    setPush(undefined)
+  }
+
+  /** Compile and audit every source through one UI/state lifecycle. */
+  async function compileForReview(
+    ch: Chapter,
+    profile: PublisherProfile,
+    controller: AbortController,
+    statusSuffix = '',
+  ): Promise<CompiledChapter> {
+    setChapter(ch)
+    setCompiling({ section: 1, total: ch.sections.length })
+    const { compileAndAuditChapter } = await import('./engine')
+    return compileAndAuditChapter(ch, {
+      profile,
+      signal: controller.signal,
+      onProgress: (progress) => {
+        setCompiling(
+          progress.phase === 'done'
+            ? undefined
+            : { section: progress.done + 1, total: progress.total },
+        )
+        const label = progressLabel(progress)
+        // Silent once the queue owns the screen: its header names the active
+        // section, so a second polite live region would repeat it.
+        if (label !== undefined) setBusy(opened.current ? '' : `${label}${statusSuffix}`)
+      },
+      onSection: (section) => setAudited((all) => [...all, section]),
+    })
+  }
+
   async function pickBook(b: BookRef) {
+    run.current?.abort()
+    run.current = undefined
+    clearDerivedOutput()
+    setImported(undefined)
+    setSelected([])
     setBusy(`Loading ${b.title}…`)
     setError('')
     try {
@@ -372,18 +419,12 @@ export default function App() {
     run.current?.abort()
     run.current = undefined
     activeWebClient.current = undefined
-    opened.current = false
+    clearDerivedOutput()
     setBook(undefined)
     setToc(undefined)
     setOutlines([])
     setSelected([])
-    setChapter(undefined)
-    setAudited([])
-    setCompiling(undefined)
-    setPrepared([])
-    setQueue(undefined)
-    setCommitted(undefined)
-    setPush(undefined)
+    setImported(undefined)
     setBusy('')
     setError('')
     setPhase('chapters')
@@ -414,38 +455,22 @@ export default function App() {
     setError('')
     // The latch is per RUN, not per chapter: one queue spans the selection, so
     // reopening it between chapters would throw away answers mid-way through.
-    opened.current = false
-    setQueue(undefined)
-    setAudited([])
-    setPrepared([])
+    clearDerivedOutput()
 
     const done: CompiledChapter[] = []
     try {
-      // The audit engine includes axe-core and the iframe runner. Defer that
-      // payload until the user actually prepares a chapter so source browsing,
-      // Canvas setup, and the install shell remain a smaller first load.
-      const { compileAndAuditChapter } = await import('./engine')
       for (const [index, outline] of selected.entries()) {
         const of = selected.length > 1 ? ` (${index + 1} of ${selected.length})` : ''
         setBusy(`Fetching ${outline.title}…${of}`)
         const ch = book!.source === 'openstax'
           ? await fetchChapter(openstaxClient, book!, outline, toc, controller.signal)
           : await activeWebClient.current!.fetchChapter(book!, outline, controller.signal)
-        setChapter(ch)
-        setCompiling({ section: 1, total: ch.sections.length })
-        const compiled = await compileAndAuditChapter(ch, {
-          profile: publisherProfiles[ch.source],
-          signal: controller.signal,
-          onProgress: (p) => {
-            setCompiling(p.phase === 'done' ? undefined : { section: p.done + 1, total: p.total })
-            const label = progressLabel(p)
-            // Silent once the queue owns the screen: its header line already
-            // names the section being compiled, and two polite live regions
-            // reporting the same run is the same sentence read out twice.
-            if (label !== undefined) setBusy(opened.current ? '' : `${label}${of}`)
-          },
-          onSection: (section) => setAudited((all) => [...all, section]),
-        })
+        const compiled = await compileForReview(
+          ch,
+          publisherProfiles[ch.source],
+          controller,
+          of,
+        )
         done.push(compiled)
         // Published per chapter rather than at the end, so a selection that
         // fails on chapter 4 still has 1-3 to show rather than nothing.
@@ -454,15 +479,11 @@ export default function App() {
     } catch (e) {
       // A cancel is not announced. The user knows what they did, and the only
       // thing they need is to be back somewhere they can act.
-      if (!isAbort(e)) setError(`Could not prepare ${selected[done.length]?.title ?? 'the selection'}. ${messageOf(e)}`)
+      if (!isAbortError(e)) setError(`Could not prepare ${selected[done.length]?.title ?? 'the selection'}. ${messageOf(e)}`)
       // Everything the run produced goes with it, the open queue included. A
       // half-prepared selection left on screen would invite answers to sections
       // the rest of it will never be checked against.
-      setAudited([])
-      opened.current = false
-      setQueue(undefined)
-      setChapter(undefined)
-      setPrepared([])
+      clearDerivedOutput()
       /*
        * And back to the phase that has something to act on. Clearing `chapter`
        * used to undo the navigation for free, because the picker was selected by
@@ -476,6 +497,51 @@ export default function App() {
       setCompiling(undefined)
       run.current = undefined
     }
+  }
+
+  /**
+   * Prepare a confirmed browser import through the same Chapter-level engine
+   * seam as publisher content. Parsing and metadata stay above this boundary;
+   * the compiler receives only the normalized Chapter.
+   */
+  async function prepareImportedText(result: ImportResult) {
+    const ch = toChapter(result.work)
+    run.current?.abort()
+    clearDerivedOutput()
+    const controller = new AbortController()
+    run.current = controller
+    setImported(result)
+    setBook(undefined)
+    setToc(undefined)
+    setOutlines([])
+    setSelected([])
+    setPhase('review')
+    setError('')
+    setBusy(`Preparing ${ch.title}…`)
+
+    try {
+      const compiled = await compileForReview(ch, publisherProfiles.document, controller)
+      setPrepared([compiled])
+    } catch (caught) {
+      if (!isAbortError(caught)) setError(`Could not prepare ${ch.title}. ${messageOf(caught)}`)
+      setImported(undefined)
+      clearDerivedOutput()
+      setPhase('chapters')
+    } finally {
+      setBusy('')
+      setCompiling(undefined)
+      run.current = undefined
+    }
+  }
+
+  function clearImportedContent() {
+    run.current?.abort()
+    run.current = undefined
+    clearDerivedOutput()
+    setImported(undefined)
+    setBusy('')
+    setError('')
+    setPhase('chapters')
   }
 
   async function commitCartridge() {
@@ -542,7 +608,7 @@ export default function App() {
    */
   const shell: ShellState = {
     destination,
-    selectedCount: selected.length,
+    selectedCount: imported ? 1 : selected.length,
     preparedCount: compiling ? prepared.length : prepared.length,
     unansweredCount: partial?.queue.length ?? 0,
     committed: committed !== undefined,
@@ -564,9 +630,17 @@ export default function App() {
        */
       onCancel={busy ? () => run.current?.abort() : undefined}
       selection={{
-        items: selected.map((o) => ({ id: o.id, title: o.title, sectionCount: o.sections.length })),
-        onRemove: (id) => setSelected((sel) => sel.filter((s) => s.id !== id)),
-        onClear: () => setSelected([]),
+        items: imported
+          ? [{ id: imported.work.id, title: imported.work.title, sectionCount: imported.work.sections.length }]
+          : selected.map((o) => ({ id: o.id, title: o.title, sectionCount: o.sections.length })),
+        onRemove: (id) => {
+          if (imported?.work.id === id) clearImportedContent()
+          else setSelected((sel) => sel.filter((s) => s.id !== id))
+        },
+        onClear: () => {
+          if (imported) clearImportedContent()
+          else setSelected([])
+        },
       }}
     >
       {phase === 'destination' && (
@@ -611,7 +685,12 @@ export default function App() {
         />
       )}
 
-      {phase === 'chapters' && !book && <SourceBrowser onPick={(book) => { void pickBook(book) }} />}
+      {phase === 'chapters' && !book && (
+        <SourceBrowser
+          onPick={(book) => { void pickBook(book) }}
+          onImportText={(result) => { void prepareImportedText(result) }}
+        />
+      )}
       {phase === 'chapters' && book && (
         <ChapterPicker
           outlines={outlines}
@@ -656,6 +735,7 @@ export default function App() {
           destination={destination}
           chapters={prepared}
           unansweredCount={partial?.queue.length ?? 0}
+          {...(imported ? { assetCount: imported.work.assets.length } : {})}
           {...(existingPages ? { existingPages } : {})}
           /*
            * Offered only for a destination that can actually be produced. The

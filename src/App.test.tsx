@@ -74,7 +74,7 @@ test('names the current screen in the h1, and the product in the shell', () => {
   expect(screen.getByText('oer2canvas')).toBeInTheDocument()
 
   fireEvent.click(screen.getByRole('button', { name: /A cartridge file/i }))
-  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Chapters')
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Content')
 })
 
 test('the default public app has no Canvas address, token, course, or push entry point', () => {
@@ -102,7 +102,7 @@ test('can leave a loaded book and choose a different one without refreshing', as
 
   fireEvent.click(screen.getByRole('button', { name: /choose a different book/i }))
 
-  expect(screen.getByRole('heading', { name: 'Choose a book' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Choose content' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: FIRST_BOOK })).toBeInTheDocument()
   expect(screen.queryByRole('checkbox', { name: /Chapter 1 Prerequisites/ })).not.toBeInTheDocument()
 })
@@ -169,9 +169,9 @@ test('a failed chapter fetch is announced, not left on "Fetching …"', async ()
   // heading says where we are, and the picker is really there to act on.
   //
   // Re-queried rather than reusing the node captured above: bouncing back to
-  // Chapters remounts the picker, so the old element is legitimately detached
+  // Content remounts the picker, so the old element is legitimately detached
   // and asserting on it would be testing React's reconciliation, not the app's.
-  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Chapters')
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Content')
   expect(screen.getByRole('checkbox', { name: /Chapter 1 Prerequisites/ })).toBeInTheDocument()
 })
 

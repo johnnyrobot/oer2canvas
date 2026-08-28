@@ -27,7 +27,7 @@ export const PHASE_ORDER: readonly PhaseId[] = [
 
 export const PHASE_LABEL: Readonly<Record<PhaseId, string>> = {
   destination: 'Destination',
-  chapters: 'Chapters',
+  chapters: 'Content',
   review: 'Review',
   plan: 'Plan',
   result: 'Result',

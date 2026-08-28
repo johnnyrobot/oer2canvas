@@ -1,5 +1,5 @@
 import rawNetworks from './pressbooks-networks.json'
-import type { BookRef, SourceId } from './types'
+import type { BookRef, PublisherSourceId } from './types'
 
 export interface PressbooksNetwork {
   host: string
@@ -10,7 +10,7 @@ export interface PressbooksNetwork {
 
 export const pressbooksNetworks = (rawNetworks as { networks: PressbooksNetwork[] }).networks
 
-function isBookRef(value: unknown, source: SourceId): value is BookRef {
+function isBookRef(value: unknown, source: PublisherSourceId): value is BookRef {
   if (!value || typeof value !== 'object') return false
   const book = value as Partial<BookRef>
   return book.source === source

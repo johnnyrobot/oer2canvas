@@ -70,3 +70,14 @@ test('browses and selects a Pressbooks network catalog book', async () => {
     expect.stringContaining('/catalogs/pressbooks/'), expect.anything(),
   ))
 })
+
+test('plain text is a content choice without removing the publisher catalogs', () => {
+  render(<SourceBrowser onPick={() => {}} onImportText={() => {}} />)
+
+  fireEvent.click(screen.getByRole('tab', { name: 'Plain text' }))
+  expect(screen.getByLabelText('Text to import')).toBeVisible()
+  expect(screen.getByRole('button', { name: 'Create one-page preview' })).toBeVisible()
+
+  fireEvent.click(screen.getByRole('tab', { name: 'OpenStax' }))
+  expect(screen.getByRole('button', { name: 'Algebra and Trigonometry' })).toBeVisible()
+})

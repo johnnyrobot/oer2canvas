@@ -95,6 +95,15 @@ export interface CompiledChapter {
 }
 
 /**
+ * Bytes approved for output. Production publication is gated by
+ * `isPublishable`, so the fallback exists only for lower-level builders and
+ * fixtures that intentionally exercise pre-gate structure.
+ */
+export function auditedHtml(section: CompiledSection): string {
+  return section.gate?.html ?? section.html
+}
+
+/**
  * D5: nothing publishes until the queue is empty.
  *
  * READ THIS, NOT `GateResult.passedChecks`. `passedChecks` is upstream's

@@ -16,7 +16,7 @@ import type { Destination } from './phases'
  * would lose the only structure the user actually chose.
  */
 export function PlanScreen({
-  destination, chapters, unansweredCount, onCommit, existingPages,
+  destination, chapters, unansweredCount, onCommit, existingPages, assetCount,
 }: {
   destination?: Destination
   chapters: readonly CompiledChapter[]
@@ -27,6 +27,8 @@ export function PlanScreen({
    * and the difference from `[]` is load-bearing — see `buildPlan`.
    */
   existingPages?: readonly CanvasPage[]
+  /** Present for browser imports, whose packaged assets must be disclosed exactly. */
+  assetCount?: number
 }) {
   const plan = buildPlan(chapters, destination, unansweredCount, existingPages)
   const behaviour = reRunBehaviour(destination)
@@ -49,6 +51,11 @@ export function PlanScreen({
 
       {/* The operation summary in one line. */}
       <p className="mt-2 text-base">{plan.summary}</p>
+      {assetCount !== undefined && (
+        <p className="mt-1 text-sm text-neutral-700 dark:text-neutral-300">
+          Packaged assets: {assetCount.toLocaleString()}.
+        </p>
+      )}
 
       {behaviour && (
         <div

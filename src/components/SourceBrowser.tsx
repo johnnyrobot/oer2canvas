@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { OpenStaxBrowser } from './OpenStaxBrowser'
+import { PlainTextImporter } from './PlainTextImporter'
 import {
   loadLibreTextsCatalog,
   loadPressbooksCatalog,
@@ -7,8 +8,40 @@ import {
   searchSourceCatalog,
 } from '../sources/catalogs'
 import type { BookRef } from '../sources/types'
+import type { ImportResult } from '../import/types'
+import { messageOf } from '../errors'
 
-type SourceTab = 'openstax' | 'libretexts' | 'pressbooks'
+type SourceTab = 'openstax' | 'libretexts' | 'pressbooks' | 'text'
+type CatalogTab = Extract<SourceTab, 'libretexts' | 'pressbooks'>
+
+const BASE_TABS = ['openstax', 'libretexts', 'pressbooks'] as const
+const TAB_LABELS: Readonly<Record<SourceTab, string>> = {
+  openstax: 'OpenStax',
+  libretexts: 'LibreTexts',
+  pressbooks: 'Pressbooks',
+  text: 'Plain text',
+}
+
+const CATALOG_TABS: Readonly<Record<CatalogTab, {
+  heading: string
+  key: (network: string) => string
+  load: (network: string) => Promise<BookRef[]>
+}>> = {
+  libretexts: {
+    heading: 'LibreTexts books',
+    key: () => 'libretexts',
+    load: () => loadLibreTextsCatalog(),
+  },
+  pressbooks: {
+    heading: 'Pressbooks books',
+    key: (network) => `pressbooks:${network}`,
+    load: (network) => loadPressbooksCatalog(network),
+  },
+}
+
+function isCatalogTab(tab: SourceTab): tab is CatalogTab {
+  return tab === 'libretexts' || tab === 'pressbooks'
+}
 
 const defaultPressbooks = pressbooksNetworks.find((network) => network.isDefault) ?? pressbooksNetworks[0]
 
@@ -16,7 +49,13 @@ const defaultPressbooks = pressbooksNetworks.find((network) => network.isDefault
  * Three real catalogs. LibreTexts and Pressbooks are generated snapshots, so
  * searching and filtering never turns a keystroke into publisher traffic.
  */
-export function SourceBrowser({ onPick }: { onPick: (book: BookRef) => void }) {
+export function SourceBrowser({
+  onPick,
+  onImportText,
+}: {
+  onPick: (book: BookRef) => void
+  onImportText?: (result: ImportResult) => void
+}) {
   const [tab, setTab] = useState<SourceTab>('openstax')
   const [libreUrl, setLibreUrl] = useState('')
   const [libreError, setLibreError] = useState('')
@@ -27,14 +66,14 @@ export function SourceBrowser({ onPick }: { onPick: (book: BookRef) => void }) {
   const [catalogError, setCatalogError] = useState('')
   const [attempt, setAttempt] = useState(0)
 
-  const catalogKey = tab === 'libretexts' ? 'libretexts' : tab === 'pressbooks' ? `pressbooks:${network}` : ''
+  const catalog = isCatalogTab(tab) ? CATALOG_TABS[tab] : undefined
+  const catalogKey = catalog?.key(network) ?? ''
   useEffect(() => {
-    if (!catalogKey || loadedKey === catalogKey) return
+    if (!catalog || loadedKey === catalogKey) return
     let active = true
     setBooks(undefined)
     setCatalogError('')
-    const request = tab === 'libretexts' ? loadLibreTextsCatalog() : loadPressbooksCatalog(network)
-    void request
+    void catalog.load(network)
       .then((loaded) => {
         if (!active) return
         setBooks(loaded)
@@ -42,10 +81,10 @@ export function SourceBrowser({ onPick }: { onPick: (book: BookRef) => void }) {
       })
       .catch((error: unknown) => {
         if (!active) return
-        setCatalogError(error instanceof Error ? error.message : String(error))
+        setCatalogError(messageOf(error))
       })
     return () => { active = false }
-  }, [attempt, catalogKey, loadedKey, network, tab])
+  }, [attempt, catalog, catalogKey, loadedKey, network])
 
   const hits = useMemo(() => searchSourceCatalog(books ?? [], query), [books, query])
 
@@ -69,12 +108,12 @@ export function SourceBrowser({ onPick }: { onPick: (book: BookRef) => void }) {
 
   return (
     <section aria-labelledby="source-heading">
-      <h2 id="source-heading" className="text-xl font-semibold">Choose a book</h2>
+      <h2 id="source-heading" className="text-xl font-semibold">Choose content</h2>
       <p className="mt-1 text-sm text-neutral-700 dark:text-neutral-300">
-        Search OpenStax, LibreTexts, or Pressbooks.
+        Search an OER publisher or import plain text from this browser.
       </p>
-      <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Book source">
-        {(['openstax', 'libretexts', 'pressbooks'] as const).map((source) => (
+      <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Content source">
+        {[...BASE_TABS, ...(onImportText ? ['text' as const] : [])].map((source) => (
           <button
             key={source}
             type="button"
@@ -87,17 +126,18 @@ export function SourceBrowser({ onPick }: { onPick: (book: BookRef) => void }) {
               setCatalogError('')
             }}
           >
-            {source === 'openstax' ? 'OpenStax' : source === 'libretexts' ? 'LibreTexts' : 'Pressbooks'}
+            {TAB_LABELS[source]}
           </button>
         ))}
       </div>
 
       <div className="mt-5">
         {tab === 'openstax' && <OpenStaxBrowser onPick={onPick} />}
-        {tab !== 'openstax' && (
+        {tab === 'text' && onImportText && <PlainTextImporter onConfirm={onImportText} />}
+        {catalog && (
           <section aria-labelledby={`${tab}-catalog-heading`}>
             <h3 id={`${tab}-catalog-heading`} className="text-lg font-semibold">
-              {tab === 'libretexts' ? 'LibreTexts books' : 'Pressbooks books'}
+              {catalog.heading}
             </h3>
             <div className="mt-4 grid max-w-3xl gap-3 sm:grid-cols-2">
               <label htmlFor={`${tab}-search`} className="block text-sm font-medium">

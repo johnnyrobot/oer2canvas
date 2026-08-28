@@ -7,11 +7,11 @@
  * load-bearing orderings cannot drift apart per publisher, because there is
  * only ever one ordering.
  */
-import type { Attribution, SourceId } from '../../sources/types'
+import type { Attribution, ContentSourceId } from '../../sources/types'
 import type { QueueAnswer } from './answers'
 
 export interface PublisherProfile {
-  id: SourceId
+  id: ContentSourceId
   /** The publisher's caption element. */
   captionContainer: string
   /**
@@ -141,12 +141,26 @@ export const PRESSBOOKS: PublisherProfile = {
   chrome: ['script', 'style', 'nav', 'header', 'footer', '.site-header', '.site-footer'],
 }
 
+/** Normalized document HTML needs no publisher-specific recovery rules. */
+export const DOCUMENT: PublisherProfile = {
+  id: 'document',
+  captionContainer: 'figcaption',
+  captionIsSibling: false,
+  labelOnlyCaption: /^(figure|table)\s*[\d.]*$/i,
+  captionDescription: 'figcaption',
+  captionCredit: /\bcredits?:\s.*$/i,
+  mediaWrapper: 'figure',
+  xrefHref: /(?!)/,
+  hashFromUrl: () => undefined,
+  chrome: ['script', 'style'],
+}
+
 export interface CompileContext {
   profile: PublisherProfile
   /** Absolute url the section html was served from — the absolutization base. */
-  contentBaseUrl: string
+  contentBaseUrl?: string
   /** Public url of THIS section. D9 links it; the attribution step reads it. */
-  canonicalUrl: string
+  canonicalUrl?: string
   sectionTitle: string
   /** Page uuid → canonical url, for the whole source book. */
   xrefs: Map<string, string>
