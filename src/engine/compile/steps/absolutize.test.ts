@@ -48,4 +48,14 @@ describe('absolutize', () => {
     const out = compileSection(section('<object data="../a.swf" codebase="../plugins/"></object>'), ctx, [absolutize])
     expect(out.html).toContain('codebase="https://openstax.org/apps/archive/x/plugins/"')
   })
+
+  it('leaves a packaged cartridge reference exactly as written', () => {
+    const out = compileSection(
+      section('<p><img src="$IMS-CC-FILEBASE$/oer2canvas/image1-a3f91c2e.png" alt="A diagram"></p>'),
+      ctx,
+      [absolutize],
+    )
+    expect(out.html).toContain('src="$IMS-CC-FILEBASE$/oer2canvas/image1-a3f91c2e.png"')
+    expect(out.html).not.toContain('openstax.org')
+  })
 })

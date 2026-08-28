@@ -8,6 +8,7 @@
  * returns HTTP 200 image/jpeg.
  */
 import type { Step } from './index'
+import { isPackagedReference } from '../../../import/assets'
 
 /**
  * URL-bearing attributes, per element — allowlist.ts's B.4 table, minus
@@ -43,6 +44,10 @@ export const absolutize: Step = (doc, ctx, sink) => {
         // Intra-book links are the later link step's responsibility; it needs
         // the uuid still in the href.
         if (ctx.profile.xrefHref.test(raw)) continue
+        // A packaged cartridge reference is resolved by Canvas at import time,
+        // not by a browser against a base URL. Absolutizing it would produce a
+        // URL that points at the publisher's site instead of the packaged file.
+        if (isPackagedReference(raw)) continue
         try {
           const url = new URL(raw, base)
           if (url.protocol === 'http:' && (SUBRESOURCE.has(attr) || url.hostname === base.hostname)) {
