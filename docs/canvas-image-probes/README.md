@@ -1,8 +1,15 @@
 # Canvas embedded-image probes
 
 These probe cartridges isolate how Canvas imports packaged raster images. They are research
-artifacts, not part of the application exporter. Their results must be recorded in
-[`VALIDATION_WORKSHEET.md`](VALIDATION_WORKSHEET.md) before production asset packaging changes.
+artifacts, not part of the application exporter.
+
+> **Resolved 2026-08-28.** All four variants were run against a live Canvas instance.
+> `standalone-webcontent` is the shape production may implement; `webcontent-dependencies` also
+> passed. `page-owned-files` and `associatedcontent-dependencies` failed — Canvas reported the
+> import as `completed` and attached no course files at all. Findings, limitations, and the
+> completed worksheet are in
+> [`docs/evidence/canvas-image-probes-2026-08-28.md`](../evidence/canvas-image-probes-2026-08-28.md).
+> Re-running the evidence replaces that record; it does not re-open the decision by itself.
 
 ## What is held constant
 
@@ -62,7 +69,37 @@ npm run probe:canvas-images:validate
 Rerunning generation must print the same four hashes. A changed hash means the input changed and
 invalidates observations tied to the earlier hash.
 
+## Run the evidence automatically
+
+`npm run probe:canvas-images:run` drives the whole procedure below and writes a completed worksheet.
+It needs `CANVAS_BASE_URL` and a `CANVAS_TOKEN` that may create and delete courses.
+
+```sh
+npm run probe:canvas-images:run                      # all four variants
+npm run probe:canvas-images:run -- --only <probe-id> # re-run one shape
+npm run probe:canvas-images:run -- --keep-courses    # leave courses for inspection
+node scripts/canvas-image-probe-run.mjs --render <evidence-dir>  # re-render after a rule change
+```
+
+It creates three disposable courses per variant — import, copy destination, re-export reimport —
+and deletes only the ids it created, including when a run fails partway.
+
+The collector never decides anything. Every pass/fail rule and the winning-shape decision lives in
+`scripts/canvas-image-probe-evidence.mjs` and is unit-tested against fabricated observations, so a
+collector that meets unexpected Canvas behavior cannot quietly lower its own bar. Absent evidence is
+recorded as `not run`, which can never satisfy the gate. Because `run.json` holds raw observations
+and no verdicts, corrected rules can be re-applied with `--render` without spending another twelve
+courses.
+
+Two measurement details are load-bearing. Canvas adds `loading="lazy"`, so the harness forces eager
+loading before measuring: a deferred image below the fold is indistinguishable from a broken one by
+natural size alone. And it waits for the *expected* image count rather than for "every image present
+is complete", because before Canvas renders the body there are zero images and `[].every(...)` is
+vacuously true — which silently measures an empty page as a fully settled one.
+
 ## Canvas sandbox procedure
+
+The manual procedure the runner automates, for reproducing a result by hand:
 
 Use only a disposable course on a Canvas environment you are authorized to test. Use one clean
 course per variant, or fully reset the course between variants. The probes deliberately share page
@@ -119,3 +156,6 @@ The production exporter must not gain packaged-image behavior until all of the f
 If no candidate survives those checks, production asset packaging remains blocked. Do not choose a
 shape from the generator tests: those prove cartridge structure and reproducibility, not Canvas
 behavior.
+
+That gate was met on 2026-08-28 and issue 07 is resolved. The recorded evidence covers **one** Canvas
+environment, so it is not cross-version evidence; a second environment would still strengthen it.

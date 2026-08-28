@@ -1,0 +1,2511 @@
+{
+  "identity": {
+    "operator": "redacted",
+    "startedAt": "2026-08-28T18:42:35.867Z",
+    "canvasBaseUrl": "https://canvas.example.edu",
+    "canvasRelease": "see evidence/run.json",
+    "browser": "Chromium 151.0.7922.34 (Playwright)",
+    "sourceCourses": "146, 149, 152, 155",
+    "copyCourses": "147, 150, 153, 156",
+    "roundTripCourses": "148, 151, 154, 157",
+    "probeIndex": "artifacts/canvas-image-probes/probe-index.json"
+  },
+  "expectedVariantIds": [
+    "standalone-webcontent",
+    "webcontent-dependencies",
+    "page-owned-files",
+    "associatedcontent-dependencies"
+  ],
+  "secondEnvironment": null,
+  "variants": [
+    {
+      "id": "standalone-webcontent",
+      "sha256": "8dfbea00c0bd80f7699e594aa8824eab0c4c00c9fa07739e281ed235b4e0bfd1",
+      "sourceCourseId": 146,
+      "import": {
+        "migrationId": 92,
+        "workflowState": "completed",
+        "migrationIssues": []
+      },
+      "pages": [
+        {
+          "key": "01-single-image",
+          "canvasUrl": "01-single-image",
+          "title": "01 Single image",
+          "storedHtml": "<h2>01 Single image</h2><figure><img src=\"https://canvas.example.edu/courses/146/files/4241/preview\" alt=\"Red square PNG — single image probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/146/files/4241\" data-api-returntype=\"File\"><figcaption>single.png</figcaption></figure>",
+          "storedImages": [
+            {
+              "src": "https://canvas.example.edu/courses/146/files/4241/preview",
+              "alt": "Red square PNG — single image probe",
+              "fileId": "4241"
+            }
+          ],
+          "renderedImages": [
+            {
+              "currentSrc": "https://canvas.example.edu/courses/146/files/4241/preview",
+              "alt": "Red square PNG — single image probe",
+              "naturalWidth": 16,
+              "naturalHeight": 16,
+              "complete": true
+            }
+          ]
+        },
+        {
+          "key": "02-shared-image-a",
+          "canvasUrl": "02-shared-image-a",
+          "title": "02 Shared image A",
+          "storedHtml": "<h2>02 Shared image A</h2><figure><img src=\"https://canvas.example.edu/courses/146/files/4240/preview\" alt=\"Orange square GIF — shared image probe A\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/146/files/4240\" data-api-returntype=\"File\"><figcaption>shared.gif</figcaption></figure>",
+          "storedImages": [
+            {
+              "src": "https://canvas.example.edu/courses/146/files/4240/preview",
+              "alt": "Orange square GIF — shared image probe A",
+              "fileId": "4240"
+            }
+          ],
+          "renderedImages": [
+            {
+              "currentSrc": "https://canvas.example.edu/courses/146/files/4240/preview",
+              "alt": "Orange square GIF — shared image probe A",
+              "naturalWidth": 16,
+              "naturalHeight": 16,
+              "complete": true
+            }
+          ]
+        },
+        {
+          "key": "03-shared-image-b",
+          "canvasUrl": "03-shared-image-b",
+          "title": "03 Shared image B",
+          "storedHtml": "<h2>03 Shared image B</h2><figure><img src=\"https://canvas.example.edu/courses/146/files/4240/preview\" alt=\"Orange square GIF — shared image probe B\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/146/files/4240\" data-api-returntype=\"File\"><figcaption>shared.gif</figcaption></figure>",
+          "storedImages": [
+            {
+              "src": "https://canvas.example.edu/courses/146/files/4240/preview",
+              "alt": "Orange square GIF — shared image probe B",
+              "fileId": "4240"
+            }
+          ],
+          "renderedImages": [
+            {
+              "currentSrc": "https://canvas.example.edu/courses/146/files/4240/preview",
+              "alt": "Orange square GIF — shared image probe B",
+              "naturalWidth": 16,
+              "naturalHeight": 16,
+              "complete": true
+            }
+          ]
+        },
+        {
+          "key": "04-raster-and-duplicates",
+          "canvasUrl": "04-raster-and-duplicates",
+          "title": "04 Raster types and duplicate bytes",
+          "storedHtml": "<h2>04 Raster types and duplicate bytes</h2><figure><img src=\"https://canvas.example.edu/courses/146/files/4238/preview\" alt=\"Purple square PNG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/146/files/4238\" data-api-returntype=\"File\"><figcaption>raster.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/146/files/4237/preview\" alt=\"Green square JPEG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/146/files/4237\" data-api-returntype=\"File\"><figcaption>raster.jpg</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/146/files/4239/preview\" alt=\"Blue square WebP raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/146/files/4239\" data-api-returntype=\"File\"><figcaption>raster.webp</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/146/files/4235/preview\" alt=\"Gray square duplicate bytes A\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/146/files/4235\" data-api-returntype=\"File\"><figcaption>duplicate-a.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/146/files/4236/preview\" alt=\"Gray square duplicate bytes B\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/146/files/4236\" data-api-returntype=\"File\"><figcaption>duplicate-b.png</figcaption></figure>",
+          "storedImages": [
+            {
+              "src": "https://canvas.example.edu/courses/146/files/4238/preview",
+              "alt": "Purple square PNG raster probe",
+              "fileId": "4238"
+            },
+            {
+              "src": "https://canvas.example.edu/courses/146/files/4237/preview",
+              "alt": "Green square JPEG raster probe",
+              "fileId": "4237"
+            },
+            {
+              "src": "https://canvas.example.edu/courses/146/files/4239/preview",
+              "alt": "Blue square WebP raster probe",
+              "fileId": "4239"
+            },
+            {
+              "src": "https://canvas.example.edu/courses/146/files/4235/preview",
+              "alt": "Gray square duplicate bytes A",
+              "fileId": "4235"
+            },
+            {
+              "src": "https://canvas.example.edu/courses/146/files/4236/preview",
+              "alt": "Gray square duplicate bytes B",
+              "fileId": "4236"
+            }
+          ],
+          "renderedImages": [
+            {
+              "currentSrc": "https://canvas.example.edu/courses/146/files/4238/preview",
+              "alt": "Purple square PNG raster probe",
+              "naturalWidth": 16,
+              "naturalHeight": 16,
+              "complete": true
+            },
+            {
+              "currentSrc": "https://canvas.example.edu/courses/146/files/4237/preview",
+              "alt": "Green square JPEG raster probe",
+              "naturalWidth": 16,
+              "naturalHeight": 16,
+              "complete": true
+            },
+            {
+              "currentSrc": "https://canvas.example.edu/courses/146/files/4239/preview",
+              "alt": "Blue square WebP raster probe",
+              "naturalWidth": 16,
+              "naturalHeight": 16,
+              "complete": true
+            },
+            {
+              "currentSrc": "https://canvas.example.edu/courses/146/files/4235/preview",
+              "alt": "Gray square duplicate bytes A",
+              "naturalWidth": 16,
+              "naturalHeight": 16,
+              "complete": true
+            },
+            {
+              "currentSrc": "https://canvas.example.edu/courses/146/files/4236/preview",
+              "alt": "Gray square duplicate bytes B",
+              "naturalWidth": 16,
+              "naturalHeight": 16,
+              "complete": true
+            }
+          ]
+        }
+      ],
+      "files": [
+        {
+          "id": "4235",
+          "displayName": "duplicate-a.png",
+          "filename": "duplicate-a.png",
+          "size": 107,
+          "contentType": "image/png",
+          "folderPath": "course files/probe"
+        },
+        {
+          "id": "4236",
+          "displayName": "duplicate-b.png",
+          "filename": "duplicate-a.png",
+          "size": 107,
+          "contentType": "image/png",
+          "folderPath": "course files/probe"
+        },
+        {
+          "id": "4237",
+          "displayName": "raster.jpg",
+          "filename": "raster.jpg",
+          "size": 272,
+          "contentType": "image/jpeg",
+          "folderPath": "course files/probe"
+        },
+        {
+          "id": "4238",
+          "displayName": "raster.png",
+          "filename": "raster.png",
+          "size": 107,
+          "contentType": "image/png",
+          "folderPath": "course files/probe"
+        },
+        {
+          "id": "4239",
+          "displayName": "raster.webp",
+          "filename": "raster.webp",
+          "size": 38,
+          "contentType": "image/webp",
+          "folderPath": "course files/probe"
+        },
+        {
+          "id": "4240",
+          "displayName": "shared.gif",
+          "filename": "shared.gif",
+          "size": 55,
+          "contentType": "image/gif",
+          "folderPath": "course files/probe"
+        },
+        {
+          "id": "4241",
+          "displayName": "single.png",
+          "filename": "single.png",
+          "size": 107,
+          "contentType": "image/png",
+          "folderPath": "course files/probe"
+        }
+      ],
+      "consoleErrors": [],
+      "failedRequests": [],
+      "sharedImage": {
+        "pageAFileId": "4240",
+        "pageBFileId": "4240"
+      },
+      "duplicateBytes": {
+        "fileIds": [
+          "4235",
+          "4236"
+        ]
+      },
+      "reimport": {
+        "workflowState": "completed",
+        "pagesBefore": 4,
+        "pagesAfter": 4,
+        "filesBefore": 7,
+        "filesAfter": 7,
+        "allImagesRendered": true
+      },
+      "shareCopy": {
+        "destinationCourseId": 147,
+        "workflowState": "completed",
+        "pageCount": 4,
+        "pages": [
+          {
+            "key": "01-single-image",
+            "canvasUrl": "01-single-image",
+            "title": "01 Single image",
+            "storedHtml": "<h2>01 Single image</h2><figure><img src=\"https://canvas.example.edu/courses/147/files/4254/preview\" alt=\"Red square PNG — single image probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/147/files/4254\" data-api-returntype=\"File\"><figcaption>single.png</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/147/files/4254/preview",
+                "alt": "Red square PNG — single image probe",
+                "fileId": "4254"
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/147/files/4254/preview",
+                "alt": "Red square PNG — single image probe",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "02-shared-image-a",
+            "canvasUrl": "02-shared-image-a",
+            "title": "02 Shared image A",
+            "storedHtml": "<h2>02 Shared image A</h2><figure><img src=\"https://canvas.example.edu/courses/147/files/4252/preview\" alt=\"Orange square GIF — shared image probe A\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/147/files/4252\" data-api-returntype=\"File\"><figcaption>shared.gif</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/147/files/4252/preview",
+                "alt": "Orange square GIF — shared image probe A",
+                "fileId": "4252"
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/147/files/4252/preview",
+                "alt": "Orange square GIF — shared image probe A",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "03-shared-image-b",
+            "canvasUrl": "03-shared-image-b",
+            "title": "03 Shared image B",
+            "storedHtml": "<h2>03 Shared image B</h2><figure><img src=\"https://canvas.example.edu/courses/147/files/4252/preview\" alt=\"Orange square GIF — shared image probe B\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/147/files/4252\" data-api-returntype=\"File\"><figcaption>shared.gif</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/147/files/4252/preview",
+                "alt": "Orange square GIF — shared image probe B",
+                "fileId": "4252"
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/147/files/4252/preview",
+                "alt": "Orange square GIF — shared image probe B",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "04-raster-and-duplicates",
+            "canvasUrl": "04-raster-and-duplicates",
+            "title": "04 Raster types and duplicate bytes",
+            "storedHtml": "<h2>04 Raster types and duplicate bytes</h2><figure><img src=\"https://canvas.example.edu/courses/147/files/4251/preview\" alt=\"Purple square PNG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/147/files/4251\" data-api-returntype=\"File\"><figcaption>raster.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/147/files/4249/preview\" alt=\"Green square JPEG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/147/files/4249\" data-api-returntype=\"File\"><figcaption>raster.jpg</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/147/files/4253/preview\" alt=\"Blue square WebP raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/147/files/4253\" data-api-returntype=\"File\"><figcaption>raster.webp</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/147/files/4248/preview\" alt=\"Gray square duplicate bytes A\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/147/files/4248\" data-api-returntype=\"File\"><figcaption>duplicate-a.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/147/files/4250/preview\" alt=\"Gray square duplicate bytes B\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/147/files/4250\" data-api-returntype=\"File\"><figcaption>duplicate-b.png</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/147/files/4251/preview",
+                "alt": "Purple square PNG raster probe",
+                "fileId": "4251"
+              },
+              {
+                "src": "https://canvas.example.edu/courses/147/files/4249/preview",
+                "alt": "Green square JPEG raster probe",
+                "fileId": "4249"
+              },
+              {
+                "src": "https://canvas.example.edu/courses/147/files/4253/preview",
+                "alt": "Blue square WebP raster probe",
+                "fileId": "4253"
+              },
+              {
+                "src": "https://canvas.example.edu/courses/147/files/4248/preview",
+                "alt": "Gray square duplicate bytes A",
+                "fileId": "4248"
+              },
+              {
+                "src": "https://canvas.example.edu/courses/147/files/4250/preview",
+                "alt": "Gray square duplicate bytes B",
+                "fileId": "4250"
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/147/files/4251/preview",
+                "alt": "Purple square PNG raster probe",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/147/files/4249/preview",
+                "alt": "Green square JPEG raster probe",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/147/files/4253/preview",
+                "alt": "Blue square WebP raster probe",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/147/files/4248/preview",
+                "alt": "Gray square duplicate bytes A",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/147/files/4250/preview",
+                "alt": "Gray square duplicate bytes B",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              }
+            ]
+          }
+        ],
+        "files": [
+          {
+            "id": "4248",
+            "displayName": "duplicate-a.png",
+            "filename": "duplicate-a.png",
+            "size": 107,
+            "contentType": "image/png",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4250",
+            "displayName": "duplicate-b.png",
+            "filename": "duplicate-a.png",
+            "size": 107,
+            "contentType": "image/png",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4249",
+            "displayName": "raster.jpg",
+            "filename": "raster.jpg",
+            "size": 272,
+            "contentType": "image/jpeg",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4251",
+            "displayName": "raster.png",
+            "filename": "raster.png",
+            "size": 107,
+            "contentType": "image/png",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4253",
+            "displayName": "raster.webp",
+            "filename": "raster.webp",
+            "size": 38,
+            "contentType": "image/webp",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4252",
+            "displayName": "shared.gif",
+            "filename": "shared.gif",
+            "size": 55,
+            "contentType": "image/gif",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4254",
+            "displayName": "single.png",
+            "filename": "single.png",
+            "size": 107,
+            "contentType": "image/png",
+            "folderPath": "course files/probe"
+          }
+        ],
+        "allImagesRendered": true,
+        "sharedResolvesToOneFile": true
+      },
+      "reexport": {
+        "workflowState": "exported",
+        "path": "artifacts/canvas-image-probe-evidence/2026-08-28T18-42-35-867Z/standalone-webcontent-reexport.imscc",
+        "sha256": "f8316f358d3424a9c13cfacaab697b47e0c97e0f38f1e875c30c0a095b0dce7c",
+        "bytes": 9676,
+        "unzipOk": true,
+        "entryCount": 23,
+        "pageReferences": [
+          {
+            "entry": "wiki_content/01-single-image.html",
+            "src": "$IMS-CC-FILEBASE$/probe/single.png",
+            "alt": "Red square PNG — single image probe",
+            "resolvesToPackagedFile": true
+          },
+          {
+            "entry": "wiki_content/02-shared-image-a.html",
+            "src": "$IMS-CC-FILEBASE$/probe/shared.gif",
+            "alt": "Orange square GIF — shared image probe A",
+            "resolvesToPackagedFile": true
+          },
+          {
+            "entry": "wiki_content/03-shared-image-b.html",
+            "src": "$IMS-CC-FILEBASE$/probe/shared.gif",
+            "alt": "Orange square GIF — shared image probe B",
+            "resolvesToPackagedFile": true
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "$IMS-CC-FILEBASE$/probe/raster.png",
+            "alt": "Purple square PNG raster probe",
+            "resolvesToPackagedFile": true
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "$IMS-CC-FILEBASE$/probe/raster.jpg",
+            "alt": "Green square JPEG raster probe",
+            "resolvesToPackagedFile": true
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "$IMS-CC-FILEBASE$/probe/raster.webp",
+            "alt": "Blue square WebP raster probe",
+            "resolvesToPackagedFile": true
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "$IMS-CC-FILEBASE$/probe/duplicate-a.png",
+            "alt": "Gray square duplicate bytes A",
+            "resolvesToPackagedFile": true
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "$IMS-CC-FILEBASE$/probe/duplicate-b.png",
+            "alt": "Gray square duplicate bytes B",
+            "resolvesToPackagedFile": true
+          }
+        ],
+        "manifestResourceTypes": [
+          "associatedcontent/imscc_xmlv1p1/learning-application-resource",
+          "webcontent"
+        ]
+      },
+      "reexportImport": {
+        "courseId": 148,
+        "workflowState": "completed",
+        "pageCount": 4,
+        "pages": [
+          {
+            "key": "01-single-image",
+            "canvasUrl": "01-single-image",
+            "title": "01 Single image",
+            "storedHtml": "<h2>01 Single image</h2><figure><img src=\"https://canvas.example.edu/courses/148/files/4265/preview\" alt=\"Red square PNG — single image probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/148/files/4265\" data-api-returntype=\"File\"><figcaption>single.png</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/148/files/4265/preview",
+                "alt": "Red square PNG — single image probe",
+                "fileId": "4265"
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/148/files/4265/preview",
+                "alt": "Red square PNG — single image probe",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "02-shared-image-a",
+            "canvasUrl": "02-shared-image-a",
+            "title": "02 Shared image A",
+            "storedHtml": "<h2>02 Shared image A</h2><figure><img src=\"https://canvas.example.edu/courses/148/files/4264/preview\" alt=\"Orange square GIF — shared image probe A\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/148/files/4264\" data-api-returntype=\"File\"><figcaption>shared.gif</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/148/files/4264/preview",
+                "alt": "Orange square GIF — shared image probe A",
+                "fileId": "4264"
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/148/files/4264/preview",
+                "alt": "Orange square GIF — shared image probe A",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "03-shared-image-b",
+            "canvasUrl": "03-shared-image-b",
+            "title": "03 Shared image B",
+            "storedHtml": "<h2>03 Shared image B</h2><figure><img src=\"https://canvas.example.edu/courses/148/files/4264/preview\" alt=\"Orange square GIF — shared image probe B\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/148/files/4264\" data-api-returntype=\"File\"><figcaption>shared.gif</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/148/files/4264/preview",
+                "alt": "Orange square GIF — shared image probe B",
+                "fileId": "4264"
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/148/files/4264/preview",
+                "alt": "Orange square GIF — shared image probe B",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "04-raster-and-duplicates",
+            "canvasUrl": "04-raster-and-duplicates",
+            "title": "04 Raster types and duplicate bytes",
+            "storedHtml": "<h2>04 Raster types and duplicate bytes</h2><figure><img src=\"https://canvas.example.edu/courses/148/files/4262/preview\" alt=\"Purple square PNG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/148/files/4262\" data-api-returntype=\"File\"><figcaption>raster.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/148/files/4261/preview\" alt=\"Green square JPEG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/148/files/4261\" data-api-returntype=\"File\"><figcaption>raster.jpg</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/148/files/4263/preview\" alt=\"Blue square WebP raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/148/files/4263\" data-api-returntype=\"File\"><figcaption>raster.webp</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/148/files/4259/preview\" alt=\"Gray square duplicate bytes A\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/148/files/4259\" data-api-returntype=\"File\"><figcaption>duplicate-a.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/148/files/4260/preview\" alt=\"Gray square duplicate bytes B\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/148/files/4260\" data-api-returntype=\"File\"><figcaption>duplicate-b.png</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/148/files/4262/preview",
+                "alt": "Purple square PNG raster probe",
+                "fileId": "4262"
+              },
+              {
+                "src": "https://canvas.example.edu/courses/148/files/4261/preview",
+                "alt": "Green square JPEG raster probe",
+                "fileId": "4261"
+              },
+              {
+                "src": "https://canvas.example.edu/courses/148/files/4263/preview",
+                "alt": "Blue square WebP raster probe",
+                "fileId": "4263"
+              },
+              {
+                "src": "https://canvas.example.edu/courses/148/files/4259/preview",
+                "alt": "Gray square duplicate bytes A",
+                "fileId": "4259"
+              },
+              {
+                "src": "https://canvas.example.edu/courses/148/files/4260/preview",
+                "alt": "Gray square duplicate bytes B",
+                "fileId": "4260"
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/148/files/4262/preview",
+                "alt": "Purple square PNG raster probe",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/148/files/4261/preview",
+                "alt": "Green square JPEG raster probe",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/148/files/4263/preview",
+                "alt": "Blue square WebP raster probe",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/148/files/4259/preview",
+                "alt": "Gray square duplicate bytes A",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/148/files/4260/preview",
+                "alt": "Gray square duplicate bytes B",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              }
+            ]
+          }
+        ],
+        "files": [
+          {
+            "id": "4259",
+            "displayName": "duplicate-a.png",
+            "filename": "duplicate-a.png",
+            "size": 107,
+            "contentType": "image/png",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4260",
+            "displayName": "duplicate-b.png",
+            "filename": "duplicate-a.png",
+            "size": 107,
+            "contentType": "image/png",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4261",
+            "displayName": "raster.jpg",
+            "filename": "raster.jpg",
+            "size": 272,
+            "contentType": "image/jpeg",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4262",
+            "displayName": "raster.png",
+            "filename": "raster.png",
+            "size": 107,
+            "contentType": "image/png",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4263",
+            "displayName": "raster.webp",
+            "filename": "raster.webp",
+            "size": 38,
+            "contentType": "image/webp",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4264",
+            "displayName": "shared.gif",
+            "filename": "shared.gif",
+            "size": 55,
+            "contentType": "image/gif",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4265",
+            "displayName": "single.png",
+            "filename": "single.png",
+            "size": 107,
+            "contentType": "image/png",
+            "folderPath": "course files/probe"
+          }
+        ],
+        "allImagesRendered": true,
+        "altTextIntact": true
+      }
+    },
+    {
+      "id": "webcontent-dependencies",
+      "sha256": "a48533090eb003b3621694170bc45f3890e7ab69423d1d3f348bdd666f847d21",
+      "sourceCourseId": 149,
+      "import": {
+        "migrationId": 96,
+        "workflowState": "completed",
+        "migrationIssues": []
+      },
+      "pages": [
+        {
+          "key": "01-single-image",
+          "canvasUrl": "01-single-image",
+          "title": "01 Single image",
+          "storedHtml": "<h2>01 Single image</h2><figure><img src=\"https://canvas.example.edu/courses/149/files/4275/preview\" alt=\"Red square PNG — single image probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/149/files/4275\" data-api-returntype=\"File\"><figcaption>single.png</figcaption></figure>",
+          "storedImages": [
+            {
+              "src": "https://canvas.example.edu/courses/149/files/4275/preview",
+              "alt": "Red square PNG — single image probe",
+              "fileId": "4275"
+            }
+          ],
+          "renderedImages": [
+            {
+              "currentSrc": "https://canvas.example.edu/courses/149/files/4275/preview",
+              "alt": "Red square PNG — single image probe",
+              "naturalWidth": 16,
+              "naturalHeight": 16,
+              "complete": true
+            }
+          ]
+        },
+        {
+          "key": "02-shared-image-a",
+          "canvasUrl": "02-shared-image-a",
+          "title": "02 Shared image A",
+          "storedHtml": "<h2>02 Shared image A</h2><figure><img src=\"https://canvas.example.edu/courses/149/files/4274/preview\" alt=\"Orange square GIF — shared image probe A\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/149/files/4274\" data-api-returntype=\"File\"><figcaption>shared.gif</figcaption></figure>",
+          "storedImages": [
+            {
+              "src": "https://canvas.example.edu/courses/149/files/4274/preview",
+              "alt": "Orange square GIF — shared image probe A",
+              "fileId": "4274"
+            }
+          ],
+          "renderedImages": [
+            {
+              "currentSrc": "https://canvas.example.edu/courses/149/files/4274/preview",
+              "alt": "Orange square GIF — shared image probe A",
+              "naturalWidth": 16,
+              "naturalHeight": 16,
+              "complete": true
+            }
+          ]
+        },
+        {
+          "key": "03-shared-image-b",
+          "canvasUrl": "03-shared-image-b",
+          "title": "03 Shared image B",
+          "storedHtml": "<h2>03 Shared image B</h2><figure><img src=\"https://canvas.example.edu/courses/149/files/4274/preview\" alt=\"Orange square GIF — shared image probe B\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/149/files/4274\" data-api-returntype=\"File\"><figcaption>shared.gif</figcaption></figure>",
+          "storedImages": [
+            {
+              "src": "https://canvas.example.edu/courses/149/files/4274/preview",
+              "alt": "Orange square GIF — shared image probe B",
+              "fileId": "4274"
+            }
+          ],
+          "renderedImages": [
+            {
+              "currentSrc": "https://canvas.example.edu/courses/149/files/4274/preview",
+              "alt": "Orange square GIF — shared image probe B",
+              "naturalWidth": 16,
+              "naturalHeight": 16,
+              "complete": true
+            }
+          ]
+        },
+        {
+          "key": "04-raster-and-duplicates",
+          "canvasUrl": "04-raster-and-duplicates",
+          "title": "04 Raster types and duplicate bytes",
+          "storedHtml": "<h2>04 Raster types and duplicate bytes</h2><figure><img src=\"https://canvas.example.edu/courses/149/files/4272/preview\" alt=\"Purple square PNG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/149/files/4272\" data-api-returntype=\"File\"><figcaption>raster.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/149/files/4271/preview\" alt=\"Green square JPEG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/149/files/4271\" data-api-returntype=\"File\"><figcaption>raster.jpg</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/149/files/4273/preview\" alt=\"Blue square WebP raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/149/files/4273\" data-api-returntype=\"File\"><figcaption>raster.webp</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/149/files/4269/preview\" alt=\"Gray square duplicate bytes A\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/149/files/4269\" data-api-returntype=\"File\"><figcaption>duplicate-a.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/149/files/4270/preview\" alt=\"Gray square duplicate bytes B\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/149/files/4270\" data-api-returntype=\"File\"><figcaption>duplicate-b.png</figcaption></figure>",
+          "storedImages": [
+            {
+              "src": "https://canvas.example.edu/courses/149/files/4272/preview",
+              "alt": "Purple square PNG raster probe",
+              "fileId": "4272"
+            },
+            {
+              "src": "https://canvas.example.edu/courses/149/files/4271/preview",
+              "alt": "Green square JPEG raster probe",
+              "fileId": "4271"
+            },
+            {
+              "src": "https://canvas.example.edu/courses/149/files/4273/preview",
+              "alt": "Blue square WebP raster probe",
+              "fileId": "4273"
+            },
+            {
+              "src": "https://canvas.example.edu/courses/149/files/4269/preview",
+              "alt": "Gray square duplicate bytes A",
+              "fileId": "4269"
+            },
+            {
+              "src": "https://canvas.example.edu/courses/149/files/4270/preview",
+              "alt": "Gray square duplicate bytes B",
+              "fileId": "4270"
+            }
+          ],
+          "renderedImages": [
+            {
+              "currentSrc": "https://canvas.example.edu/courses/149/files/4272/preview",
+              "alt": "Purple square PNG raster probe",
+              "naturalWidth": 16,
+              "naturalHeight": 16,
+              "complete": true
+            },
+            {
+              "currentSrc": "https://canvas.example.edu/courses/149/files/4271/preview",
+              "alt": "Green square JPEG raster probe",
+              "naturalWidth": 16,
+              "naturalHeight": 16,
+              "complete": true
+            },
+            {
+              "currentSrc": "https://canvas.example.edu/courses/149/files/4273/preview",
+              "alt": "Blue square WebP raster probe",
+              "naturalWidth": 16,
+              "naturalHeight": 16,
+              "complete": true
+            },
+            {
+              "currentSrc": "https://canvas.example.edu/courses/149/files/4269/preview",
+              "alt": "Gray square duplicate bytes A",
+              "naturalWidth": 16,
+              "naturalHeight": 16,
+              "complete": true
+            },
+            {
+              "currentSrc": "https://canvas.example.edu/courses/149/files/4270/preview",
+              "alt": "Gray square duplicate bytes B",
+              "naturalWidth": 16,
+              "naturalHeight": 16,
+              "complete": true
+            }
+          ]
+        }
+      ],
+      "files": [
+        {
+          "id": "4269",
+          "displayName": "duplicate-a.png",
+          "filename": "duplicate-a.png",
+          "size": 107,
+          "contentType": "image/png",
+          "folderPath": "course files/probe"
+        },
+        {
+          "id": "4270",
+          "displayName": "duplicate-b.png",
+          "filename": "duplicate-a.png",
+          "size": 107,
+          "contentType": "image/png",
+          "folderPath": "course files/probe"
+        },
+        {
+          "id": "4271",
+          "displayName": "raster.jpg",
+          "filename": "raster.jpg",
+          "size": 272,
+          "contentType": "image/jpeg",
+          "folderPath": "course files/probe"
+        },
+        {
+          "id": "4272",
+          "displayName": "raster.png",
+          "filename": "raster.png",
+          "size": 107,
+          "contentType": "image/png",
+          "folderPath": "course files/probe"
+        },
+        {
+          "id": "4273",
+          "displayName": "raster.webp",
+          "filename": "raster.webp",
+          "size": 38,
+          "contentType": "image/webp",
+          "folderPath": "course files/probe"
+        },
+        {
+          "id": "4274",
+          "displayName": "shared.gif",
+          "filename": "shared.gif",
+          "size": 55,
+          "contentType": "image/gif",
+          "folderPath": "course files/probe"
+        },
+        {
+          "id": "4275",
+          "displayName": "single.png",
+          "filename": "single.png",
+          "size": 107,
+          "contentType": "image/png",
+          "folderPath": "course files/probe"
+        }
+      ],
+      "consoleErrors": [],
+      "failedRequests": [],
+      "sharedImage": {
+        "pageAFileId": "4274",
+        "pageBFileId": "4274"
+      },
+      "duplicateBytes": {
+        "fileIds": [
+          "4269",
+          "4270"
+        ]
+      },
+      "reimport": {
+        "workflowState": "completed",
+        "pagesBefore": 4,
+        "pagesAfter": 4,
+        "filesBefore": 7,
+        "filesAfter": 7,
+        "allImagesRendered": true
+      },
+      "shareCopy": {
+        "destinationCourseId": 150,
+        "workflowState": "completed",
+        "pageCount": 4,
+        "pages": [
+          {
+            "key": "01-single-image",
+            "canvasUrl": "01-single-image",
+            "title": "01 Single image",
+            "storedHtml": "<h2>01 Single image</h2><figure><img src=\"https://canvas.example.edu/courses/150/files/4286/preview\" alt=\"Red square PNG — single image probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/150/files/4286\" data-api-returntype=\"File\"><figcaption>single.png</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/150/files/4286/preview",
+                "alt": "Red square PNG — single image probe",
+                "fileId": "4286"
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/150/files/4286/preview",
+                "alt": "Red square PNG — single image probe",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "02-shared-image-a",
+            "canvasUrl": "02-shared-image-a",
+            "title": "02 Shared image A",
+            "storedHtml": "<h2>02 Shared image A</h2><figure><img src=\"https://canvas.example.edu/courses/150/files/4285/preview\" alt=\"Orange square GIF — shared image probe A\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/150/files/4285\" data-api-returntype=\"File\"><figcaption>shared.gif</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/150/files/4285/preview",
+                "alt": "Orange square GIF — shared image probe A",
+                "fileId": "4285"
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/150/files/4285/preview",
+                "alt": "Orange square GIF — shared image probe A",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "03-shared-image-b",
+            "canvasUrl": "03-shared-image-b",
+            "title": "03 Shared image B",
+            "storedHtml": "<h2>03 Shared image B</h2><figure><img src=\"https://canvas.example.edu/courses/150/files/4285/preview\" alt=\"Orange square GIF — shared image probe B\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/150/files/4285\" data-api-returntype=\"File\"><figcaption>shared.gif</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/150/files/4285/preview",
+                "alt": "Orange square GIF — shared image probe B",
+                "fileId": "4285"
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/150/files/4285/preview",
+                "alt": "Orange square GIF — shared image probe B",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "04-raster-and-duplicates",
+            "canvasUrl": "04-raster-and-duplicates",
+            "title": "04 Raster types and duplicate bytes",
+            "storedHtml": "<h2>04 Raster types and duplicate bytes</h2><figure><img src=\"https://canvas.example.edu/courses/150/files/4287/preview\" alt=\"Purple square PNG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/150/files/4287\" data-api-returntype=\"File\"><figcaption>raster.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/150/files/4284/preview\" alt=\"Green square JPEG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/150/files/4284\" data-api-returntype=\"File\"><figcaption>raster.jpg</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/150/files/4288/preview\" alt=\"Blue square WebP raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/150/files/4288\" data-api-returntype=\"File\"><figcaption>raster.webp</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/150/files/4282/preview\" alt=\"Gray square duplicate bytes A\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/150/files/4282\" data-api-returntype=\"File\"><figcaption>duplicate-a.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/150/files/4283/preview\" alt=\"Gray square duplicate bytes B\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/150/files/4283\" data-api-returntype=\"File\"><figcaption>duplicate-b.png</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/150/files/4287/preview",
+                "alt": "Purple square PNG raster probe",
+                "fileId": "4287"
+              },
+              {
+                "src": "https://canvas.example.edu/courses/150/files/4284/preview",
+                "alt": "Green square JPEG raster probe",
+                "fileId": "4284"
+              },
+              {
+                "src": "https://canvas.example.edu/courses/150/files/4288/preview",
+                "alt": "Blue square WebP raster probe",
+                "fileId": "4288"
+              },
+              {
+                "src": "https://canvas.example.edu/courses/150/files/4282/preview",
+                "alt": "Gray square duplicate bytes A",
+                "fileId": "4282"
+              },
+              {
+                "src": "https://canvas.example.edu/courses/150/files/4283/preview",
+                "alt": "Gray square duplicate bytes B",
+                "fileId": "4283"
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/150/files/4287/preview",
+                "alt": "Purple square PNG raster probe",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/150/files/4284/preview",
+                "alt": "Green square JPEG raster probe",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/150/files/4288/preview",
+                "alt": "Blue square WebP raster probe",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/150/files/4282/preview",
+                "alt": "Gray square duplicate bytes A",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/150/files/4283/preview",
+                "alt": "Gray square duplicate bytes B",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              }
+            ]
+          }
+        ],
+        "files": [
+          {
+            "id": "4282",
+            "displayName": "duplicate-a.png",
+            "filename": "duplicate-a.png",
+            "size": 107,
+            "contentType": "image/png",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4283",
+            "displayName": "duplicate-b.png",
+            "filename": "duplicate-a.png",
+            "size": 107,
+            "contentType": "image/png",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4284",
+            "displayName": "raster.jpg",
+            "filename": "raster.jpg",
+            "size": 272,
+            "contentType": "image/jpeg",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4287",
+            "displayName": "raster.png",
+            "filename": "raster.png",
+            "size": 107,
+            "contentType": "image/png",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4288",
+            "displayName": "raster.webp",
+            "filename": "raster.webp",
+            "size": 38,
+            "contentType": "image/webp",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4285",
+            "displayName": "shared.gif",
+            "filename": "shared.gif",
+            "size": 55,
+            "contentType": "image/gif",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4286",
+            "displayName": "single.png",
+            "filename": "single.png",
+            "size": 107,
+            "contentType": "image/png",
+            "folderPath": "course files/probe"
+          }
+        ],
+        "allImagesRendered": true,
+        "sharedResolvesToOneFile": true
+      },
+      "reexport": {
+        "workflowState": "exported",
+        "path": "artifacts/canvas-image-probe-evidence/2026-08-28T18-42-35-867Z/webcontent-dependencies-reexport.imscc",
+        "sha256": "e8b15c13ea0f17b150e4dc5d2edc1b842d461819a464a66776e1eb5630abf865",
+        "bytes": 9679,
+        "unzipOk": true,
+        "entryCount": 23,
+        "pageReferences": [
+          {
+            "entry": "wiki_content/01-single-image.html",
+            "src": "$IMS-CC-FILEBASE$/probe/single.png",
+            "alt": "Red square PNG — single image probe",
+            "resolvesToPackagedFile": true
+          },
+          {
+            "entry": "wiki_content/02-shared-image-a.html",
+            "src": "$IMS-CC-FILEBASE$/probe/shared.gif",
+            "alt": "Orange square GIF — shared image probe A",
+            "resolvesToPackagedFile": true
+          },
+          {
+            "entry": "wiki_content/03-shared-image-b.html",
+            "src": "$IMS-CC-FILEBASE$/probe/shared.gif",
+            "alt": "Orange square GIF — shared image probe B",
+            "resolvesToPackagedFile": true
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "$IMS-CC-FILEBASE$/probe/raster.png",
+            "alt": "Purple square PNG raster probe",
+            "resolvesToPackagedFile": true
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "$IMS-CC-FILEBASE$/probe/raster.jpg",
+            "alt": "Green square JPEG raster probe",
+            "resolvesToPackagedFile": true
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "$IMS-CC-FILEBASE$/probe/raster.webp",
+            "alt": "Blue square WebP raster probe",
+            "resolvesToPackagedFile": true
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "$IMS-CC-FILEBASE$/probe/duplicate-a.png",
+            "alt": "Gray square duplicate bytes A",
+            "resolvesToPackagedFile": true
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "$IMS-CC-FILEBASE$/probe/duplicate-b.png",
+            "alt": "Gray square duplicate bytes B",
+            "resolvesToPackagedFile": true
+          }
+        ],
+        "manifestResourceTypes": [
+          "associatedcontent/imscc_xmlv1p1/learning-application-resource",
+          "webcontent"
+        ]
+      },
+      "reexportImport": {
+        "courseId": 151,
+        "workflowState": "completed",
+        "pageCount": 4,
+        "pages": [
+          {
+            "key": "01-single-image",
+            "canvasUrl": "01-single-image",
+            "title": "01 Single image",
+            "storedHtml": "<h2>01 Single image</h2><figure><img src=\"https://canvas.example.edu/courses/151/files/4299/preview\" alt=\"Red square PNG — single image probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/151/files/4299\" data-api-returntype=\"File\"><figcaption>single.png</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/151/files/4299/preview",
+                "alt": "Red square PNG — single image probe",
+                "fileId": "4299"
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/151/files/4299/preview",
+                "alt": "Red square PNG — single image probe",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "02-shared-image-a",
+            "canvasUrl": "02-shared-image-a",
+            "title": "02 Shared image A",
+            "storedHtml": "<h2>02 Shared image A</h2><figure><img src=\"https://canvas.example.edu/courses/151/files/4298/preview\" alt=\"Orange square GIF — shared image probe A\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/151/files/4298\" data-api-returntype=\"File\"><figcaption>shared.gif</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/151/files/4298/preview",
+                "alt": "Orange square GIF — shared image probe A",
+                "fileId": "4298"
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/151/files/4298/preview",
+                "alt": "Orange square GIF — shared image probe A",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "03-shared-image-b",
+            "canvasUrl": "03-shared-image-b",
+            "title": "03 Shared image B",
+            "storedHtml": "<h2>03 Shared image B</h2><figure><img src=\"https://canvas.example.edu/courses/151/files/4298/preview\" alt=\"Orange square GIF — shared image probe B\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/151/files/4298\" data-api-returntype=\"File\"><figcaption>shared.gif</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/151/files/4298/preview",
+                "alt": "Orange square GIF — shared image probe B",
+                "fileId": "4298"
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/151/files/4298/preview",
+                "alt": "Orange square GIF — shared image probe B",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "04-raster-and-duplicates",
+            "canvasUrl": "04-raster-and-duplicates",
+            "title": "04 Raster types and duplicate bytes",
+            "storedHtml": "<h2>04 Raster types and duplicate bytes</h2><figure><img src=\"https://canvas.example.edu/courses/151/files/4296/preview\" alt=\"Purple square PNG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/151/files/4296\" data-api-returntype=\"File\"><figcaption>raster.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/151/files/4295/preview\" alt=\"Green square JPEG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/151/files/4295\" data-api-returntype=\"File\"><figcaption>raster.jpg</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/151/files/4297/preview\" alt=\"Blue square WebP raster probe\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/151/files/4297\" data-api-returntype=\"File\"><figcaption>raster.webp</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/151/files/4293/preview\" alt=\"Gray square duplicate bytes A\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/151/files/4293\" data-api-returntype=\"File\"><figcaption>duplicate-a.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/151/files/4294/preview\" alt=\"Gray square duplicate bytes B\" width=\"16\" height=\"16\" loading=\"lazy\" data-api-endpoint=\"https://canvas.example.edu/api/v1/courses/151/files/4294\" data-api-returntype=\"File\"><figcaption>duplicate-b.png</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/151/files/4296/preview",
+                "alt": "Purple square PNG raster probe",
+                "fileId": "4296"
+              },
+              {
+                "src": "https://canvas.example.edu/courses/151/files/4295/preview",
+                "alt": "Green square JPEG raster probe",
+                "fileId": "4295"
+              },
+              {
+                "src": "https://canvas.example.edu/courses/151/files/4297/preview",
+                "alt": "Blue square WebP raster probe",
+                "fileId": "4297"
+              },
+              {
+                "src": "https://canvas.example.edu/courses/151/files/4293/preview",
+                "alt": "Gray square duplicate bytes A",
+                "fileId": "4293"
+              },
+              {
+                "src": "https://canvas.example.edu/courses/151/files/4294/preview",
+                "alt": "Gray square duplicate bytes B",
+                "fileId": "4294"
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/151/files/4296/preview",
+                "alt": "Purple square PNG raster probe",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/151/files/4295/preview",
+                "alt": "Green square JPEG raster probe",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/151/files/4297/preview",
+                "alt": "Blue square WebP raster probe",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/151/files/4293/preview",
+                "alt": "Gray square duplicate bytes A",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/151/files/4294/preview",
+                "alt": "Gray square duplicate bytes B",
+                "naturalWidth": 16,
+                "naturalHeight": 16,
+                "complete": true
+              }
+            ]
+          }
+        ],
+        "files": [
+          {
+            "id": "4293",
+            "displayName": "duplicate-a.png",
+            "filename": "duplicate-a.png",
+            "size": 107,
+            "contentType": "image/png",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4294",
+            "displayName": "duplicate-b.png",
+            "filename": "duplicate-a.png",
+            "size": 107,
+            "contentType": "image/png",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4295",
+            "displayName": "raster.jpg",
+            "filename": "raster.jpg",
+            "size": 272,
+            "contentType": "image/jpeg",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4296",
+            "displayName": "raster.png",
+            "filename": "raster.png",
+            "size": 107,
+            "contentType": "image/png",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4297",
+            "displayName": "raster.webp",
+            "filename": "raster.webp",
+            "size": 38,
+            "contentType": "image/webp",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4298",
+            "displayName": "shared.gif",
+            "filename": "shared.gif",
+            "size": 55,
+            "contentType": "image/gif",
+            "folderPath": "course files/probe"
+          },
+          {
+            "id": "4299",
+            "displayName": "single.png",
+            "filename": "single.png",
+            "size": 107,
+            "contentType": "image/png",
+            "folderPath": "course files/probe"
+          }
+        ],
+        "allImagesRendered": true,
+        "altTextIntact": true
+      }
+    },
+    {
+      "id": "page-owned-files",
+      "sha256": "cc3aa03bc96a37432846ae7ddf2c8d759be054e6ec163dd0fcb642b1234e2ff3",
+      "sourceCourseId": 152,
+      "import": {
+        "migrationId": 100,
+        "workflowState": "completed",
+        "migrationIssues": [
+          {
+            "issue_type": "warning",
+            "description": "Missing links found in imported content - Wiki Page body"
+          },
+          {
+            "issue_type": "warning",
+            "description": "Missing links found in imported content - Wiki Page body"
+          },
+          {
+            "issue_type": "warning",
+            "description": "Missing links found in imported content - Wiki Page body"
+          },
+          {
+            "issue_type": "warning",
+            "description": "Missing links found in imported content - Wiki Page body"
+          }
+        ]
+      },
+      "pages": [
+        {
+          "key": "01-single-image",
+          "canvasUrl": "01-single-image",
+          "title": "01 Single image",
+          "storedHtml": "<h2>01 Single image</h2><figure><img src=\"https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/single.png\" alt=\"Red square PNG — single image probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>single.png</figcaption></figure>",
+          "storedImages": [
+            {
+              "src": "https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/single.png",
+              "alt": "Red square PNG — single image probe",
+              "fileId": null
+            }
+          ],
+          "renderedImages": [
+            {
+              "currentSrc": "https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/single.png",
+              "alt": "Red square PNG — single image probe",
+              "naturalWidth": 0,
+              "naturalHeight": 0,
+              "complete": true
+            }
+          ]
+        },
+        {
+          "key": "02-shared-image-a",
+          "canvasUrl": "02-shared-image-a",
+          "title": "02 Shared image A",
+          "storedHtml": "<h2>02 Shared image A</h2><figure><img src=\"https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/shared.gif\" alt=\"Orange square GIF — shared image probe A\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>shared.gif</figcaption></figure>",
+          "storedImages": [
+            {
+              "src": "https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/shared.gif",
+              "alt": "Orange square GIF — shared image probe A",
+              "fileId": null
+            }
+          ],
+          "renderedImages": [
+            {
+              "currentSrc": "https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/shared.gif",
+              "alt": "Orange square GIF — shared image probe A",
+              "naturalWidth": 0,
+              "naturalHeight": 0,
+              "complete": true
+            }
+          ]
+        },
+        {
+          "key": "03-shared-image-b",
+          "canvasUrl": "03-shared-image-b",
+          "title": "03 Shared image B",
+          "storedHtml": "<h2>03 Shared image B</h2><figure><img src=\"https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/shared.gif\" alt=\"Orange square GIF — shared image probe B\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>shared.gif</figcaption></figure>",
+          "storedImages": [
+            {
+              "src": "https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/shared.gif",
+              "alt": "Orange square GIF — shared image probe B",
+              "fileId": null
+            }
+          ],
+          "renderedImages": [
+            {
+              "currentSrc": "https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/shared.gif",
+              "alt": "Orange square GIF — shared image probe B",
+              "naturalWidth": 0,
+              "naturalHeight": 0,
+              "complete": true
+            }
+          ]
+        },
+        {
+          "key": "04-raster-and-duplicates",
+          "canvasUrl": "04-raster-and-duplicates",
+          "title": "04 Raster types and duplicate bytes",
+          "storedHtml": "<h2>04 Raster types and duplicate bytes</h2><figure><img src=\"https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/raster.png\" alt=\"Purple square PNG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/raster.jpg\" alt=\"Green square JPEG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.jpg</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/raster.webp\" alt=\"Blue square WebP raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.webp</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/duplicate-a.png\" alt=\"Gray square duplicate bytes A\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>duplicate-a.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/duplicate-b.png\" alt=\"Gray square duplicate bytes B\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>duplicate-b.png</figcaption></figure>",
+          "storedImages": [
+            {
+              "src": "https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/raster.png",
+              "alt": "Purple square PNG raster probe",
+              "fileId": null
+            },
+            {
+              "src": "https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/raster.jpg",
+              "alt": "Green square JPEG raster probe",
+              "fileId": null
+            },
+            {
+              "src": "https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/raster.webp",
+              "alt": "Blue square WebP raster probe",
+              "fileId": null
+            },
+            {
+              "src": "https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/duplicate-a.png",
+              "alt": "Gray square duplicate bytes A",
+              "fileId": null
+            },
+            {
+              "src": "https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/duplicate-b.png",
+              "alt": "Gray square duplicate bytes B",
+              "fileId": null
+            }
+          ],
+          "renderedImages": [
+            {
+              "currentSrc": "https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/raster.png",
+              "alt": "Purple square PNG raster probe",
+              "naturalWidth": 0,
+              "naturalHeight": 0,
+              "complete": true
+            },
+            {
+              "currentSrc": "https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/raster.jpg",
+              "alt": "Green square JPEG raster probe",
+              "naturalWidth": 0,
+              "naturalHeight": 0,
+              "complete": true
+            },
+            {
+              "currentSrc": "https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/raster.webp",
+              "alt": "Blue square WebP raster probe",
+              "naturalWidth": 0,
+              "naturalHeight": 0,
+              "complete": true
+            },
+            {
+              "currentSrc": "https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/duplicate-a.png",
+              "alt": "Gray square duplicate bytes A",
+              "naturalWidth": 0,
+              "naturalHeight": 0,
+              "complete": true
+            },
+            {
+              "currentSrc": "https://canvas.example.edu/courses/152/file_contents/course%20files/web_resources/probe/duplicate-b.png",
+              "alt": "Gray square duplicate bytes B",
+              "naturalWidth": 0,
+              "naturalHeight": 0,
+              "complete": true
+            }
+          ]
+        }
+      ],
+      "files": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()"
+      ],
+      "failedRequests": [],
+      "sharedImage": {
+        "pageAFileId": null,
+        "pageBFileId": null
+      },
+      "duplicateBytes": {
+        "fileIds": []
+      },
+      "reimport": {
+        "workflowState": "completed",
+        "pagesBefore": 4,
+        "pagesAfter": 4,
+        "filesBefore": 0,
+        "filesAfter": 0,
+        "allImagesRendered": false
+      },
+      "shareCopy": {
+        "destinationCourseId": 153,
+        "workflowState": "completed",
+        "pageCount": 4,
+        "pages": [
+          {
+            "key": "01-single-image",
+            "canvasUrl": "01-single-image",
+            "title": "01 Single image",
+            "storedHtml": "<h2>01 Single image</h2><figure><img src=\"https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/single.png\" alt=\"Red square PNG — single image probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>single.png</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/single.png",
+                "alt": "Red square PNG — single image probe",
+                "fileId": null
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/single.png",
+                "alt": "Red square PNG — single image probe",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "02-shared-image-a",
+            "canvasUrl": "02-shared-image-a",
+            "title": "02 Shared image A",
+            "storedHtml": "<h2>02 Shared image A</h2><figure><img src=\"https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/shared.gif\" alt=\"Orange square GIF — shared image probe A\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>shared.gif</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/shared.gif",
+                "alt": "Orange square GIF — shared image probe A",
+                "fileId": null
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/shared.gif",
+                "alt": "Orange square GIF — shared image probe A",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "03-shared-image-b",
+            "canvasUrl": "03-shared-image-b",
+            "title": "03 Shared image B",
+            "storedHtml": "<h2>03 Shared image B</h2><figure><img src=\"https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/shared.gif\" alt=\"Orange square GIF — shared image probe B\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>shared.gif</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/shared.gif",
+                "alt": "Orange square GIF — shared image probe B",
+                "fileId": null
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/shared.gif",
+                "alt": "Orange square GIF — shared image probe B",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "04-raster-and-duplicates",
+            "canvasUrl": "04-raster-and-duplicates",
+            "title": "04 Raster types and duplicate bytes",
+            "storedHtml": "<h2>04 Raster types and duplicate bytes</h2><figure><img src=\"https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/raster.png\" alt=\"Purple square PNG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/raster.jpg\" alt=\"Green square JPEG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.jpg</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/raster.webp\" alt=\"Blue square WebP raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.webp</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/duplicate-a.png\" alt=\"Gray square duplicate bytes A\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>duplicate-a.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/duplicate-b.png\" alt=\"Gray square duplicate bytes B\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>duplicate-b.png</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/raster.png",
+                "alt": "Purple square PNG raster probe",
+                "fileId": null
+              },
+              {
+                "src": "https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/raster.jpg",
+                "alt": "Green square JPEG raster probe",
+                "fileId": null
+              },
+              {
+                "src": "https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/raster.webp",
+                "alt": "Blue square WebP raster probe",
+                "fileId": null
+              },
+              {
+                "src": "https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/duplicate-a.png",
+                "alt": "Gray square duplicate bytes A",
+                "fileId": null
+              },
+              {
+                "src": "https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/duplicate-b.png",
+                "alt": "Gray square duplicate bytes B",
+                "fileId": null
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/raster.png",
+                "alt": "Purple square PNG raster probe",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/raster.jpg",
+                "alt": "Green square JPEG raster probe",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/raster.webp",
+                "alt": "Blue square WebP raster probe",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/duplicate-a.png",
+                "alt": "Gray square duplicate bytes A",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/153/file_contents/course%20files/web_resources/probe/duplicate-b.png",
+                "alt": "Gray square duplicate bytes B",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              }
+            ]
+          }
+        ],
+        "files": [],
+        "allImagesRendered": false,
+        "sharedResolvesToOneFile": false
+      },
+      "reexport": {
+        "workflowState": "exported",
+        "path": "artifacts/canvas-image-probe-evidence/2026-08-28T18-42-35-867Z/page-owned-files-reexport.imscc",
+        "sha256": "bd3edc212a065c31b41528f0229f2df4ed4de8bf8544d29a472c6c924114dd5f",
+        "bytes": 7632,
+        "unzipOk": true,
+        "entryCount": 16,
+        "pageReferences": [
+          {
+            "entry": "wiki_content/01-single-image.html",
+            "src": "http://canvas.example.edu/courses/152/file_contents/$IMS-CC-FILEBASE$/web_resources/probe/single.png",
+            "alt": "Red square PNG — single image probe",
+            "resolvesToPackagedFile": false
+          },
+          {
+            "entry": "wiki_content/02-shared-image-a.html",
+            "src": "http://canvas.example.edu/courses/152/file_contents/$IMS-CC-FILEBASE$/web_resources/probe/shared.gif",
+            "alt": "Orange square GIF — shared image probe A",
+            "resolvesToPackagedFile": false
+          },
+          {
+            "entry": "wiki_content/03-shared-image-b.html",
+            "src": "http://canvas.example.edu/courses/152/file_contents/$IMS-CC-FILEBASE$/web_resources/probe/shared.gif",
+            "alt": "Orange square GIF — shared image probe B",
+            "resolvesToPackagedFile": false
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "http://canvas.example.edu/courses/152/file_contents/$IMS-CC-FILEBASE$/web_resources/probe/raster.png",
+            "alt": "Purple square PNG raster probe",
+            "resolvesToPackagedFile": false
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "http://canvas.example.edu/courses/152/file_contents/$IMS-CC-FILEBASE$/web_resources/probe/raster.jpg",
+            "alt": "Green square JPEG raster probe",
+            "resolvesToPackagedFile": false
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "http://canvas.example.edu/courses/152/file_contents/$IMS-CC-FILEBASE$/web_resources/probe/raster.webp",
+            "alt": "Blue square WebP raster probe",
+            "resolvesToPackagedFile": false
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "http://canvas.example.edu/courses/152/file_contents/$IMS-CC-FILEBASE$/web_resources/probe/duplicate-a.png",
+            "alt": "Gray square duplicate bytes A",
+            "resolvesToPackagedFile": false
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "http://canvas.example.edu/courses/152/file_contents/$IMS-CC-FILEBASE$/web_resources/probe/duplicate-b.png",
+            "alt": "Gray square duplicate bytes B",
+            "resolvesToPackagedFile": false
+          }
+        ],
+        "manifestResourceTypes": [
+          "associatedcontent/imscc_xmlv1p1/learning-application-resource",
+          "webcontent"
+        ]
+      },
+      "reexportImport": {
+        "courseId": 154,
+        "workflowState": "completed",
+        "pageCount": 4,
+        "pages": [
+          {
+            "key": "01-single-image",
+            "canvasUrl": "01-single-image",
+            "title": "01 Single image",
+            "storedHtml": "<h2>01 Single image</h2><figure><img src=\"https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/single.png\" alt=\"Red square PNG — single image probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>single.png</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/single.png",
+                "alt": "Red square PNG — single image probe",
+                "fileId": null
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/single.png",
+                "alt": "Red square PNG — single image probe",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "02-shared-image-a",
+            "canvasUrl": "02-shared-image-a",
+            "title": "02 Shared image A",
+            "storedHtml": "<h2>02 Shared image A</h2><figure><img src=\"https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/shared.gif\" alt=\"Orange square GIF — shared image probe A\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>shared.gif</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/shared.gif",
+                "alt": "Orange square GIF — shared image probe A",
+                "fileId": null
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/shared.gif",
+                "alt": "Orange square GIF — shared image probe A",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "03-shared-image-b",
+            "canvasUrl": "03-shared-image-b",
+            "title": "03 Shared image B",
+            "storedHtml": "<h2>03 Shared image B</h2><figure><img src=\"https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/shared.gif\" alt=\"Orange square GIF — shared image probe B\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>shared.gif</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/shared.gif",
+                "alt": "Orange square GIF — shared image probe B",
+                "fileId": null
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/shared.gif",
+                "alt": "Orange square GIF — shared image probe B",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "04-raster-and-duplicates",
+            "canvasUrl": "04-raster-and-duplicates",
+            "title": "04 Raster types and duplicate bytes",
+            "storedHtml": "<h2>04 Raster types and duplicate bytes</h2><figure><img src=\"https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/raster.png\" alt=\"Purple square PNG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/raster.jpg\" alt=\"Green square JPEG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.jpg</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/raster.webp\" alt=\"Blue square WebP raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.webp</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/duplicate-a.png\" alt=\"Gray square duplicate bytes A\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>duplicate-a.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/duplicate-b.png\" alt=\"Gray square duplicate bytes B\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>duplicate-b.png</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/raster.png",
+                "alt": "Purple square PNG raster probe",
+                "fileId": null
+              },
+              {
+                "src": "https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/raster.jpg",
+                "alt": "Green square JPEG raster probe",
+                "fileId": null
+              },
+              {
+                "src": "https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/raster.webp",
+                "alt": "Blue square WebP raster probe",
+                "fileId": null
+              },
+              {
+                "src": "https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/duplicate-a.png",
+                "alt": "Gray square duplicate bytes A",
+                "fileId": null
+              },
+              {
+                "src": "https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/duplicate-b.png",
+                "alt": "Gray square duplicate bytes B",
+                "fileId": null
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/raster.png",
+                "alt": "Purple square PNG raster probe",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/raster.jpg",
+                "alt": "Green square JPEG raster probe",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/raster.webp",
+                "alt": "Blue square WebP raster probe",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/duplicate-a.png",
+                "alt": "Gray square duplicate bytes A",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/154/file_contents/course%20files/web_resources/probe/duplicate-b.png",
+                "alt": "Gray square duplicate bytes B",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              }
+            ]
+          }
+        ],
+        "files": [],
+        "allImagesRendered": false,
+        "altTextIntact": true
+      }
+    },
+    {
+      "id": "associatedcontent-dependencies",
+      "sha256": "b9854b5752d7380cffcefc4412c368f70992a14d43c3ea88d6023be717701917",
+      "sourceCourseId": 155,
+      "import": {
+        "migrationId": 104,
+        "workflowState": "completed",
+        "migrationIssues": [
+          {
+            "issue_type": "warning",
+            "description": "Missing links found in imported content - Wiki Page body"
+          },
+          {
+            "issue_type": "warning",
+            "description": "Missing links found in imported content - Wiki Page body"
+          },
+          {
+            "issue_type": "warning",
+            "description": "Missing links found in imported content - Wiki Page body"
+          },
+          {
+            "issue_type": "warning",
+            "description": "Missing links found in imported content - Wiki Page body"
+          }
+        ]
+      },
+      "pages": [
+        {
+          "key": "01-single-image",
+          "canvasUrl": "01-single-image",
+          "title": "01 Single image",
+          "storedHtml": "<h2>01 Single image</h2><figure><img src=\"https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/single.png\" alt=\"Red square PNG — single image probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>single.png</figcaption></figure>",
+          "storedImages": [
+            {
+              "src": "https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/single.png",
+              "alt": "Red square PNG — single image probe",
+              "fileId": null
+            }
+          ],
+          "renderedImages": [
+            {
+              "currentSrc": "https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/single.png",
+              "alt": "Red square PNG — single image probe",
+              "naturalWidth": 0,
+              "naturalHeight": 0,
+              "complete": true
+            }
+          ]
+        },
+        {
+          "key": "02-shared-image-a",
+          "canvasUrl": "02-shared-image-a",
+          "title": "02 Shared image A",
+          "storedHtml": "<h2>02 Shared image A</h2><figure><img src=\"https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/shared.gif\" alt=\"Orange square GIF — shared image probe A\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>shared.gif</figcaption></figure>",
+          "storedImages": [
+            {
+              "src": "https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/shared.gif",
+              "alt": "Orange square GIF — shared image probe A",
+              "fileId": null
+            }
+          ],
+          "renderedImages": [
+            {
+              "currentSrc": "https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/shared.gif",
+              "alt": "Orange square GIF — shared image probe A",
+              "naturalWidth": 0,
+              "naturalHeight": 0,
+              "complete": true
+            }
+          ]
+        },
+        {
+          "key": "03-shared-image-b",
+          "canvasUrl": "03-shared-image-b",
+          "title": "03 Shared image B",
+          "storedHtml": "<h2>03 Shared image B</h2><figure><img src=\"https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/shared.gif\" alt=\"Orange square GIF — shared image probe B\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>shared.gif</figcaption></figure>",
+          "storedImages": [
+            {
+              "src": "https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/shared.gif",
+              "alt": "Orange square GIF — shared image probe B",
+              "fileId": null
+            }
+          ],
+          "renderedImages": [
+            {
+              "currentSrc": "https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/shared.gif",
+              "alt": "Orange square GIF — shared image probe B",
+              "naturalWidth": 0,
+              "naturalHeight": 0,
+              "complete": true
+            }
+          ]
+        },
+        {
+          "key": "04-raster-and-duplicates",
+          "canvasUrl": "04-raster-and-duplicates",
+          "title": "04 Raster types and duplicate bytes",
+          "storedHtml": "<h2>04 Raster types and duplicate bytes</h2><figure><img src=\"https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/raster.png\" alt=\"Purple square PNG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/raster.jpg\" alt=\"Green square JPEG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.jpg</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/raster.webp\" alt=\"Blue square WebP raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.webp</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/duplicate-a.png\" alt=\"Gray square duplicate bytes A\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>duplicate-a.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/duplicate-b.png\" alt=\"Gray square duplicate bytes B\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>duplicate-b.png</figcaption></figure>",
+          "storedImages": [
+            {
+              "src": "https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/raster.png",
+              "alt": "Purple square PNG raster probe",
+              "fileId": null
+            },
+            {
+              "src": "https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/raster.jpg",
+              "alt": "Green square JPEG raster probe",
+              "fileId": null
+            },
+            {
+              "src": "https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/raster.webp",
+              "alt": "Blue square WebP raster probe",
+              "fileId": null
+            },
+            {
+              "src": "https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/duplicate-a.png",
+              "alt": "Gray square duplicate bytes A",
+              "fileId": null
+            },
+            {
+              "src": "https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/duplicate-b.png",
+              "alt": "Gray square duplicate bytes B",
+              "fileId": null
+            }
+          ],
+          "renderedImages": [
+            {
+              "currentSrc": "https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/raster.png",
+              "alt": "Purple square PNG raster probe",
+              "naturalWidth": 0,
+              "naturalHeight": 0,
+              "complete": true
+            },
+            {
+              "currentSrc": "https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/raster.jpg",
+              "alt": "Green square JPEG raster probe",
+              "naturalWidth": 0,
+              "naturalHeight": 0,
+              "complete": true
+            },
+            {
+              "currentSrc": "https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/raster.webp",
+              "alt": "Blue square WebP raster probe",
+              "naturalWidth": 0,
+              "naturalHeight": 0,
+              "complete": true
+            },
+            {
+              "currentSrc": "https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/duplicate-a.png",
+              "alt": "Gray square duplicate bytes A",
+              "naturalWidth": 0,
+              "naturalHeight": 0,
+              "complete": true
+            },
+            {
+              "currentSrc": "https://canvas.example.edu/courses/155/file_contents/course%20files/web_resources/probe/duplicate-b.png",
+              "alt": "Gray square duplicate bytes B",
+              "naturalWidth": 0,
+              "naturalHeight": 0,
+              "complete": true
+            }
+          ]
+        }
+      ],
+      "files": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()"
+      ],
+      "failedRequests": [],
+      "sharedImage": {
+        "pageAFileId": null,
+        "pageBFileId": null
+      },
+      "duplicateBytes": {
+        "fileIds": []
+      },
+      "reimport": {
+        "workflowState": "completed",
+        "pagesBefore": 4,
+        "pagesAfter": 4,
+        "filesBefore": 0,
+        "filesAfter": 0,
+        "allImagesRendered": false
+      },
+      "shareCopy": {
+        "destinationCourseId": 156,
+        "workflowState": "completed",
+        "pageCount": 4,
+        "pages": [
+          {
+            "key": "01-single-image",
+            "canvasUrl": "01-single-image",
+            "title": "01 Single image",
+            "storedHtml": "<h2>01 Single image</h2><figure><img src=\"https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/single.png\" alt=\"Red square PNG — single image probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>single.png</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/single.png",
+                "alt": "Red square PNG — single image probe",
+                "fileId": null
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/single.png",
+                "alt": "Red square PNG — single image probe",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "02-shared-image-a",
+            "canvasUrl": "02-shared-image-a",
+            "title": "02 Shared image A",
+            "storedHtml": "<h2>02 Shared image A</h2><figure><img src=\"https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/shared.gif\" alt=\"Orange square GIF — shared image probe A\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>shared.gif</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/shared.gif",
+                "alt": "Orange square GIF — shared image probe A",
+                "fileId": null
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/shared.gif",
+                "alt": "Orange square GIF — shared image probe A",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "03-shared-image-b",
+            "canvasUrl": "03-shared-image-b",
+            "title": "03 Shared image B",
+            "storedHtml": "<h2>03 Shared image B</h2><figure><img src=\"https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/shared.gif\" alt=\"Orange square GIF — shared image probe B\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>shared.gif</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/shared.gif",
+                "alt": "Orange square GIF — shared image probe B",
+                "fileId": null
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/shared.gif",
+                "alt": "Orange square GIF — shared image probe B",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "04-raster-and-duplicates",
+            "canvasUrl": "04-raster-and-duplicates",
+            "title": "04 Raster types and duplicate bytes",
+            "storedHtml": "<h2>04 Raster types and duplicate bytes</h2><figure><img src=\"https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/raster.png\" alt=\"Purple square PNG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/raster.jpg\" alt=\"Green square JPEG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.jpg</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/raster.webp\" alt=\"Blue square WebP raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.webp</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/duplicate-a.png\" alt=\"Gray square duplicate bytes A\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>duplicate-a.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/duplicate-b.png\" alt=\"Gray square duplicate bytes B\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>duplicate-b.png</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/raster.png",
+                "alt": "Purple square PNG raster probe",
+                "fileId": null
+              },
+              {
+                "src": "https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/raster.jpg",
+                "alt": "Green square JPEG raster probe",
+                "fileId": null
+              },
+              {
+                "src": "https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/raster.webp",
+                "alt": "Blue square WebP raster probe",
+                "fileId": null
+              },
+              {
+                "src": "https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/duplicate-a.png",
+                "alt": "Gray square duplicate bytes A",
+                "fileId": null
+              },
+              {
+                "src": "https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/duplicate-b.png",
+                "alt": "Gray square duplicate bytes B",
+                "fileId": null
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/raster.png",
+                "alt": "Purple square PNG raster probe",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/raster.jpg",
+                "alt": "Green square JPEG raster probe",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/raster.webp",
+                "alt": "Blue square WebP raster probe",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/duplicate-a.png",
+                "alt": "Gray square duplicate bytes A",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/156/file_contents/course%20files/web_resources/probe/duplicate-b.png",
+                "alt": "Gray square duplicate bytes B",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              }
+            ]
+          }
+        ],
+        "files": [],
+        "allImagesRendered": false,
+        "sharedResolvesToOneFile": false
+      },
+      "reexport": {
+        "workflowState": "exported",
+        "path": "artifacts/canvas-image-probe-evidence/2026-08-28T18-42-35-867Z/associatedcontent-dependencies-reexport.imscc",
+        "sha256": "875554a5440f20ade338fb395589b07002209280cce3a10d6cb8991f1926ecda",
+        "bytes": 7650,
+        "unzipOk": true,
+        "entryCount": 16,
+        "pageReferences": [
+          {
+            "entry": "wiki_content/01-single-image.html",
+            "src": "http://canvas.example.edu/courses/155/file_contents/$IMS-CC-FILEBASE$/web_resources/probe/single.png",
+            "alt": "Red square PNG — single image probe",
+            "resolvesToPackagedFile": false
+          },
+          {
+            "entry": "wiki_content/02-shared-image-a.html",
+            "src": "http://canvas.example.edu/courses/155/file_contents/$IMS-CC-FILEBASE$/web_resources/probe/shared.gif",
+            "alt": "Orange square GIF — shared image probe A",
+            "resolvesToPackagedFile": false
+          },
+          {
+            "entry": "wiki_content/03-shared-image-b.html",
+            "src": "http://canvas.example.edu/courses/155/file_contents/$IMS-CC-FILEBASE$/web_resources/probe/shared.gif",
+            "alt": "Orange square GIF — shared image probe B",
+            "resolvesToPackagedFile": false
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "http://canvas.example.edu/courses/155/file_contents/$IMS-CC-FILEBASE$/web_resources/probe/raster.png",
+            "alt": "Purple square PNG raster probe",
+            "resolvesToPackagedFile": false
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "http://canvas.example.edu/courses/155/file_contents/$IMS-CC-FILEBASE$/web_resources/probe/raster.jpg",
+            "alt": "Green square JPEG raster probe",
+            "resolvesToPackagedFile": false
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "http://canvas.example.edu/courses/155/file_contents/$IMS-CC-FILEBASE$/web_resources/probe/raster.webp",
+            "alt": "Blue square WebP raster probe",
+            "resolvesToPackagedFile": false
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "http://canvas.example.edu/courses/155/file_contents/$IMS-CC-FILEBASE$/web_resources/probe/duplicate-a.png",
+            "alt": "Gray square duplicate bytes A",
+            "resolvesToPackagedFile": false
+          },
+          {
+            "entry": "wiki_content/04-raster-and-duplicates.html",
+            "src": "http://canvas.example.edu/courses/155/file_contents/$IMS-CC-FILEBASE$/web_resources/probe/duplicate-b.png",
+            "alt": "Gray square duplicate bytes B",
+            "resolvesToPackagedFile": false
+          }
+        ],
+        "manifestResourceTypes": [
+          "associatedcontent/imscc_xmlv1p1/learning-application-resource",
+          "webcontent"
+        ]
+      },
+      "reexportImport": {
+        "courseId": 157,
+        "workflowState": "completed",
+        "pageCount": 4,
+        "pages": [
+          {
+            "key": "01-single-image",
+            "canvasUrl": "01-single-image",
+            "title": "01 Single image",
+            "storedHtml": "<h2>01 Single image</h2><figure><img src=\"https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/single.png\" alt=\"Red square PNG — single image probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>single.png</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/single.png",
+                "alt": "Red square PNG — single image probe",
+                "fileId": null
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/single.png",
+                "alt": "Red square PNG — single image probe",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "02-shared-image-a",
+            "canvasUrl": "02-shared-image-a",
+            "title": "02 Shared image A",
+            "storedHtml": "<h2>02 Shared image A</h2><figure><img src=\"https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/shared.gif\" alt=\"Orange square GIF — shared image probe A\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>shared.gif</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/shared.gif",
+                "alt": "Orange square GIF — shared image probe A",
+                "fileId": null
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/shared.gif",
+                "alt": "Orange square GIF — shared image probe A",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "03-shared-image-b",
+            "canvasUrl": "03-shared-image-b",
+            "title": "03 Shared image B",
+            "storedHtml": "<h2>03 Shared image B</h2><figure><img src=\"https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/shared.gif\" alt=\"Orange square GIF — shared image probe B\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>shared.gif</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/shared.gif",
+                "alt": "Orange square GIF — shared image probe B",
+                "fileId": null
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/shared.gif",
+                "alt": "Orange square GIF — shared image probe B",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              }
+            ]
+          },
+          {
+            "key": "04-raster-and-duplicates",
+            "canvasUrl": "04-raster-and-duplicates",
+            "title": "04 Raster types and duplicate bytes",
+            "storedHtml": "<h2>04 Raster types and duplicate bytes</h2><figure><img src=\"https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/raster.png\" alt=\"Purple square PNG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/raster.jpg\" alt=\"Green square JPEG raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.jpg</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/raster.webp\" alt=\"Blue square WebP raster probe\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>raster.webp</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/duplicate-a.png\" alt=\"Gray square duplicate bytes A\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>duplicate-a.png</figcaption></figure><figure><img src=\"https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/duplicate-b.png\" alt=\"Gray square duplicate bytes B\" width=\"16\" height=\"16\" loading=\"lazy\"><figcaption>duplicate-b.png</figcaption></figure>",
+            "storedImages": [
+              {
+                "src": "https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/raster.png",
+                "alt": "Purple square PNG raster probe",
+                "fileId": null
+              },
+              {
+                "src": "https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/raster.jpg",
+                "alt": "Green square JPEG raster probe",
+                "fileId": null
+              },
+              {
+                "src": "https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/raster.webp",
+                "alt": "Blue square WebP raster probe",
+                "fileId": null
+              },
+              {
+                "src": "https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/duplicate-a.png",
+                "alt": "Gray square duplicate bytes A",
+                "fileId": null
+              },
+              {
+                "src": "https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/duplicate-b.png",
+                "alt": "Gray square duplicate bytes B",
+                "fileId": null
+              }
+            ],
+            "renderedImages": [
+              {
+                "currentSrc": "https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/raster.png",
+                "alt": "Purple square PNG raster probe",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/raster.jpg",
+                "alt": "Green square JPEG raster probe",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/raster.webp",
+                "alt": "Blue square WebP raster probe",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/duplicate-a.png",
+                "alt": "Gray square duplicate bytes A",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              },
+              {
+                "currentSrc": "https://canvas.example.edu/courses/157/file_contents/course%20files/web_resources/probe/duplicate-b.png",
+                "alt": "Gray square duplicate bytes B",
+                "naturalWidth": 0,
+                "naturalHeight": 0,
+                "complete": true
+              }
+            ]
+          }
+        ],
+        "files": [],
+        "allImagesRendered": false,
+        "altTextIntact": true
+      }
+    }
+  ]
+}

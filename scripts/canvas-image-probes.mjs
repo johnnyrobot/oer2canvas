@@ -49,7 +49,7 @@ const image = (path, mediaType, base64) => ({
   data: Uint8Array.from(Buffer.from(base64, 'base64')),
 })
 
-const ASSETS = Object.freeze([
+export const ASSETS = Object.freeze([
   image(
     'single.png',
     'image/png',
@@ -86,7 +86,7 @@ const ASSETS = Object.freeze([
 const assetByPath = new Map(ASSETS.map((asset) => [asset.path, asset]))
 const assetPath = (name) => `web_resources/probe/${name}`
 
-const PAGES = Object.freeze([
+export const PAGES = Object.freeze([
   {
     id: 'page-single',
     path: 'wiki_content/01-single-image.html',
