@@ -1,6 +1,6 @@
 # Document import map
 
-**Frontier:** 08 — Ship one embedded-image import tracer.
+**Frontier:** 09 — Harden packaged assets across document formats.
 
 | Issue | Status | Blocked by |
 | --- | --- | --- |
@@ -11,7 +11,7 @@
 | [05 — Import Markdown and HTML safely](issues/05-import-markdown-html-safely.md) | resolved | 01 |
 | [06 — Generate Canvas image probes](issues/06-generate-canvas-image-probes.md) | resolved | — |
 | [07 — Validate images in Canvas](issues/07-validate-images-in-canvas.md) | resolved | 06 |
-| [08 — Ship embedded-image tracer](issues/08-ship-embedded-image-tracer.md) | ready-for-agent | 04, 07 |
+| [08 — Ship embedded-image tracer](issues/08-ship-embedded-image-tracer.md) | resolved | 04, 07 |
 | [09 — Harden packaged assets](issues/09-harden-packaged-assets.md) | ready-for-agent | 08 |
 | [10 — Edit proposed page plan](issues/10-edit-proposed-page-plan.md) | resolved | 01, 04, 05 |
 | [11 — Import text-based PDFs](issues/11-import-text-based-pdfs.md) | ready-for-agent | 02, 05, 10 |
