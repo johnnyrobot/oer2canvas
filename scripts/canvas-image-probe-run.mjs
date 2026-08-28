@@ -344,7 +344,29 @@ export async function renderPages(context, baseUrl, courseId, pages, evidenceDir
       // images, and `[].every(...)` is vacuously true, which silently measures an
       // empty page as a fully settled one. On timeout, record the DOM as it
       // actually is — an image Canvas really did drop is evidence, not an error.
-      const expectedImageCount = EXPECTED_PAGE_IMAGES[stored.key]?.length ?? 0
+      //
+      // Ruling 13: the count comes from THIS PAGE'S OWN stored HTML
+      // (`readCourseContent` already parses `storedImages` out of the Canvas
+      // API response for every page, probe or not), never from
+      // `EXPECTED_PAGE_IMAGES` keyed by a fixed set of probe page names. A
+      // page whose key isn't one of the twelve probe variants — any cartridge
+      // this repo's own pipeline produces, for instance — would silently
+      // resolve that lookup to `undefined?.length ?? 0`, making the vacuous-
+      // truth case above the ACTUAL case taken rather than the edge case the
+      // comment above warns about: `waitForFunction` would then return the
+      // instant the content container exists, before Canvas has painted the
+      // page body, and a page that really does have an image would be scored
+      // as "settled" with zero of them in the DOM. That is exactly what broke
+      // `scripts/verify-canvas-image-tracer.mjs`'s first live run against a
+      // packaged-image cartridge outside the probe suite. `storedImages`
+      // reflects what the Canvas API already told us this page contains, so
+      // deriving the wait target from it works for the twelve probe pages
+      // (their stored HTML always carries one `<img>` per
+      // `EXPECTED_PAGE_IMAGES` entry, unresolved-`src` variants included —
+      // the tag is present even when what it points at is broken) AND for any
+      // other page from any other cartridge, with no probe-suite dependency
+      // left in this function at all.
+      const expectedImageCount = stored.storedImages?.length ?? 0
       try {
         await page.waitForFunction(
           (count) => {
