@@ -21,3 +21,6 @@ __screenshots__/
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# This repository's shared engineering-skill configuration.
+!AGENTS.md
