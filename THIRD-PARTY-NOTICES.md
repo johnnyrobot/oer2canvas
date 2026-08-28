@@ -10,6 +10,8 @@ are in `package-lock.json`; this summary identifies the direct runtime and build
 | lucide-react | ISC | Interface icons |
 | Temml | MIT | Converts publisher-carried TeX equations to MathML |
 | @huggingface/transformers | Apache-2.0 | Browser/WebGPU runtime for the optional local VLM draft |
+| @firecrawl/anydoc-wasm 0.2.4 | MIT | Probe-only browser Worker parsing for DOCX, ODT, RTF, and EPUB |
+| @firecrawl/pdf-inspector-wasm 1.17.0 | MIT | Probe-only browser Worker inspection for PDF |
 | Vite / Vitest / Playwright | MIT | Build and test tooling |
 | vite-plugin-pwa / Workbox | MIT | Service worker and PWA assets |
 | Tailwind CSS | MIT | Styles |

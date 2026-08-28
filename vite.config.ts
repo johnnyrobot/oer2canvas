@@ -120,11 +120,31 @@ export default defineConfig({
           // a draft; Transformers.js caches what is actually used on demand.
           '**/assets/transformers.web-*.js',
           '**/assets/ort-wasm-*.wasm',
+          // Document parsers are also opt-in. Their module Workers and WASM
+          // binaries are fetched only after a matching file enters the probe;
+          // precaching either parser would spend 5-7 MiB at install time for a
+          // capability the instructor may never use.
+          '**/assets/anydoc.worker-*.js',
+          '**/assets/pdf-inspector.worker-*.js',
+          '**/assets/anydoc_wasm_bg-*.wasm',
+          '**/assets/pdf_inspector_wasm_bg-*.wasm',
         ],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
         runtimeCaching: [
+          {
+            urlPattern: ({ url, sameOrigin }: { url: URL; sameOrigin: boolean }) =>
+              sameOrigin && /\/assets\/(?:anydoc\.worker|pdf-inspector\.worker|anydoc_wasm_bg|pdf_inspector_wasm_bg)-/.test(url.pathname),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'oer2canvas-document-parsers-v1',
+              cacheableResponse: { statuses: [200] },
+              // Two Workers + two WASM binaries. Hashed filenames make 30-day
+              // retention safe, while the entry bound evicts old parser builds.
+              expiration: { maxEntries: 4, maxAgeSeconds: 30 * 24 * 60 * 60 },
+            },
+          },
           {
             urlPattern: ({ url, sameOrigin }: { url: URL; sameOrigin: boolean }) => sameOrigin && url.pathname.startsWith('/catalogs/'),
             handler: 'NetworkFirst',

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { importText, MAX_TEXT_IMPORT_BYTES, PLAIN_TEXT_FILE_ACCEPT } from '../import/text'
+import { importText, MAX_TEXT_IMPORT_BYTES } from '../import/text'
+import { PLAIN_TEXT_FILE_ACCEPT } from '../import/capability'
 import type { ImportResult, RightsAuthority } from '../import/types'
 import { isAbortError, messageOf } from '../errors'
 

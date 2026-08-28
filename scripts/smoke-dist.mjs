@@ -22,13 +22,14 @@
  * Run with `npm run test:dist` (build first).
  */
 import { createServer } from 'node:http'
-import { readFile } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { rmSync, existsSync } from 'node:fs'
 import { extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
+import { pdfFixture } from '../src/import/testing/pdf-fixture.ts'
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const DIST = join(ROOT, 'dist')
@@ -122,6 +123,21 @@ async function main() {
     throw new Error('dist/_headers does not opt every static asset out of search indexing')
   }
   const serviceWorker = await readFile(join(DIST, 'sw.js'), 'utf8')
+  const builtAssets = await readdir(join(DIST, 'assets'))
+  const parserAssets = builtAssets.filter((name) =>
+    /^(?:anydoc\.worker|pdf-inspector\.worker|anydoc_wasm_bg|pdf_inspector_wasm_bg)-/.test(name))
+  const probeAsset = builtAssets.find((name) => /^probe-.*\.js$/.test(name))
+  if (parserAssets.length !== 4 || !probeAsset) {
+    throw new Error(`dist parser assets are incomplete: ${parserAssets.join(', ') || 'none'}`)
+  }
+  if (!serviceWorker.includes('oer2canvas-document-parsers-v1')) {
+    throw new Error('service worker has no bounded runtime cache for document parsers')
+  }
+  for (const asset of parserAssets) {
+    if (serviceWorker.includes(`assets/${asset}`)) {
+      throw new Error(`service worker install precaches the on-demand parser asset ${asset}`)
+    }
+  }
   // The generated Workbox navigation route must keep Worker-controlled
   // responses out of the app HTML cache. Checking the built artifact catches a
   // config change that looks correct in TypeScript but serializes a broader
@@ -165,11 +181,59 @@ async function main() {
 
   const failures = []
   const consoleErrors = []
+  const localRequests = []
   page.on('pageerror', (e) => consoleErrors.push(String(e)))
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (url.origin === `http://localhost:${PORT}`) localRequests.push(url.pathname)
+  })
   await stubUpstream(page, failures)
 
   try {
     await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'domcontentloaded' })
+    await page.waitForLoadState('networkidle')
+
+    const parserRequest = (pattern) => localRequests.some((path) => pattern.test(path))
+    if (parserRequest(/(?:probe-|anydoc\.worker|pdf-inspector\.worker|anydoc_wasm_bg|pdf_inspector_wasm_bg)/)) {
+      failures.push('initial application load fetched an on-demand parser asset')
+    }
+
+    const anydoc = await page.evaluate(async ({ probeUrl, source }) => {
+      const { probeParser } = await import(probeUrl)
+      return probeParser({
+        parser: 'anydoc',
+        bytes: new Uint8Array(source).buffer,
+        formatHint: 'rtf',
+      })
+    }, {
+      probeUrl: `/assets/${probeAsset}`,
+      source: Array.from(new TextEncoder().encode('{\\rtf1 Production AnyDoc probe.}')),
+    })
+    if (anydoc.detectedFormat !== 'rtf' || anydoc.parserVersion !== '0.2.4') {
+      failures.push(`built AnyDoc probe returned unexpected evidence: ${JSON.stringify(anydoc)}`)
+    }
+    if (!parserRequest(/anydoc\.worker/) || !parserRequest(/anydoc_wasm_bg/)) {
+      failures.push('built AnyDoc probe did not fetch its Worker and WASM on demand')
+    }
+    if (parserRequest(/pdf-inspector\.worker|pdf_inspector_wasm_bg/)) {
+      failures.push('AnyDoc probe fetched PDF Inspector assets')
+    }
+
+    const pdfBytes = pdfFixture(1, 'Production PDF Inspector probe')
+    const pdf = await page.evaluate(async ({ probeUrl, source }) => {
+      const { probeParser } = await import(probeUrl)
+      return probeParser({
+        parser: 'pdf-inspector',
+        bytes: new Uint8Array(source).buffer,
+        formatHint: 'pdf',
+      })
+    }, { probeUrl: `/assets/${probeAsset}`, source: Array.from(pdfBytes) })
+    if (pdf.detectedFormat !== 'pdf' || pdf.pageCount !== 1) {
+      failures.push(`built PDF Inspector probe returned unexpected evidence: ${JSON.stringify(pdf)}`)
+    }
+    if (!parserRequest(/pdf-inspector\.worker/) || !parserRequest(/pdf_inspector_wasm_bg/)) {
+      failures.push('built PDF Inspector probe did not fetch its Worker and WASM on demand')
+    }
 
     // This assertion runs against the compiled artifact, so a source-level
     // conditional that is accidentally enabled or dropped by deployment
@@ -308,7 +372,7 @@ async function main() {
     for (const f of failures) console.error(`  - ${f}`)
     process.exit(1)
   }
-  console.log('dist smoke test passed: the built bundle compiles and audits a chapter.')
+  console.log('dist smoke test passed: parser WASM stays lazy, and the built bundle compiles and audits a chapter.')
 }
 
 await main()

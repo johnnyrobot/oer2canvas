@@ -29,6 +29,9 @@ credential, revoke it in Canvas immediately and mention only that it was revoked
 - Pasted and file-selected plain text is decoded as strict UTF-8, limited to 2 MiB, escaped before
   semantic HTML is created, and then subjected to the same allowlist and accessibility gate as
   publisher content. Source files and derived document data remain browser-local.
+- Probe-only AnyDoc and PDF Inspector parsers run in disposable module Workers with transferred
+  buffers, a 30-second timeout, and measured input/page/asset/memory budgets. Parser output remains
+  untrusted, a cancelled or failed Worker is terminated, and these formats are not release-enabled.
 
 ## Operational requirements before launch
 

@@ -1,0 +1,248 @@
+import {
+  ParserProbeError,
+  createParserProbeRunner,
+  type ParserProbeResponse,
+  type ParserProbeWorker,
+} from './probe'
+
+class FakeWorker implements ParserProbeWorker {
+  readonly requests: unknown[] = []
+  terminated = false
+  private readonly messageListeners = new Set<(event: MessageEvent<ParserProbeResponse>) => void>()
+  private readonly errorListeners = new Set<(event: ErrorEvent) => void>()
+
+  postMessage(message: unknown, transfer: Transferable[]): void {
+    this.requests.push(structuredClone(message, { transfer }))
+  }
+
+  addEventListener(type: 'message' | 'error', listener: EventListener): void {
+    if (type === 'message') {
+      this.messageListeners.add(listener as (event: MessageEvent<ParserProbeResponse>) => void)
+    } else {
+      this.errorListeners.add(listener as (event: ErrorEvent) => void)
+    }
+  }
+
+  removeEventListener(type: 'message' | 'error', listener: EventListener): void {
+    if (type === 'message') {
+      this.messageListeners.delete(listener as (event: MessageEvent<ParserProbeResponse>) => void)
+    } else {
+      this.errorListeners.delete(listener as (event: ErrorEvent) => void)
+    }
+  }
+
+  terminate(): void {
+    this.terminated = true
+  }
+
+  emit(response: ParserProbeResponse): void {
+    for (const listener of this.messageListeners) listener(new MessageEvent('message', { data: response }))
+  }
+}
+
+test('the parser probe transfers source ownership and reports public progress through completion', async () => {
+  const worker = new FakeWorker()
+  const progress: string[] = []
+  const run = createParserProbeRunner({
+    createWorker: () => worker,
+    requestId: () => 'request-1',
+  })
+  const bytes = new TextEncoder().encode('{\\rtf1 Probe text}').buffer
+
+  const pending = run({
+    parser: 'anydoc',
+    bytes,
+    formatHint: 'rtf',
+    onProgress: (event) => progress.push(event.phase),
+  })
+
+  expect(bytes.byteLength).toBe(0)
+  expect(worker.requests).toHaveLength(1)
+  expect(worker.requests[0]).toMatchObject({
+    kind: 'parse',
+    requestId: 'request-1',
+    formatHint: 'rtf',
+  })
+  expect((worker.requests[0] as { bytes: ArrayBuffer }).bytes.byteLength).toBe(18)
+
+  worker.emit({
+    kind: 'ready',
+    requestId: 'request-1',
+    parser: 'anydoc',
+    parserVersion: '0.2.4',
+    initializationMs: 12,
+  })
+  worker.emit({ kind: 'progress', requestId: 'request-1', phase: 'parsing' })
+  worker.emit({
+    kind: 'result',
+    requestId: 'request-1',
+    result: {
+      parser: 'anydoc',
+      parserVersion: '0.2.4',
+      detectedFormat: 'rtf',
+      inputBytes: 18,
+      outputBytes: 10,
+      parseMs: 3,
+      counts: { blocks: 1, headings: 0, tables: 0, images: 0, assets: 0 },
+    },
+  })
+
+  await expect(pending).resolves.toMatchObject({ parser: 'anydoc', detectedFormat: 'rtf' })
+  expect(progress).toEqual(['loading-parser', 'parser-ready', 'parsing', 'complete'])
+  expect(worker.terminated).toBe(true)
+})
+
+test('cancellation terminates synchronous parser work and a retry receives a fresh worker', async () => {
+  const workers: FakeWorker[] = []
+  const run = createParserProbeRunner({
+    createWorker: () => {
+      const worker = new FakeWorker()
+      workers.push(worker)
+      return worker
+    },
+    requestId: () => `request-${workers.length + 1}`,
+  })
+  const controller = new AbortController()
+  const cancelled = run({
+    parser: 'pdf-inspector',
+    bytes: new ArrayBuffer(16),
+    signal: controller.signal,
+  })
+  controller.abort()
+
+  await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' })
+  expect(workers[0]?.terminated).toBe(true)
+
+  const retry = run({ parser: 'pdf-inspector', bytes: new ArrayBuffer(16) })
+  expect(workers).toHaveLength(2)
+  workers[1]!.emit({
+    kind: 'failure',
+    requestId: 'request-2',
+    error: { code: 'initialization', message: 'WebAssembly.compile failed' },
+  })
+  await expect(retry).rejects.toEqual(expect.objectContaining<Partial<ParserProbeError>>({
+    name: 'ParserProbeError',
+    code: 'initialization',
+    retryable: true,
+    message: expect.stringMatching(/PDF Inspector could not start.*reload.*try again/i),
+  }))
+  expect(workers[1]?.terminated).toBe(true)
+})
+
+test('cancellation from the first progress callback stops before bytes enter the Worker', async () => {
+  const worker = new FakeWorker()
+  const controller = new AbortController()
+  const run = createParserProbeRunner({ createWorker: () => worker })
+
+  const pending = run({
+    parser: 'anydoc',
+    bytes: new ArrayBuffer(16),
+    signal: controller.signal,
+    onProgress: () => controller.abort(),
+  })
+
+  await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+  expect(worker.requests).toHaveLength(0)
+  expect(worker.terminated).toBe(true)
+})
+
+test('a failing progress consumer cannot strand a parser Worker', async () => {
+  const worker = new FakeWorker()
+  const run = createParserProbeRunner({ createWorker: () => worker })
+
+  await expect(run({
+    parser: 'pdf-inspector',
+    bytes: new ArrayBuffer(16),
+    onProgress: () => { throw new Error('render failed') },
+  })).rejects.toMatchObject({
+    name: 'ParserProbeError',
+    code: 'parse-failed',
+    message: expect.stringMatching(/progress.*render failed/i),
+  })
+  expect(worker.requests).toHaveLength(0)
+  expect(worker.terminated).toBe(true)
+})
+
+test('the public probe refuses files above the measured browser budget before creating a Worker', async () => {
+  const createWorker = vi.fn(() => new FakeWorker())
+  const run = createParserProbeRunner({ createWorker })
+
+  await expect(run({
+    parser: 'anydoc',
+    bytes: new ArrayBuffer((16 * 1024 * 1024) + 1),
+  })).rejects.toMatchObject({
+    name: 'ParserProbeError',
+    code: 'resource-limit',
+    message: expect.stringMatching(/16 MiB.*before.*Worker/i),
+  })
+  expect(createWorker).not.toHaveBeenCalled()
+})
+
+test('a parser that stops responding is terminated at the measured timeout and can retry', async () => {
+  vi.useFakeTimers()
+  try {
+    const workers: FakeWorker[] = []
+    const run = createParserProbeRunner({
+      createWorker: () => {
+        const worker = new FakeWorker()
+        workers.push(worker)
+        return worker
+      },
+      requestId: () => `timeout-${workers.length + 1}`,
+    })
+    const pending = run({
+      parser: 'anydoc',
+      bytes: new ArrayBuffer(16),
+      timeoutMs: 10,
+    })
+    const timedOut = expect(pending).rejects.toMatchObject({
+      name: 'ParserProbeError',
+      code: 'resource-limit',
+      message: expect.stringMatching(/did not finish.*10 ms.*try again/i),
+    })
+    await vi.advanceTimersByTimeAsync(10)
+
+    await timedOut
+    expect(workers[0]?.terminated).toBe(true)
+
+    const retry = run({ parser: 'anydoc', bytes: new ArrayBuffer(16) })
+    expect(workers).toHaveLength(2)
+    workers[1]!.emit({
+      kind: 'failure',
+      requestId: 'timeout-2',
+      error: { code: 'unsupported', message: 'unsupported fixture' },
+    })
+    await expect(retry).rejects.toMatchObject({ code: 'unsupported' })
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('measured result budgets stop oversized parser output and terminate its Worker', async () => {
+  const worker = new FakeWorker()
+  const run = createParserProbeRunner({
+    createWorker: () => worker,
+    requestId: () => 'budget-result',
+  })
+  const pending = run({ parser: 'pdf-inspector', bytes: new ArrayBuffer(16) })
+  worker.emit({
+    kind: 'result',
+    requestId: 'budget-result',
+    result: {
+      parser: 'pdf-inspector',
+      parserVersion: '1.17.0',
+      detectedFormat: 'pdf',
+      inputBytes: 16,
+      outputBytes: 1,
+      parseMs: 1,
+      pageCount: 201,
+      counts: { blocks: 1, headings: 0, tables: 0, images: 0, assets: 0 },
+    },
+  })
+
+  await expect(pending).rejects.toMatchObject({
+    code: 'resource-limit',
+    message: expect.stringMatching(/201 pages.*limit is 200/i),
+  })
+  expect(worker.terminated).toBe(true)
+})

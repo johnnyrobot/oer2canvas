@@ -1,4 +1,5 @@
 import type { ImportMetadata, ImportResult } from './types'
+import { capabilityForFilename } from './capability'
 
 export type TextImportInput =
   | { kind: 'paste'; text: string }
@@ -9,10 +10,9 @@ export interface TextImportOptions {
   signal?: AbortSignal
 }
 
-export const PLAIN_TEXT_FILE_ACCEPT = '.txt,text/plain'
-
-// A conservative tracer guard required by ticket 01. Ticket 02 replaces this
-// with the benchmark-selected production budget before document import ships.
+// Plain text runs on the main thread through hashing, HTML formation, and a
+// live preview. Worker-parser measurements do not justify raising this tracer's
+// independently conservative limit.
 export const MAX_TEXT_IMPORT_BYTES = 2 * 1024 * 1024
 
 function assertWithinLimit(bytes: number): void {
@@ -73,7 +73,7 @@ export async function importText(
     throw new Error('Enter a license name when you provide a license URL.')
   }
   if (input.kind === 'file') {
-    if (!/\.txt$/i.test(input.file.name)) {
+    if (capabilityForFilename(input.file.name)?.format !== 'text') {
       throw new Error('Choose a plain-text file with a .txt extension.')
     }
     assertWithinLimit(input.file.size)
