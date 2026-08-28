@@ -1,5 +1,5 @@
 import { auditedHtml, type CompiledChapter, type CompiledSection } from '../../contracts/index'
-import { FILEBASE, PACKAGED_ASSET_DIRECTORY, packagedArchivePath, packagedReference } from '../../import/assets'
+import { isPackagedReference, packagedArchivePath, packagedReference } from '../../import/assets'
 import { pageTargetsByChapter, slug } from './page-identity'
 import type { ZipEntry } from './zip'
 
@@ -95,9 +95,7 @@ function pagesOf(chapters: readonly CompiledChapter[]): Page[][] {
 
 /** One asset actually shipped in the archive, keyed by content once per cartridge. */
 export interface PackagedAsset {
-  sha256: string
   archivePath: string
-  mediaType: string
   bytes: Uint8Array
   resourceId: string
 }
@@ -128,14 +126,38 @@ export class UnresolvedPackagedReferenceError extends Error {
   }
 }
 
-// Escape `FILEBASE` (`$IMS-CC-FILEBASE$`) for use inside a RegExp source, and
-// build the scan pattern from it and `PACKAGED_ASSET_DIRECTORY` rather than
-// re-typing the literal token and directory name a second time — the same
-// reasoning `FILEBASE`'s own export comment gives for why `allowlist.ts`
-// imports it instead of keeping its own copy. Two independently-typed copies
-// of a reserved token are a standing invitation for them to drift apart.
-const FILEBASE_SOURCE = FILEBASE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-const PACKAGED_REFERENCE_IN_HTML = new RegExp(`${FILEBASE_SOURCE}/${PACKAGED_ASSET_DIRECTORY}/[^"'\\s>]+`, 'g')
+/**
+ * Every `$IMS-CC-FILEBASE$/oer2canvas/...` value the gated html actually
+ * carries as an ATTRIBUTE — never a raw-text scan over the serialized string.
+ *
+ * A regex over the serialized html (the first version of this function used
+ * `/\$IMS-CC-FILEBASE\$\/oer2canvas\/[^"'\s>]+/g`) matches the token
+ * wherever it sits, including inside ordinary prose: a page that both embeds
+ * an image AND mentions its own path in a caption —
+ * `<img src="$IMS-CC-FILEBASE$/oer2canvas/x.png"><p>The file is
+ * $IMS-CC-FILEBASE$/oer2canvas/x.png.</p>` — would have that regex capture
+ * `x.png.</p` out of the prose occurrence (nothing in the excluded-character
+ * class stops at `<`), which then fails `isPackagedReference` and makes
+ * `collectPackagedAssets` throw on a page that is perfectly valid. Parsing
+ * with `DOMParser` and reading actual attribute VALUES sidesteps the whole
+ * class of bug rather than patching this one shape of it: html the browser's
+ * own parser has already separated into elements and attributes has no tag
+ * boundary left to run across, and prose text is never an attribute value in
+ * the first place. `DOMParser.parseFromString` executes no script and loads
+ * no subresource, and the document it builds is never attached to the live
+ * one — the same property `compileSection` (src/engine/compile/index.ts)
+ * relies on for the same reason.
+ */
+function packagedReferencesIn(html: string): Set<string> {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const found = new Set<string>()
+  for (const element of doc.body.querySelectorAll('*')) {
+    for (const attribute of element.attributes) {
+      if (isPackagedReference(attribute.value)) found.add(attribute.value)
+    }
+  }
+  return found
+}
 
 /**
  * Every distinct asset the emitted pages actually reference, deduped by
@@ -173,12 +195,33 @@ export function collectPackagedAssets(chapters: readonly CompiledChapter[]): Pac
     for (const asset of compiled.chapter.assets ?? []) {
       const reference = packagedReference(asset.name)
       if (byReference.has(reference)) continue
+      // `packagedAssetName` (src/import/assets.ts) sanitizes down to
+      // `[a-z0-9-]` plus a known extension, and the allowlist fences what
+      // reaches `img@src` — so `asset.name` SHOULD already be safe to turn
+      // straight into an archive path. This module ships that path into a
+      // zip entry and an XML `href` attribute, though, so "should" is not
+      // enough: an unsanitized name (`../../wiki_content/x.html`, or one
+      // containing `&`) would silently become a write path outside this
+      // asset's own directory, or a manifest `href` that breaks XML
+      // parsing. `isPackagedReference` is the exact predicate the allowlist
+      // already widens `img.src` by, so re-running it here costs one line
+      // and turns an unstated upstream invariant into one this module
+      // enforces itself, dropping the asset instead of trusting it blindly.
+      if (!isPackagedReference(reference)) continue
       byReference.set(reference, {
-        sha256: asset.sha256,
         archivePath: packagedArchivePath(asset.name),
-        mediaType: asset.mediaType,
         bytes: asset.bytes,
-        resourceId: `asset-${asset.sha256.slice(0, 8)}`,
+        // Derived from `name`, NOT from `sha256.slice(0, 8)`: `name` is
+        // already unique per archive path by construction (it IS the archive
+        // path's basename), while an 8-hex-character hash prefix is not —
+        // two distinct assets can share one, which would emit two
+        // `<resource>` elements with the identical `identifier`. That
+        // `identifier` is an xsd:ID, so a collision is an INVALID manifest,
+        // not a cosmetic one. `resourceId` function's own sanitizer
+        // (`[^A-Za-z0-9._-]` -> `-`) is reused here for the same reason it
+        // exists there: publisher-influenced text landing in an xsd:ID needs
+        // the same narrow character set regardless of which kind of id it is.
+        resourceId: `asset-${asset.name.replace(/[^A-Za-z0-9._-]/g, '-')}`,
       })
     }
   }
@@ -195,9 +238,7 @@ export function collectPackagedAssets(chapters: readonly CompiledChapter[]): Pac
   // rather than the archive's own contents.
   const referenced = new Set<string>()
   for (const page of pagesOf(chapters).flat()) {
-    for (const reference of auditedHtml(page.section).match(PACKAGED_REFERENCE_IN_HTML) ?? []) {
-      referenced.add(reference)
-    }
+    for (const reference of packagedReferencesIn(auditedHtml(page.section))) referenced.add(reference)
   }
   const unresolved = [...referenced].filter((reference) => !byReference.has(reference))
   if (unresolved.length > 0) throw new UnresolvedPackagedReferenceError(unresolved)
@@ -287,14 +328,22 @@ export function buildManifest(chapters: readonly CompiledChapter[]): string {
    * ONE STANDALONE `webcontent` RESOURCE PER ASSET, WITH NO `<dependency>`
    * FROM ITS PAGE — MEASURED, not the more "obviously structured" option.
    * `docs/evidence/canvas-image-probes-2026-08-28.md` imported four candidate
-   * cartridge layouts into a live Canvas. This one is the only one that
-   * works. The two layouts that look at least as principled — nesting the
-   * asset as a second `<file>` under the PAGE's resource, or wrapping it in
-   * `associatedcontent` — both measured as Canvas reporting "Completed" and
-   * then attaching zero course files. A page resource declaring
-   * `<dependency identifierref="...">` on its asset was measured as optional:
-   * present or absent, the import outcome was identical. Do not add either
-   * "improvement" back without new evidence.
+   * cartridge layouts into a live Canvas. Two of them measured as Canvas
+   * reporting "Completed" and then attaching zero course files: nesting the
+   * asset as a second `<file>` under the PAGE's resource, and wrapping it in
+   * `associatedcontent`. Do not add either "improvement" back without new
+   * evidence.
+   *
+   * A THIRD SHAPE, `webcontent-dependencies` — this same standalone resource
+   * plus a `<dependency identifierref="...">` from the page to it — also
+   * passed every required behaviour. It is not "the only one that works";
+   * the evidence doc breaks the tie toward THIS shape for being the simpler
+   * manifest, not because the dependency-carrying one failed anything. So the
+   * one fact actually pinned by measurement is narrower than "the only
+   * shape" would suggest: a page resource declaring that dependency was
+   * measured as OPTIONAL — present or absent, the import outcome was
+   * identical — which is why it is omitted here, not because it was found to
+   * be wrong.
    */
   const assetResources = collectPackagedAssets(chapters)
     .map(

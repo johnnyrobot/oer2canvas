@@ -234,13 +234,42 @@ test('declares each asset as a standalone webcontent resource', () => {
     chapter('Ch 1', [section('a', 'Intro', { html: imageRefHtml })], [asset('image1-a3f91c2e.png', 'a3f91c2e')]),
   ]
   const manifest = buildManifest(chaptersWithAsset)
+  // The identifier is derived from the archive name, not the hash prefix —
+  // see the "two distinct assets" test below for why that matters.
   expect(manifest).toContain(
-    '<resource identifier="asset-a3f91c2e" type="webcontent" href="web_resources/oer2canvas/image1-a3f91c2e.png">',
+    '<resource identifier="asset-image1-a3f91c2e.png" type="webcontent" href="web_resources/oer2canvas/image1-a3f91c2e.png">',
   )
   expect(manifest).toContain('<file href="web_resources/oer2canvas/image1-a3f91c2e.png"/>')
   // Issue 07 measured page dependencies as optional and changed nothing —
   // don't "improve" the manifest toward a layout that measured no better.
   expect(manifest).not.toContain('<dependency')
+})
+
+// A resource `identifier` is an xsd:ID: two `<resource>` elements sharing one
+// are an INVALID manifest, not merely an odd-looking one. Deriving the id
+// from `sha256.slice(0, 8)` (the first version of this code) can collide —
+// two distinct assets sharing an 8-hex-character prefix is well within reach
+// of a real cartridge with dozens of images. Deriving it from the archive
+// NAME instead is collision-free by construction: `packagedAssetName` already
+// guarantees the archive path is unique per distinct-content asset, so two
+// different assets always get two different names.
+test('two distinct assets whose hashes share a prefix still get distinct resource identifiers', () => {
+  const htmlA = '<p><img src="$IMS-CC-FILEBASE$/oer2canvas/one-a3f91c2e.png" alt="" width="1" height="1"></p>'
+  const htmlB = '<p><img src="$IMS-CC-FILEBASE$/oer2canvas/two-a3f91c2e11.png" alt="" width="1" height="1"></p>'
+  const chapters = [
+    chapter(
+      'Ch 1',
+      [section('a', 'One', { html: htmlA }), section('b', 'Two', { html: htmlB })],
+      [
+        asset('one-a3f91c2e.png', 'a3f91c2e00'),
+        asset('two-a3f91c2e11.png', 'a3f91c2e11'),
+      ],
+    ),
+  ]
+  const manifest = buildManifest(chapters)
+  const identifiers = [...manifest.matchAll(/<resource identifier="(asset-[^"]+)"/g)].map((m) => m[1])
+  expect(identifiers).toEqual(['asset-one-a3f91c2e.png', 'asset-two-a3f91c2e11.png'])
+  expect(new Set(identifiers).size).toBe(2)
 })
 
 test('dedupes one asset shared across two chapters', () => {
@@ -296,12 +325,40 @@ test('refuses to build when a reference resolves to nothing', () => {
   )
 })
 
+// A raw-text regex scan over the serialized html cannot tell an attribute
+// value from prose that happens to mention the same path — it would capture
+// `image1-a3f91c2e.png.</p` out of the sentence below (nothing stops it at
+// `<`) and refuse a page that is entirely valid. `collectPackagedAssets`
+// scans parsed ATTRIBUTE VALUES instead, so the prose occurrence is inert:
+// it's text content, never an attribute, and the export must not choke on it.
+test('mentioning the image path in prose alongside the real reference does not break the export', () => {
+  const html =
+    '<p><img src="$IMS-CC-FILEBASE$/oer2canvas/image1-a3f91c2e.png" alt="A" width="16" height="16"></p>' +
+    '<p>The file is $IMS-CC-FILEBASE$/oer2canvas/image1-a3f91c2e.png.</p>'
+  const chapters = [chapter('Ch 1', [section('a', 'Intro', { html })], [asset('image1-a3f91c2e.png', 'a3f91c2e')])]
+  const entries = buildCartridge(chapters)
+  const assetEntries = entries.filter((entry) => entry.name.startsWith('web_resources/'))
+  expect(assetEntries.map((entry) => entry.name)).toEqual(['web_resources/oer2canvas/image1-a3f91c2e.png'])
+})
+
 test('an asset nothing references is simply not packaged', () => {
   const chapters = [
     chapter('Ch 1', [section('a', 'Intro')], [asset('unused-00000000.png', '00000000')]),
   ]
   const entries = buildCartridge(chapters)
   expect(entries.filter((entry) => entry.name.startsWith('web_resources/'))).toHaveLength(0)
+  expect(collectPackagedAssets(chapters)).toHaveLength(0)
+})
+
+// Not reachable through today's production path — `packagedAssetName`
+// sanitizes to `[a-z0-9-]` plus a known extension before an `ImportedAsset`
+// ever gets a `name` — but this module ships `asset.name` straight into a zip
+// entry path and an XML `href`, so it must not simply trust that an upstream
+// invariant holds. A traversal-shaped name is dropped rather than written.
+test('an asset whose name would not survive as a well-formed reference is dropped, not packaged', () => {
+  const chapters = [
+    chapter('Ch 1', [section('a', 'Intro')], [asset('../evil.png', 'aaaaaaaa')]),
+  ]
   expect(collectPackagedAssets(chapters)).toHaveLength(0)
 })
 
