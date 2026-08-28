@@ -221,6 +221,39 @@ test('an ambiguous match is reported as unknown, never as an overwrite', () => {
   nothing. Saying the first when the second is true sends someone to check a
   connection that is fine.
 */
+// Direct push has no file-upload path at all (`src/canvas/client.ts` writes
+// only `wiki_page.body`), so a page carrying a packaged image reference would
+// import into Canvas broken. Cartridge export is the only route that carries
+// the bytes with it.
+const chapterWithAsset = (title: string, sections: CompiledSection[]): CompiledChapter => ({
+  chapter: {
+    title,
+    assets: [{ id: 'a', mediaType: 'image/png', extension: 'png', bytes: new Uint8Array(), sha256: 'a', name: 'a.png' }],
+    // The bare `{ title }` cast used elsewhere in this file loses its "T
+    // assignable to S" escape hatch once `assets` is added, because
+    // `Chapter['assets']` is optional and readonly while the literal's
+    // inferred type is neither — `unknown` is the honest way to say this test
+    // double intentionally only fills in the two fields `buildPlan` reads.
+  } as unknown as CompiledChapter['chapter'],
+  sections,
+  queue: [],
+})
+
+test('a canvas destination blocks while an import carries packaged assets', () => {
+  const plan = buildPlan([chapterWithAsset('Ch 1', [section('a')])], CANVAS, 0)
+  expect(plan.blockers.some((blocker) => /cartridge/i.test(blocker))).toBe(true)
+})
+
+test('cartridge export is unblocked with packaged assets', () => {
+  const plan = buildPlan([chapterWithAsset('Ch 1', [section('a')])], CARTRIDGE, 0)
+  expect(plan.blockers.some((blocker) => /image/i.test(blocker))).toBe(false)
+})
+
+test('a canvas destination is unaffected when nothing is packaged', () => {
+  const plan = buildPlan([chapter('Ch 1', [section('a')])], CANVAS, 0)
+  expect(plan.blockers.some((blocker) => /image/i.test(blocker))).toBe(false)
+})
+
 test('an unknown status carries why it is unknown', () => {
   const notLoaded = buildPlan([chapter('Chapter 1', [section('a')])], CANVAS, 0)
   expect(notLoaded.groups[0]!.pages[0]!.status).toEqual({ kind: 'unknown', reason: 'not-loaded' })

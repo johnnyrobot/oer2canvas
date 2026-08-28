@@ -149,6 +149,25 @@ export function buildPlan(
   }
 
   /*
+   * Direct push writes `wiki_page.body` and nothing else — see
+   * `src/canvas/client.ts`, which has no file-upload path at all. A page carrying
+   * a packaged reference would therefore import with a broken image. Cartridge
+   * export is the only route that carries the bytes, so the plan says so rather
+   * than letting the push half-succeed. Issue 09 owns the Files-API design that
+   * would lift this.
+   */
+  const packagedAssetCount = chapters.reduce(
+    (total, compiled) => total + (compiled.chapter.assets?.length ?? 0),
+    0,
+  )
+  if (packagedAssetCount > 0 && destination?.kind === 'canvas') {
+    blockers.push(
+      `This import packages ${plural(packagedAssetCount, 'image', 'images')}. ` +
+        'Pushing to a course cannot upload them, so export a cartridge instead.',
+    )
+  }
+
+  /*
    * The gate itself, and it is `isPublishable` rather than `passedChecks`.
    *
    * Its doc comment names this slice in capitals for a reason: `passedChecks` is
