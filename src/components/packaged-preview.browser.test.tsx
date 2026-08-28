@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { StrictMode, useState } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach } from 'vitest'
 import { ChapterView } from './ChapterView'
@@ -19,6 +19,15 @@ import type { ImportedAsset, ImportResult } from '../import/types'
  * — `naturalWidth === 16` — can only be true if the browser actually decoded
  * real image bytes behind the blob url; jsdom has no image decoder and would
  * pass this test for a `blob:` url pointing at garbage.
+ *
+ * Also covers the object-url lifecycle directly: one test wraps `ChapterView`
+ * in `<StrictMode>` (which `src/main.tsx` enables unconditionally) and
+ * asserts the image still decodes despite React's dev-only double-invoked
+ * effects — this is the regression pin for a prior defect where a `StrictMode`
+ * remount revoked a url that was still displayed. Another spies on
+ * `URL.revokeObjectURL` to prove urls are actually released — on an asset-list
+ * change and on real unmount — rather than merely leaving the DOM in a state
+ * that happens to look correct while leaking memory underneath it.
  */
 
 afterEach(() => cleanup())
@@ -142,6 +151,77 @@ describe('ChapterView', () => {
     // No assertion possible on revocation itself (the browser gives no way to
     // ask), but reaching this point without the second image failing to
     // decode is what proves the first chapter's cleanup did not fire early.
+  })
+
+  /**
+   * THE REGRESSION TEST FOR THE CRITICAL FINDING.
+   *
+   * `StrictMode` (enabled unconditionally in `src/main.tsx`) deliberately
+   * runs a newly-mounted effect's cleanup and then its setup a second time,
+   * back to back, in development only, to surface effects that are not
+   * resilient to being started and stopped repeatedly. A version of this
+   * hook that created its blob urls once (in a `useMemo` computed during
+   * render) and only ever revoked them in the effect would treat that
+   * synthetic remount as real: the synthetic cleanup unconditionally revoked
+   * every url the memo made, and the synthetic setup that followed had
+   * nothing left to do (there was no creation step inside the effect to
+   * redo), leaving the already-painted `<img>` pointing at a revoked blob
+   * url for the rest of its life. This test is a straight port of the one
+   * that proved it, by execution: without the fix, `naturalWidth` measures
+   * `0` here, not `16`.
+   */
+  test('an image with a packaged reference decodes even under React StrictMode\'s double-invoked effects', async () => {
+    const chapter: Chapter = { ...baseChapter, assets: [PACKAGED_ASSET] }
+    const compiled = compiledWith(chapter, `<img alt="A diagram" src="${PACKAGED_REFERENCE}">`)
+
+    const { container } = render(
+      <StrictMode>
+        <ChapterView compiled={compiled} />
+      </StrictMode>,
+    )
+    const image = container.querySelector('img')!
+    await waitForDecode(image)
+    expect(image.naturalWidth).toBe(16)
+    expect(image.getAttribute('src')).toMatch(/^blob:/)
+  })
+
+  test('urls are revoked when the asset list changes, and again on real unmount — never while still displayed', async () => {
+    // Spies rather than the indirect "does the OTHER image still decode"
+    // proof above: this is the direct regression pin for "no leak" as its
+    // own property, independent of whichever lifecycle mechanism happens to
+    // satisfy it.
+    const revoke = vi.spyOn(URL, 'revokeObjectURL')
+    const assetB: ImportedAsset = { ...PACKAGED_ASSET, id: 'asset-2', name: 'other-cafef00d.png', bytes: RASTER_FIXTURES.jpeg.bytes, mediaType: RASTER_FIXTURES.jpeg.mediaType, extension: 'jpg' }
+    const referenceB = packagedReference(assetB.name)
+    const chapterA: Chapter = { ...baseChapter, assets: [PACKAGED_ASSET] }
+    const chapterB: Chapter = { ...baseChapter, title: 'Chapter B', assets: [assetB] }
+
+    const { container, rerender, unmount } = render(
+      <ChapterView compiled={compiledWith(chapterA, `<img alt="A" src="${PACKAGED_REFERENCE}">`)} />,
+    )
+    const firstImage = container.querySelector('img')!
+    await waitForDecode(firstImage)
+    const firstUrl = firstImage.getAttribute('src')!
+    // Still on screen, decoded: must not have been revoked yet.
+    expect(revoke).not.toHaveBeenCalledWith(firstUrl)
+
+    rerender(<ChapterView compiled={compiledWith(chapterB, `<img alt="B" src="${referenceB}">`)} />)
+    // The revoke happens once the effect for the new asset list has run,
+    // which is after the render that already swapped the DOM to chapter B's
+    // (unresolved, then resolved) html — so `firstUrl` is never in the
+    // document any more by the time this fires.
+    await waitFor(() => expect(revoke).toHaveBeenCalledWith(firstUrl))
+
+    const secondImage = container.querySelector('img')!
+    await waitForDecode(secondImage)
+    const secondUrl = secondImage.getAttribute('src')!
+    expect(secondUrl).not.toBe(firstUrl)
+    expect(revoke).not.toHaveBeenCalledWith(secondUrl)
+
+    unmount()
+    expect(revoke).toHaveBeenCalledWith(secondUrl)
+
+    revoke.mockRestore()
   })
 })
 
