@@ -328,3 +328,32 @@ test('h1 is remapped to h2 and is not semantic loss', async () => {
   expect(r.html).toContain('<h2>')
   expect(r.removedSemantic).not.toContain('h1')
 })
+
+// ── Packaged cartridge references on img src ─────────────────────────────────
+
+test('keeps a packaged cartridge reference on img src', async () => {
+  const { html } = await validateAllowlist(
+    '<p><img src="$IMS-CC-FILEBASE$/oer2canvas/image1-a3f91c2e.png" alt="A diagram" width="16" height="16"></p>',
+  )
+  expect(html).toContain('$IMS-CC-FILEBASE$/oer2canvas/image1-a3f91c2e.png')
+  expect(html).toContain('alt="A diagram"')
+})
+
+test.each([
+  ['traversal', '$IMS-CC-FILEBASE$/oer2canvas/../../etc/passwd'],
+  ['query', '$IMS-CC-FILEBASE$/oer2canvas/a.png?x=1'],
+  ['foreign prefix', '$IMS-CC-FILEBASE$/elsewhere/a.png'],
+  ['unvalidated type', '$IMS-CC-FILEBASE$/oer2canvas/a.svg'],
+  ['bare token', '$IMS-CC-FILEBASE$'],
+])('drops a %s src that only resembles a packaged reference', async (_label, src) => {
+  const { html } = await validateAllowlist(`<p><img src="${src}" alt="x"></p>`)
+  expect(html).not.toContain('IMS-CC-FILEBASE')
+})
+
+test('the packaged form does not leak to other url-bearing elements', async () => {
+  const { html } = await validateAllowlist(
+    '<p><iframe src="$IMS-CC-FILEBASE$/oer2canvas/a.png"></iframe>' +
+      '<video src="$IMS-CC-FILEBASE$/oer2canvas/a.png"></video></p>',
+  )
+  expect(html).not.toContain('IMS-CC-FILEBASE')
+})

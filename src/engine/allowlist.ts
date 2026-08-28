@@ -16,6 +16,7 @@
  * semantic loss and is not reported. See README for the documented assumptions.
  */
 import type { AllowlistResult, AllowlistValidator } from '../contracts/index';
+import { isPackagedReference } from '../import/assets';
 
 // --- Appendix B data ---------------------------------------------------------
 
@@ -84,6 +85,15 @@ const PER_ELEMENT_ATTRS: Readonly<Record<string, ReadonlySet<string>>> = {
 
 const A_HREF_SCHEMES = new Set(['ftp', 'http', 'https', 'mailto', 'skype']);
 const HTTP_SCHEMES = new Set(['http', 'https']);
+
+/**
+ * The prefix of the packaged-cartridge reference token (see `src/import/assets.ts`).
+ * Duplicated here (rather than imported) because it is only needed as a cheap
+ * fence -- "does this value merely resemble our reserved token" -- ahead of the
+ * real, anchored check in `isPackagedReference`; the token's exact grammar
+ * still lives in one place.
+ */
+const FILEBASE_TOKEN_PREFIX = '$IMS-CC-FILEBASE$';
 
 /** B.4 URL-bearing attributes per element -> the schemes permitted on them. */
 const URL_ATTRS: Readonly<Record<string, Readonly<Record<string, ReadonlySet<string>>>>> = {
@@ -504,7 +514,27 @@ function filterAttrs(tag: string, attrs: Attr[]): Attr[] {
     }
 
     const schemeSet = urlAttrs?.[name];
-    if (schemeSet && value !== null && !isSchemeAllowed(value, schemeSet)) continue;
+    if (schemeSet && value !== null) {
+      if (value.startsWith(FILEBASE_TOKEN_PREFIX)) {
+        /*
+         * A packaged cartridge asset has no scheme, so a well-formed reference
+         * would otherwise fall into `isSchemeAllowed`'s "no scheme -> relative,
+         * allow" bucket -- and so would anything merely dressed up to look
+         * like one (traversal, a query string, a foreign directory). That
+         * bucket exists for genuine relative paths and must stay permissive
+         * for those; a value carrying our reserved token is never one of
+         * those, so it is validated in full here instead, and only on `img`'s
+         * `src`. Admitting it by widening the scheme check would be wrong
+         * too: `HTTP_SCHEMES` is shared with iframe, embed, object, audio and
+         * video, so widening it would widen all of them, not just img.
+         * `isPackagedReference` is anchored to our own prefix and rejects
+         * traversal, queries and encoded separators.
+         */
+        if (!(tag === 'img' && name === 'src' && isPackagedReference(value))) continue;
+      } else if (!isSchemeAllowed(value, schemeSet)) {
+        continue;
+      }
+    }
 
     out.push({ name, value });
     seen.add(name);
