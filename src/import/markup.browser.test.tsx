@@ -25,6 +25,8 @@ const HOSTILE_MARKDOWN = [
   '',
   '- Preserved Markdown list item',
   '',
+  'Equation: \\(E=mc^2\\)',
+  '',
   `[Unsafe Markdown link](javascript:parent.${EXECUTION_FLAG}+=1)`,
   '',
   HOSTILE_HTML,
@@ -83,7 +85,7 @@ test.each([
     {
       metadata: {
         title: 'Hostile import',
-        sourceUrl: new URL('/fixtures/hostile-source.html', location.origin).href,
+        sourceUrl: 'https://example.edu/fixtures/hostile-source.html',
         rightsAuthority: 'own',
         rightsAcknowledged: true,
       },
@@ -93,6 +95,9 @@ test.each([
   const compiled = await compileAndAuditChapter(toChapter(imported.work), { profile: DOCUMENT })
   const audited = compiled.sections[0]!.gate!.html
   expect(compiled.sections[0]!.gate!.conformance.blockers).toEqual([])
+  if (format === 'markdown') {
+    expect(new DOMParser().parseFromString(audited, 'text/html').querySelector('math')).not.toBeNull()
+  }
   expect(executionGlobal[EXECUTION_FLAG]).toBe(0)
 
   const { container } = render(<ChapterView compiled={compiled} />)

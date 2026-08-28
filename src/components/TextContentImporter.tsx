@@ -69,6 +69,8 @@ export function TextContentImporter({ onConfirm }: { onConfirm: (result: ImportR
           {capability?.label ?? result.work.format.toUpperCase()} ·{' '}
           {result.work.format === 'markdown' ? 'Marked GFM browser parser' : 'Native browser parser'} ·{' '}
           One Canvas page · {result.report.counts.headings} headings · {result.report.counts.tables} tables ·{' '}
+          {result.report.counts.equations} equations · {result.report.counts.images} images ·{' '}
+          {result.report.counts.notes} notes · {result.report.counts.unavailableAssets} unavailable assets ·{' '}
           {result.work.assets.length} packaged assets ·{' '}
           {result.report.originalBytes?.toLocaleString()} bytes · processed in this browser
         </p>

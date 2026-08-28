@@ -78,6 +78,26 @@ test('a user can preview Markdown semantics and review every sanitization findin
   })
 })
 
+test('the preview reports every required semantic and unavailable-asset count', async () => {
+  render(<TextContentImporter onConfirm={() => {}} />)
+  fireEvent.click(screen.getByRole('radio', { name: 'HTML' }))
+  fireEvent.change(screen.getByLabelText('Document title'), { target: { value: 'Counted lesson' } })
+  fireEvent.change(screen.getByLabelText('Content to import'), {
+    target: {
+      value: '<h2>Counts</h2><table><tr><td>Cell</td></tr></table>' +
+        '<p>Equation: \\(x=1\\)</p><aside role="note">Remember this</aside>' +
+        '<img src="missing.png" alt="Missing diagram">',
+    },
+  })
+  fireEvent.click(screen.getByRole('radio', { name: 'I created or own this content' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: /I am responsible for rights/i }))
+  fireEvent.click(screen.getByRole('button', { name: 'Create one-page preview' }))
+
+  expect(await screen.findByRole('heading', { name: 'Preview: Counted lesson' })).toBeVisible()
+  expect(screen.getByText(/1 headings · 1 tables · 1 equations · 1 images · 1 notes/i)).toBeVisible()
+  expect(screen.getByText(/1 unavailable assets · 0 packaged assets/i)).toBeVisible()
+})
+
 test('a user can select a UTF-8 HTML file without uploading it', async () => {
   render(<TextContentImporter onConfirm={() => {}} />)
   fireEvent.click(screen.getByRole('radio', { name: 'Upload a text, Markdown, or HTML file' }))

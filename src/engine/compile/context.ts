@@ -152,6 +152,7 @@ export const DOCUMENT: PublisherProfile = {
   mediaWrapper: 'figure',
   xrefHref: /(?!)/,
   hashFromUrl: () => undefined,
+  mathFromText: true,
   chrome: ['script', 'style'],
 }
 

@@ -17,6 +17,19 @@ export function validateImportMetadata(metadata: ImportMetadata): void {
   if (metadata.licenseUrl?.trim() && !metadata.licenseName?.trim()) {
     throw new Error('Enter a license name when you provide a license URL.')
   }
+  parsePublicSourceUrl(metadata.sourceUrl)
+}
+
+export function parsePublicSourceUrl(value: string | undefined): URL | undefined {
+  const source = value?.trim()
+  if (!source) return undefined
+  try {
+    const url = new URL(source)
+    if (url.protocol !== 'https:') throw new Error('not HTTPS')
+    return url
+  } catch {
+    throw new Error('Enter a valid HTTPS public source URL.')
+  }
 }
 
 export async function sha256Hex(bytes: ArrayBuffer | Uint8Array<ArrayBuffer>): Promise<string> {

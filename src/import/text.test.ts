@@ -214,6 +214,7 @@ test('a relative local image is a visible unavailable-asset blocker unless a pub
     code: 'import-relative-image-unavailable',
     severity: 'blocker',
   }))
+  expect(local.work.sections[0]!.html).toBe('<p>Diagram:</p>A cell')
   expect(local.report.counts).toMatchObject({ images: 1, unavailableAssets: 1 })
 
   const withBase = await importText(
@@ -223,6 +224,81 @@ test('a relative local image is a visible unavailable-asset blocker unless a pub
   expect(withBase.report.findings.map((finding) => finding.code))
     .not.toContain('import-relative-image-unavailable')
   expect(withBase.report.counts).toMatchObject({ images: 1, unavailableAssets: 0 })
+  expect(withBase.work.sections[0]!.html)
+    .toContain('src="https://example.edu/lessons/images/cell.png"')
+})
+
+test('relative links become non-link text without a public base and resolve before preview with one', async () => {
+  const source = '<p>Read <a href="other.html">the next lesson</a> or <a href="#terms">jump to terms</a>.</p>'
+  const metadata = {
+    title: 'Linked lesson',
+    rightsAuthority: 'own' as const,
+    rightsAcknowledged: true,
+  }
+
+  const local = await importText({ kind: 'paste', format: 'html', text: source }, { metadata })
+  expect(local.work.sections[0]!.html).toBe(
+    '<p>Read the next lesson or <a href="#terms">jump to terms</a>.</p>',
+  )
+  expect(local.report.findings).toContainEqual(expect.objectContaining({
+    code: 'import-relative-link-unavailable',
+    severity: 'warning',
+  }))
+
+  const withBase = await importText(
+    { kind: 'paste', format: 'html', text: source },
+    { metadata: { ...metadata, sourceUrl: 'https://example.edu/lessons/one.html' } },
+  )
+  expect(withBase.work.sections[0]!.html).toContain(
+    '<a href="https://example.edu/lessons/other.html">the next lesson</a>',
+  )
+  expect(withBase.work.sections[0]!.html).toContain('<a href="#terms">jump to terms</a>')
+  expect(withBase.report.findings.map((finding) => finding.code))
+    .not.toContain('import-relative-link-unavailable')
+})
+
+test.each([
+  {
+    label: 'pasted HTML',
+    input: (source: string) => ({ kind: 'paste' as const, format: 'html' as const, text: source }),
+  },
+  {
+    label: 'a Markdown file',
+    input: (source: string) => ({
+      kind: 'file' as const,
+      file: new File([source], 'robustness.md', { type: 'text/markdown' }),
+    }),
+  },
+])('$label preserves the robustness corpus deterministically', async ({ input }) => {
+  const deep = `${'<div>'.repeat(128)}Deeply nested text${'</div>'.repeat(128)}`
+  const unbroken = 'x'.repeat(16_384)
+  const source = [
+    '<p>Broken <strong>markup',
+    deep,
+    `<p>${unbroken}</p>`,
+    '<p>Café ☕ — Ελληνικά</p>',
+    '<p dir="rtl" lang="ar">مرحبا بالعالم</p>',
+    '<p lang="zh">细胞结构</p>',
+    '<p>Equation: \\(x^2+y^2=z^2\\)</p>',
+  ].join('\n\n')
+
+  const result = await importText(input(source), {
+    metadata: {
+      title: 'Robustness corpus',
+      rightsAuthority: 'own',
+      rightsAcknowledged: true,
+    },
+  })
+  const document = new DOMParser().parseFromString(result.work.sections[0]!.html, 'text/html')
+
+  expect(document.body.textContent).toContain('Broken markup')
+  expect(document.body.textContent).toContain('Deeply nested text')
+  expect(document.body.textContent).toContain(unbroken)
+  expect(document.body.textContent).toContain('Café ☕ — Ελληνικά')
+  expect(document.querySelector('[dir="rtl"]')?.textContent).toBe('مرحبا بالعالم')
+  expect(document.body.textContent).toContain('细胞结构')
+  expect(document.body.textContent).toContain('\\(x^2+y^2=z^2\\)')
+  expect(result.report.counts.equations).toBe(1)
 })
 
 test('empty pasted text is rejected with a recoverable explanation', async () => {
@@ -274,6 +350,22 @@ test('a license URL cannot be silently accepted without a license name', async (
       },
     },
   )).rejects.toThrow('Enter a license name when you provide a license URL.')
+})
+
+test('a public source URL must be a valid HTTPS base', async () => {
+  for (const sourceUrl of ['lessons/one.html', 'http://example.edu/lessons/one.html']) {
+    await expect(importText(
+      { kind: 'paste', format: 'html', text: '<p>Useful text</p>' },
+      {
+        metadata: {
+          title: 'Linked lesson',
+          sourceUrl,
+          rightsAuthority: 'own',
+          rightsAcknowledged: true,
+        },
+      },
+    )).rejects.toThrow('Enter a valid HTTPS public source URL.')
+  }
 })
 
 test('a UTF-8 text file is imported by name and invalid encoding is explained', async () => {

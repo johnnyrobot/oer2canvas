@@ -1,6 +1,6 @@
 import type { ImportMetadata, ImportResult } from './types'
 import { capabilityForFilename } from './capability'
-import { documentIds, importProvenance, sha256Hex, validateImportMetadata } from './common'
+import { documentIds, importProvenance, parsePublicSourceUrl, sha256Hex, validateImportMetadata } from './common'
 import { escapeHtml } from './html'
 import { sanitizeImportedHtml, sanitizeImportedMarkdown } from './markup'
 import type { ImportedFormat } from './types'
@@ -79,14 +79,22 @@ export async function importText(
   const provenance = importProvenance(options.metadata, input.kind === 'paste'
     ? { kind: 'paste' }
     : { kind: 'local-file', originalName: input.file.name })
+  const baseUrl = parsePublicSourceUrl(options.metadata.sourceUrl)
   const normalized = format === 'text'
     ? {
         html: semanticHtml(text),
         findings: [],
-        counts: { headings: 0, tables: 0, images: 0, equations: 0, notes: 0, unavailableAssets: 0 },
+        counts: {
+          headings: 0,
+          tables: 0,
+          images: 0,
+          equations: [...text.matchAll(/\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]/g)].length,
+          notes: 0,
+          unavailableAssets: 0,
+        },
       }
     : (format === 'markdown' ? sanitizeImportedMarkdown : sanitizeImportedHtml)(text, {
-        relativeUrlsHaveBase: Boolean(options.metadata.sourceUrl?.trim()),
+        ...(baseUrl ? { publicBaseUrl: baseUrl } : {}),
       })
 
   return {

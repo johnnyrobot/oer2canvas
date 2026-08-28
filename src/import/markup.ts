@@ -1,4 +1,5 @@
 import { Marked } from 'marked'
+import { escapeHtml } from './html'
 import type { ImportFinding } from './types'
 
 const markdown = new Marked({
@@ -6,6 +7,21 @@ const markdown = new Marked({
   breaks: false,
   gfm: true,
   pedantic: false,
+})
+markdown.use({
+  extensions: [{
+    name: 'documentMath',
+    level: 'inline',
+    start(source) {
+      const index = source.search(/\\[([]/)
+      return index >= 0 ? index : undefined
+    },
+    tokenizer(source) {
+      const match = /^(?:\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\])/.exec(source)
+      return match ? { type: 'documentMath', raw: match[0] } : undefined
+    },
+    renderer: (token) => escapeHtml(token.raw),
+  }],
 })
 
 const ALLOWED_TAGS = new Set([
@@ -58,11 +74,13 @@ interface RepairSummary {
   dangerousUrls: Set<string>
   unsupported: Set<string>
   unsafeAttributes: Set<string>
+  unavailableLinks: number
   unavailableImages: number
+  images: number
 }
 
 export interface MarkupSanitizationOptions {
-  relativeUrlsHaveBase?: boolean
+  publicBaseUrl?: URL
 }
 
 export interface SanitizedMarkup {
@@ -105,6 +123,26 @@ function isRelativeUrl(value: string): boolean {
   return !schemeOf(trimmed) && !trimmed.startsWith('//')
 }
 
+type AttributeRestriction = 'active' | 'dangerous'
+
+function attributeRestriction(tag: string, name: string, value: string): AttributeRestriction | undefined {
+  if (name.startsWith('on')) return 'active'
+  if ((name === 'href' || name === 'src' || name === 'cite') && isDangerousUrl(tag, name, value)) {
+    return 'dangerous'
+  }
+  return undefined
+}
+
+function recordAttributeRestriction(
+  summary: RepairSummary,
+  restriction: AttributeRestriction,
+  tag: string,
+  name: string,
+): void {
+  if (restriction === 'active') summary.active.add(`${name} handler`)
+  else summary.dangerousUrls.add(`${name} on <${tag}>`)
+}
+
 function recordDiscardedAttributes(
   element: Element,
   tag: string,
@@ -113,17 +151,24 @@ function recordDiscardedAttributes(
 ): void {
   for (const attribute of element.attributes) {
     const name = attribute.name.toLowerCase()
-    if (name.startsWith('on')) {
-      summary.active.add(`${name} handler`)
-    } else if (
-      (name === 'href' || name === 'src' || name === 'cite')
-      && isDangerousUrl(tag, name, attribute.value)
-    ) {
-      summary.dangerousUrls.add(`${name} on <${tag}>`)
+    const restriction = attributeRestriction(tag, name, attribute.value)
+    if (restriction) {
+      recordAttributeRestriction(summary, restriction, tag, name)
     } else if (discloseAll) {
       summary.unsafeAttributes.add(`${name} on <${tag}>`)
     }
   }
+}
+
+function countDelimitedEquations(root: ParentNode): number {
+  const walker = root.ownerDocument!.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  let count = 0
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node as Text
+    if (text.parentElement?.closest('pre, code')) continue
+    count += [...text.data.matchAll(/\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]/g)].length
+  }
+  return count
 }
 
 function describe(values: ReadonlySet<string>): string {
@@ -146,12 +191,20 @@ function findingsFrom(summary: RepairSummary): ImportFinding[] {
       message: `Removed unsafe URL values from: ${describe(summary.dangerousUrls)}.`,
     })
   }
+  if (summary.unavailableLinks > 0) {
+    const count = summary.unavailableLinks
+    findings.push({
+      code: 'import-relative-link-unavailable',
+      severity: 'warning',
+      message: `Removed ${count} unresolved relative URL ${count === 1 ? 'reference' : 'references'}. Link text and surrounding content were preserved. Add a public source URL to resolve relative links.`,
+    })
+  }
   if (summary.unavailableImages > 0) {
     const count = summary.unavailableImages
     findings.push({
       code: 'import-relative-image-unavailable',
       severity: 'blocker',
-      message: `${count} ${count === 1 ? 'image uses' : 'images use'} a relative or removed source that cannot be packaged yet. Add an absolute HTTPS image URL or remove the image before preparing this page.`,
+      message: `${count} ${count === 1 ? 'image uses' : 'images use'} a relative or removed source that cannot be packaged yet. Alternative text was retained where supplied. Add an absolute HTTPS image URL or remove the image before preparing this page.`,
     })
   }
   if (summary.unsupported.size > 0) {
@@ -186,7 +239,9 @@ export function sanitizeImportedHtml(
     dangerousUrls: new Set(),
     unsupported: new Set(),
     unsafeAttributes: new Set(),
+    unavailableLinks: 0,
     unavailableImages: 0,
+    images: 0,
   }
 
   for (const element of document.querySelectorAll('script, style, link, base, meta[http-equiv]')) {
@@ -229,10 +284,12 @@ export function sanitizeImportedHtml(
       continue
     }
 
+    let unwrapRelativeLink = false
     for (const attribute of [...element.attributes]) {
       const name = attribute.name.toLowerCase()
-      if (name.startsWith('on')) {
-        summary.active.add(`${name} handler`)
+      const restriction = attributeRestriction(tag, name, attribute.value)
+      if (restriction) {
+        recordAttributeRestriction(summary, restriction, tag, name)
         element.removeAttribute(attribute.name)
         continue
       }
@@ -241,23 +298,45 @@ export function sanitizeImportedHtml(
         element.removeAttribute(attribute.name)
         continue
       }
-      if ((name === 'href' || name === 'src' || name === 'cite') && isDangerousUrl(tag, name, attribute.value)) {
-        summary.dangerousUrls.add(`${name} on <${tag}>`)
-        element.removeAttribute(attribute.name)
-        continue
-      }
       if (name === 'target' && !['_blank', '_self'].includes(attribute.value.toLowerCase())) {
         summary.unsafeAttributes.add(`target on <${tag}>`)
         element.removeAttribute(attribute.name)
+        continue
+      }
+      if (
+        (name === 'href' || name === 'src' || name === 'cite')
+        && isRelativeUrl(attribute.value)
+        && !(tag === 'a' && name === 'href' && attribute.value.trim().startsWith('#'))
+      ) {
+        if (options.publicBaseUrl) {
+          try {
+            element.setAttribute(attribute.name, new URL(attribute.value, options.publicBaseUrl).href)
+          } catch {
+            element.removeAttribute(attribute.name)
+            if (tag === 'a' && name === 'href') unwrapRelativeLink = true
+            if (name !== 'src') summary.unavailableLinks += 1
+          }
+        } else if (tag === 'a' && name === 'href') {
+          unwrapRelativeLink = true
+          summary.unavailableLinks += 1
+        } else if (name !== 'src') {
+          element.removeAttribute(attribute.name)
+          summary.unavailableLinks += 1
+        }
       }
     }
 
     if (tag === 'img') {
+      summary.images += 1
       const src = element.getAttribute('src')
-      if (!src || (isRelativeUrl(src) && !options.relativeUrlsHaveBase)) {
+      if (!src || isRelativeUrl(src)) {
         summary.unavailableImages += 1
+        const alt = element.getAttribute('alt')?.trim()
+        element.replaceWith(alt ? document.createTextNode(alt) : document.createTextNode(''))
+        continue
       }
     }
+    if (unwrapRelativeLink) unwrap(element)
   }
 
   const comments: Comment[] = []
@@ -282,8 +361,8 @@ export function sanitizeImportedHtml(
     counts: {
       headings: retained.querySelectorAll('h1, h2, h3, h4, h5, h6').length,
       tables: retained.querySelectorAll('table').length,
-      images: retained.querySelectorAll('img').length,
-      equations: retained.querySelectorAll('math').length,
+      images: summary.images,
+      equations: countDelimitedEquations(retained.body),
       notes: retained.querySelectorAll('aside[role="note"]').length,
       unavailableAssets: summary.unavailableImages,
     },
