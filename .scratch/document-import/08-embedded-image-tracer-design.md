@@ -33,7 +33,11 @@ These are measured facts, not assumptions, from
 | Audit surface | Sees the token unresolved; layout carried by `width`/`height` |
 
 Unblocking all four media types and all four formats deliberately takes scope that issue 09
-(*Harden packaged assets*) might otherwise have carried. Issue 07 measured each media type
+(*Harden packaged assets*) might otherwise have carried. Concretely, this design satisfies four of
+issue 09's seven criteria — content-hash identity, consistent raster support with safe failure, blob
+revocation, and one asset shared across pages without duplicate payloads — and takes its
+direct-push criterion as well, because issue 08 is what creates that hazard. Issue 09 has been
+rescoped to what genuinely remains rather than left to become a stub. Issue 07 measured each media type
 individually and the four formats share one parser and one image code path, so gating a subset would
 mean adding conditionals to hold back paths already proven to work.
 
@@ -144,6 +148,24 @@ Every one converges on today's behaviour — the `embedded-content` blocker plus
 
 Nothing publishes with a silent hole, which is the stance `gate.ts` already takes.
 
+## Direct Canvas push must be blocked
+
+`src/canvas/client.ts:271` pushes `wiki_page.body` and nothing else; the direct-push path has no
+file-upload capability at all. A page containing `$IMS-CC-FILEBASE$/oer2canvas/<name>` pushed that
+way renders a broken image, because the token only means anything during cartridge import.
+
+This hazard is created by issue 08, so issue 08 must close it, even though issue 09 is where the
+criterion was originally written. When any selected chapter carries packaged assets and the
+destination is a Canvas course, the plan is **not ready**, and the screen says why and points at
+cartridge export instead.
+
+The rule lives in `buildPlan` (`src/shell/plan.ts:66`), which already decides readiness and whose
+own comment requires that such rules be resolved by the function the push writes with rather than
+restated at the screen. Cartridge export is unaffected.
+
+Uploading assets through the Canvas Files API is deliberately out of scope: that workflow needs its
+own proven upload design, which is issue 09's business.
+
 ## Files
 
 | File | Change |
@@ -158,6 +180,7 @@ Nothing publishes with a silent hole, which is the stance `gate.ts` already take
 | `src/engine/compile/steps/absolutize.ts` | Skip packaged references |
 | `src/engine/export/cartridge.ts` | Asset entries, `webcontent` resources, integrity check |
 | `src/components/ChapterView.tsx`, `src/components/ImportPlanEditor.tsx` | Blob resolution for preview |
+| `src/shell/plan.ts` | Block direct push when packaged assets are present |
 | `src/import/testing/*` | 16×16 raster fixtures; images in EPUB/ODT/RTF fixtures |
 
 ## Testing
@@ -185,15 +208,21 @@ gain embedded images; they currently have none.
 updated to assert the new split, so the behaviour change is an explicit edit rather than something
 that quietly turns green.
 
-**Live Canvas acceptance.** The issue requires the fixture to import into Canvas and render. The
-anydoc WASM parser only runs in a browser, so this is a Playwright script shaped like
-`scripts/verify-canvas-release.mjs`: load the app, import the fixture, export the cartridge, then
-hand that cartridge to the issue-07 harness's `content_migrations` and render-measurement code and
-assert `naturalWidth > 0` with alt intact. `scripts/canvas-image-probe-run.mjs` already has every
-piece except the app-driving front half.
+**Live Canvas acceptance.** Split into two halves that meet at an artifact, rather than driving the
+UI with Playwright. Driving the UI would re-test the interface to prove something about packaging,
+and would rest the acceptance on brittle selectors.
 
-This is the only part that cannot run without a Canvas instance and credentials; everything else
-runs offline.
+1. A browser test runs the real pipeline in Chromium — anydoc Worker, compile, gate,
+   `buildCartridge` — and emits the cartridge bytes as an artifact. The machinery exists:
+   `structured-formats.browser.test.ts` already runs the real Worker, and `.vitest-attachments/` is
+   already in use.
+2. A Node script imports that artifact into Canvas and measures rendering, reusing
+   `scripts/canvas-image-probe-run.mjs`'s `content_migrations`, page-reading and render-measurement
+   code unchanged.
+
+Only the second half needs a Canvas instance and credentials; the first runs in CI. This also makes
+issue 09's Canvas-acceptance criterion a matter of adding fixtures rather than building
+infrastructure.
 
 ## Non-goals
 
@@ -201,3 +230,4 @@ runs offline.
 - Images from the PDF, Markdown/HTML, and URL import paths. Those are issues 11, 05 and 12.
 - Image optimisation, resizing, or recompression. Bytes are packaged as extracted.
 - Relying on Canvas deduplication. Issue 07 measured that it does not happen.
+- Uploading assets through the Canvas Files API so direct push can carry images. Issue 09.
