@@ -40,7 +40,7 @@ test.each(DOCUMENT_FIXTURE_CASES)('$format is exposed from the tested capability
   expect(html.querySelector('a')?.getAttribute('href')).toBe('https://example.edu/cells')
 })
 
-test('embedded content is handed off as a blocking finding, never dropped', async () => {
+test('a packageable embedded image is handed off as a cartridge reference, not a blocker', async () => {
   const onImported = vi.fn()
   render(<DocumentImporter onImported={onImported} />)
   await chooseFile('diagram.docx', await semanticDocxFixture({ embeddedImage: true }))
@@ -49,10 +49,24 @@ test('embedded content is handed off as a blocking finding, never dropped', asyn
 
   await waitFor(() => expect(onImported).toHaveBeenCalledTimes(1))
   const result = onImported.mock.calls[0]![0] as ImportResult
+  expect(result.report.findings.some((finding) => finding.code === 'embedded-content')).toBe(false)
+  expect(result.work.sections[0]?.html).toContain('$IMS-CC-FILEBASE$/oer2canvas/')
+})
+
+test('embedded content the workflow cannot package is handed off as a blocking finding, never dropped', async () => {
+  const onImported = vi.fn()
+  render(<DocumentImporter onImported={onImported} />)
+  await chooseFile('diagram.docx', await semanticDocxFixture({ unsupportedImage: true }))
+  completeRights()
+  fireEvent.click(screen.getByRole('button', { name: 'Inspect document' }))
+
+  await waitFor(() => expect(onImported).toHaveBeenCalledTimes(1))
+  const result = onImported.mock.calls[0]![0] as ImportResult
   expect(result.report.findings).toContainEqual(expect.objectContaining({
+    code: 'embedded-content',
     severity: 'blocker',
-    message: expect.stringMatching(/text-oriented document workflow cannot publish it yet/i),
   }))
+  expect(result.work.sections[0]?.html).toContain('[Embedded image: Unsupported diagram]')
 })
 
 test.each(['epub', 'odt', 'rtf'] as const)('%s malformed input produces a focused recoverable error', async (format) => {

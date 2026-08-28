@@ -62,8 +62,21 @@ test('content detection rejects a non-DOCX even when its name and MIME type clai
   await expect(importStructuredDocument(renamedRtf, { metadata })).rejects.toThrow(/contents are rtf, not a DOCX/i)
 })
 
-test('embedded DOCX content is visible as a blocking finding instead of disappearing', async () => {
+test('a packageable embedded DOCX image becomes a cartridge reference, not a blocker', async () => {
   const file = new File([await semanticDocxFixture({ embeddedImage: true })], 'diagram.docx', {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  })
+
+  const imported = await importStructuredDocument(file, { metadata })
+
+  expect(imported.report.counts.images).toBe(1)
+  expect(imported.report.findings.some((finding) => finding.code === 'embedded-content')).toBe(false)
+  expect(imported.work.sections[0]?.html).toContain('$IMS-CC-FILEBASE$/oer2canvas/')
+  expect(imported.work.sections[0]?.html).not.toContain('[Embedded image')
+})
+
+test('an embedded DOCX image the workflow cannot package stays a visible blocking finding', async () => {
+  const file = new File([await semanticDocxFixture({ unsupportedImage: true })], 'diagram.docx', {
     type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   })
 
@@ -74,9 +87,8 @@ test('embedded DOCX content is visible as a blocking finding instead of disappea
     code: 'embedded-content',
     severity: 'blocker',
     sectionId: imported.work.sections[0]?.id,
-    message: expect.stringMatching(/text-oriented document workflow cannot publish/i),
   }))
-  expect(imported.work.sections[0]?.html).toContain('[Embedded image: Cell diagram]')
+  expect(imported.work.sections[0]?.html).toContain('[Embedded image: Unsupported diagram]')
   expect(imported.work.assets).toEqual([])
 })
 

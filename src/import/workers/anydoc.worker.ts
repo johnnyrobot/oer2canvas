@@ -14,6 +14,7 @@ import type {
   ParserProbeResponse,
 } from '../parsers/probe'
 import { normalizeAnyDocDocument } from '../parsers/anydoc-html'
+import { prepareAssets } from '../assets'
 
 const ANYDOC_VERSION = '0.2.4'
 const workerScope = self as DedicatedWorkerGlobalScope
@@ -129,7 +130,11 @@ workerScope.addEventListener('message', (event: MessageEvent<ParserProbeRequest>
           assetBytes,
           largestAssetBytes,
           counts: { ...counts, assets: document.assets.length },
-          normalized: normalizeAnyDocDocument(document, detectedFormat ?? 'document'),
+          normalized: normalizeAnyDocDocument(
+            document,
+            detectedFormat ?? 'document',
+            await prepareAssets(document.assets),
+          ),
         },
       })
     } catch (error) {

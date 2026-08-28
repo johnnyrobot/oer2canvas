@@ -178,7 +178,7 @@ test('page previews render the sanitized page html without executing it', async 
   expect(container.querySelector('script')).toBeNull()
 })
 
-test('a parse blocker disables preparation and stays visible', () => {
+test('a blocking parse finding disables preparation and stays visible', () => {
   render(<Harness initial={createImportDraft(imported(STRUCTURED, [
     { code: 'embedded-content', severity: 'blocker', message: 'This document contains images.' },
   ]))} />)

@@ -1,5 +1,6 @@
 import type { Block, Document, Inline } from '@firecrawl/anydoc-wasm'
-import type { ParserProbeFinding, ParserProbeNormalizedContent } from './probe'
+import type { AssetRejection, PreparedAsset } from '../assets'
+import type { PackagedAssetRecord, ParserProbeFinding, ParserProbeNormalizedContent } from './probe'
 import { escapeHtml } from '../html'
 
 export class UnsupportedAnyDocVersionError extends Error {
@@ -36,6 +37,11 @@ function anchorSlug(value: string): string {
 export function normalizeAnyDocDocument(
   document: Document,
   sourceFormat = 'document',
+  // Omitted (the default empty map) means "treat every asset as unpackaged",
+  // which is exactly today's behaviour for callers that have not been
+  // updated to prepare assets first — so this parameter can be added without
+  // breaking any existing caller's meaning.
+  prepared: ReadonlyMap<number, PreparedAsset | { rejected: AssetRejection }> = new Map(),
 ): ParserProbeNormalizedContent {
   const sourceLabel = sourceFormat === 'document' ? 'document' : sourceFormat.toUpperCase()
   const findings: ParserProbeFinding[] = []
@@ -44,6 +50,25 @@ export function normalizeAnyDocDocument(
   const emittedIds = new Set<string>()
   let equations = 0
   let unavailableAssets = 0
+  // Keyed by content hash so two inline images pointing at byte-identical
+  // assets (already deduped by `prepareAssets`) collapse to one archive
+  // entry here too, rather than the parser re-fragmenting what asset
+  // preparation just unified.
+  const packaged = new Map<string, PackagedAssetRecord>()
+
+  // Exactly the four media types `prepareAssets` can ever produce a
+  // `PreparedAsset` for. There is no `undecodable` entry: the byte sniffer
+  // cannot tell "not a raster" from "a truncated header of a real format",
+  // so that variant is unreachable and was removed rather than kept as dead
+  // weight in this table (see assets.ts `AssetRejection`). The
+  // `unsupported-type` wording below therefore has to honestly cover both
+  // an unrecognized format and a corrupt file of a real one.
+  const BLOCKED_REASON: Record<AssetRejection, string> = {
+    unavailable: 'an image whose bytes are missing or unreadable',
+    'unsupported-type': 'an image in a format this workflow cannot package, or whose file is corrupt',
+    'too-large': 'an image larger than the packaging budget',
+    'too-many': 'more images than the packaging budget allows',
+  }
 
   const finding = (code: string, severity: 'warning' | 'blocker', message: string) => {
     if (!findings.some((entry) => entry.code === code)) findings.push({ code, severity, message })
@@ -122,13 +147,58 @@ export function normalizeAnyDocDocument(
       return attribute ? `<span${attribute}></span>` : ''
     }
     if (inline.kind === 'image') {
+      const alt = inline.alt ?? ''
+      // External images stay remote http(s)/mailto URLs: they are not embedded
+      // bytes at all, so there is nothing here for `prepareAssets` to have seen
+      // and nothing to package into the cartridge.
+      if (inline.source?.kind === 'external' && inline.source.url) {
+        const href = safeHref(inline.source.url)
+        if (href) return `<img src="${escapeHtml(href)}" alt="${escapeHtml(alt)}">`
+      }
+
+      const entry = inline.source?.kind === 'asset' && inline.source.assetId !== undefined
+        ? prepared.get(inline.source.assetId)
+        : undefined
+
+      if (entry && !('rejected' in entry)) {
+        // Dedupe by content hash: identical bytes become one archive entry,
+        // which issue 07 measured Canvas resolving to a single shared File.
+        // `name` is carried through as-is from `PreparedAsset` — it was
+        // already decided once, by content hash with first-seen origin
+        // winning, and recomputing it here from this call's `originPart`
+        // would disagree with a shared-hash asset seen under a different
+        // origin first.
+        if (!packaged.has(entry.sha256)) {
+          packaged.set(entry.sha256, {
+            sha256: entry.sha256,
+            name: entry.name,
+            archivePath: entry.archivePath,
+            mediaType: entry.mediaType,
+            extension: entry.extension,
+            bytes: entry.bytes,
+            originPart: entry.originPart,
+          })
+        }
+        return (
+          `<img src="${escapeHtml(entry.reference)}" alt="${escapeHtml(alt)}"` +
+          ` width="${entry.width}" height="${entry.height}">`
+        )
+      }
+
+      // Anything that reaches here cannot be packaged: the bytes were never
+      // available, or `prepareAssets` rejected them. Either way this image
+      // keeps blocking publication AND keeps a visible placeholder — nothing
+      // may disappear silently.
       if (inline.source?.kind === 'unavailable') unavailableAssets += 1
+      const reason = entry && 'rejected' in entry
+        ? BLOCKED_REASON[entry.rejected]
+        : BLOCKED_REASON.unavailable
       finding(
         'embedded-content',
         'blocker',
-        `This ${sourceLabel} contains images or embedded content. The text-oriented document workflow cannot publish it yet.`,
+        `This ${sourceLabel} contains ${reason}. Remove or replace it before publishing.`,
       )
-      return `<span>[Embedded image${inline.alt ? `: ${escapeHtml(inline.alt)}` : ''}]</span>`
+      return `<span>[Embedded image${alt ? `: ${escapeHtml(alt)}` : ''}]</span>`
     }
     if (inline.kind === 'math') {
       equations += 1
@@ -213,22 +283,28 @@ export function normalizeAnyDocDocument(
     return unsupportedKind(block)
   }).join('')
 
-  if (document.assets.length > 0) {
-    finding(
-      'embedded-content',
-      'blocker',
-      `This ${sourceLabel} contains images or embedded content. The text-oriented document workflow cannot publish it yet.`,
-    )
-  }
+  // Rendering populates `packaged`, `findings`, and the `equations`/
+  // `unavailableAssets` counters as a side effect of walking the document, so
+  // it must run to completion before the result object below reads any of
+  // them. The previous version of this function returned an object literal
+  // that called `renderBlocks(document.blocks)` inline as the `html` property
+  // while other properties in that SAME literal (`findings`, counters) read
+  // state that render mutates — correct only because of JS's left-to-right
+  // object-literal evaluation order. Hoisting the call into its own `const`
+  // makes the dependency explicit instead of leaving it as a property-order
+  // trap for the next person editing this literal.
+  const html = renderBlocks(document.blocks)
+
   if (document.notes.length > 0) {
     finding('unsupported-note', 'blocker', `This ${sourceLabel} contains notes that the text-oriented workflow cannot publish it yet.`)
   }
 
   return {
-    html: renderBlocks(document.blocks),
+    html,
     findings,
     equations,
     notes: document.notes.length,
     unavailableAssets,
+    packagedAssets: [...packaged.values()],
   }
 }

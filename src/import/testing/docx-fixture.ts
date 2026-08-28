@@ -13,17 +13,29 @@ const utf8 = (value: string) => new TextEncoder().encode(value)
 // 16x16 PNG the raster fixtures share — not a synthetic pixel of its own.
 const EMBEDDED_IMAGE_PNG = RASTER_FIXTURES.png.bytes
 
+// SVG bytes are real, well-formed XML — nothing here is truncated or corrupt
+// — but `sniffRaster` only recognizes PNG/JPEG/GIF/WebP signatures, so this
+// is refused as `unsupported-type` regardless of what the OOXML part's own
+// declared content type claims. That is exactly the "cannot package" half of
+// the embedded-image split this fixture needs to pin.
+const UNSUPPORTED_IMAGE_SVG = utf8('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"/>')
+
 export async function semanticDocxFixture(
   {
     embeddedImage = false,
+    unsupportedImage = false,
     unresolvedLink = false,
-  }: { embeddedImage?: boolean; unresolvedLink?: boolean } = {},
+  }: { embeddedImage?: boolean; unsupportedImage?: boolean; unresolvedLink?: boolean } = {},
 ): Promise<Uint8Array<ArrayBuffer>> {
-  const imageRelationship = embeddedImage
-    ? '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>'
+  const hasImage = embeddedImage || unsupportedImage
+  const imageTarget = unsupportedImage ? 'media/image1.svg' : 'media/image1.png'
+  const imageAlt = unsupportedImage ? 'Unsupported diagram' : 'Cell diagram'
+  const imageBytes = unsupportedImage ? UNSUPPORTED_IMAGE_SVG : EMBEDDED_IMAGE_PNG
+  const imageRelationship = hasImage
+    ? `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="${imageTarget}"/>`
     : ''
-  const imageParagraph = embeddedImage
-    ? `<w:p><w:r><w:drawing><wp:inline><wp:extent cx="9525" cy="9525"/><wp:docPr id="1" name="Diagram" descr="Cell diagram"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr/><pic:blipFill><a:blip r:embed="rId2"/></pic:blipFill><pic:spPr/></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`
+  const imageParagraph = hasImage
+    ? `<w:p><w:r><w:drawing><wp:inline><wp:extent cx="9525" cy="9525"/><wp:docPr id="1" name="Diagram" descr="${imageAlt}"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr/><pic:blipFill><a:blip r:embed="rId2"/></pic:blipFill><pic:spPr/></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`
     : ''
   const unresolvedLinkParagraph = unresolvedLink
     ? '<w:p><w:hyperlink w:anchor="missing-section"><w:r><w:t>Missing section</w:t></w:r></w:hyperlink></w:p>'
@@ -37,6 +49,7 @@ export async function semanticDocxFixture(
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Default Extension="png" ContentType="image/png"/>
+  <Default Extension="svg" ContentType="image/svg+xml"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
   <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
   <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
@@ -91,7 +104,7 @@ export async function semanticDocxFixture(
   <w:sectPr/>
 </w:body></w:document>`),
     },
-    ...(embeddedImage ? [{ name: 'word/media/image1.png', data: EMBEDDED_IMAGE_PNG }] : []),
+    ...(hasImage ? [{ name: `word/${imageTarget}`, data: imageBytes }] : []),
   ]
   return new Uint8Array(await writeZip(entries))
 }

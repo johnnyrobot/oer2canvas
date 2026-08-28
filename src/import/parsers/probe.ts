@@ -27,12 +27,31 @@ export interface ParserProbeFinding {
   message: string
 }
 
+/**
+ * One raster the parser has already verified (a real PNG/JPEG/GIF/WebP, sized
+ * and hashed) and that is destined for the cartridge's `web_resources/`
+ * directory. `name` is carried through verbatim from `prepareAssets` — it is
+ * assigned once, deduped by content hash with the first-seen origin winning,
+ * and must never be recomputed from `originPart` downstream (an asset sharing
+ * a hash with an earlier one keeps that earlier name but its own origin).
+ */
+export interface PackagedAssetRecord {
+  sha256: string
+  name: string
+  archivePath: string
+  mediaType: string
+  extension: string
+  bytes: Uint8Array
+  originPart: string
+}
+
 export interface ParserProbeNormalizedContent {
   html: string
   findings: ParserProbeFinding[]
   equations: number
   notes: number
   unavailableAssets: number
+  packagedAssets: PackagedAssetRecord[]
 }
 
 export interface ParserProbeResult {
