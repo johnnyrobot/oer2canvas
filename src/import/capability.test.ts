@@ -1,6 +1,7 @@
 import {
   DOCUMENT_FORMAT_CAPABILITIES,
   PLAIN_TEXT_FILE_ACCEPT,
+  TEXT_CONTENT_FILE_ACCEPT,
   STRUCTURED_DOCUMENT_FILE_ACCEPT,
   STRUCTURED_DOCUMENT_FORMAT_SUMMARY,
   capabilityForFilename,
@@ -8,8 +9,11 @@ import {
 } from './capability'
 
 test('one capability table distinguishes shipped formats from parser probes', () => {
-  expect(releaseEnabledFormats()).toEqual(['text', 'docx', 'odt', 'rtf', 'epub'])
+  expect(releaseEnabledFormats()).toEqual(['text', 'markdown', 'html', 'docx', 'odt', 'rtf', 'epub'])
   expect(PLAIN_TEXT_FILE_ACCEPT).toBe('.txt,text/plain')
+  expect(TEXT_CONTENT_FILE_ACCEPT).toBe(
+    '.txt,text/plain,.md,.markdown,text/markdown,text/x-markdown,.html,.htm,text/html,application/xhtml+xml',
+  )
   expect(STRUCTURED_DOCUMENT_FILE_ACCEPT).toContain('.docx')
   expect(STRUCTURED_DOCUMENT_FILE_ACCEPT).toContain('.odt')
   expect(STRUCTURED_DOCUMENT_FILE_ACCEPT).toContain('.rtf')
@@ -18,6 +22,16 @@ test('one capability table distinguishes shipped formats from parser probes', ()
   expect(capabilityForFilename('chapter.DOCX')).toMatchObject({
     format: 'docx',
     parser: 'anydoc',
+    status: 'enabled',
+  })
+  expect(capabilityForFilename('study.MARKDOWN')).toMatchObject({
+    format: 'markdown',
+    parser: 'native',
+    status: 'enabled',
+  })
+  expect(capabilityForFilename('lesson.HTM')).toMatchObject({
+    format: 'html',
+    parser: 'native',
     status: 'enabled',
   })
   expect(capabilityForFilename('reading.pdf')).toMatchObject({

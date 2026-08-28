@@ -8,10 +8,12 @@ sometimes through the stateless relay, and builds the Common Cartridge locally. 
 does not expose a Canvas address, access-token, course-selection, or direct-push control. Its
 relay rejects Canvas API targets, bearer credentials to publishers, and publisher write methods.
 
-Pasted plain text and selected `.txt`, `.docx`, `.epub`, `.odt`, and `.rtf` files are read,
-previewed, remediated, audited, and packaged inside the browser. Structured documents are parsed by
-AnyDoc WebAssembly in a dedicated browser Worker. Their contents, metadata, source hash, parser
-output, and derived pages are not sent through the application relay or written to browser storage.
+Pasted text, Markdown, and HTML and selected `.txt`, `.md`, `.markdown`, `.html`, `.htm`, `.docx`,
+`.epub`, `.odt`, and `.rtf` files are read, previewed, remediated, audited, and packaged inside the
+browser. Markdown and HTML are normalized locally in the main browser context; structured documents
+are parsed by AnyDoc WebAssembly in a dedicated browser Worker. Their contents, metadata, source
+hash, parser output, and derived pages are not sent through the application relay or written to
+browser storage.
 
 The repository's remaining probe-only PDF parser likewise transfers selected file bytes directly
 to a dedicated browser Worker. AnyDoc and PDF Inspector execute locally as WebAssembly;

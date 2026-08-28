@@ -57,6 +57,122 @@ test('pasted text becomes one deterministic semantic page with provenance', asyn
   expect(first.report.sourceSha256).toMatch(/^[0-9a-f]{64}$/)
 })
 
+test('pasted Markdown preserves GFM semantics and reports hostile raw HTML repairs', async () => {
+  const result = await importText(
+    {
+      kind: 'paste',
+      format: 'markdown',
+      text: [
+        '# Cell study guide',
+        '',
+        '- Membrane',
+        '- Nucleus',
+        '',
+        '| Organelle | Role |',
+        '| --- | --- |',
+        '| Nucleus | Stores DNA |',
+        '',
+        '[Safe course](https://example.edu/cells)',
+        '',
+        '```ts',
+        'const cell = "safe"',
+        '```',
+        '',
+        '<script>globalThis.markdownExecuted = true</script>',
+        '<a href="javascript:globalThis.markdownExecuted=true" onclick="globalThis.markdownExecuted=true">Unsafe course</a>',
+      ].join('\n'),
+    },
+    {
+      metadata: {
+        title: 'Biology notes',
+        rightsAuthority: 'own',
+        rightsAcknowledged: true,
+      },
+    },
+  )
+
+  const document = new DOMParser().parseFromString(result.work.sections[0]!.html, 'text/html')
+  expect(result.work.format).toBe('markdown')
+  expect(document.querySelector('h1')?.textContent).toBe('Cell study guide')
+  expect([...document.querySelectorAll('li')].map((item) => item.textContent)).toEqual([
+    'Membrane',
+    'Nucleus',
+  ])
+  expect(document.querySelector('table')?.textContent).toContain('Stores DNA')
+  expect(document.querySelector('pre code')?.textContent).toContain('const cell = "safe"')
+  expect(document.querySelector('a[href="https://example.edu/cells"]')?.textContent).toBe('Safe course')
+  expect(document.querySelector('script')).toBeNull()
+  expect(document.querySelector('[onclick]')).toBeNull()
+  expect(document.querySelector('a[href^="javascript:"]')).toBeNull()
+  expect(result.report).toMatchObject({
+    parser: 'native',
+    format: 'markdown',
+    counts: { headings: 1, tables: 1, images: 0 },
+  })
+  expect(result.report.findings.map((finding) => finding.code)).toEqual([
+    'import-active-content-removed',
+    'import-dangerous-url-removed',
+  ])
+})
+
+test('Markdown raw HTML and pasted HTML follow the same sanitization policy', async () => {
+  const hostile = [
+    '<h2>Shared policy</h2>',
+    '<figure><figcaption>Unsupported wrapper</figcaption><p>Preserved prose</p></figure>',
+    '<p style="position:fixed" onmouseover="globalThis.importExecuted=true">Styled prose</p>',
+    '<a href="data:text/html,unsafe">Unsafe link</a>',
+    '<iframe srcdoc="<script>globalThis.importExecuted=true</script>"></iframe>',
+  ].join('')
+  const metadata = {
+    title: 'Policy comparison',
+    rightsAuthority: 'own' as const,
+    rightsAcknowledged: true,
+  }
+
+  const [fromMarkdown, fromHtml] = await Promise.all([
+    importText({ kind: 'paste', format: 'markdown', text: hostile }, { metadata }),
+    importText({ kind: 'paste', format: 'html', text: hostile }, { metadata }),
+  ])
+
+  expect(fromMarkdown.work.sections[0]!.html).toBe(fromHtml.work.sections[0]!.html)
+  expect(fromHtml.work.sections[0]!.html).toBe(
+    '<h2>Shared policy</h2>Unsupported wrapper<p>Preserved prose</p>' +
+      '<p>Styled prose</p><a>Unsafe link</a>',
+  )
+  expect(fromMarkdown.report.findings).toEqual(fromHtml.report.findings)
+  expect(fromHtml.report.findings.map((finding) => finding.code)).toEqual([
+    'import-active-content-removed',
+    'import-dangerous-url-removed',
+    'import-unsupported-element-removed',
+    'import-unsafe-attribute-removed',
+  ])
+})
+
+test('a complete HTML document excludes its head and discloses active and unsupported head material', async () => {
+  const result = await importText(
+    {
+      kind: 'paste',
+      format: 'html',
+      text: '<!doctype html><html><head><title>Source title</title><style>body{display:none}</style></head>' +
+        '<body><h2>Visible lesson</h2></body></html>',
+    },
+    {
+      metadata: {
+        title: 'Imported lesson',
+        rightsAuthority: 'own',
+        rightsAcknowledged: true,
+      },
+    },
+  )
+
+  expect(result.work.sections[0]!.html).toBe('<h2>Visible lesson</h2>')
+  expect(result.report.findings.map((finding) => finding.code)).toEqual([
+    'import-active-content-removed',
+    'import-unsupported-element-removed',
+  ])
+  expect(result.report.findings[1]?.message).toContain('<title>')
+})
+
 test('empty pasted text is rejected with a recoverable explanation', async () => {
   await expect(importText(
     { kind: 'paste', text: ' \n\t ' },
@@ -67,7 +183,7 @@ test('empty pasted text is rejected with a recoverable explanation', async () =>
         rightsAcknowledged: true,
       },
     },
-  )).rejects.toThrow('Add some text before creating the preview.')
+  )).rejects.toThrow('Add some content before creating the preview.')
 })
 
 test('title, publishing authority, and responsibility acknowledgement are required', async () => {
@@ -132,9 +248,47 @@ test('a UTF-8 text file is imported by name and invalid encoding is explained', 
     .rejects.toThrow('broken.txt does not contain valid UTF-8 text.')
 })
 
-test('file imports accept only .txt files even when another format contains UTF-8 text', async () => {
+test.each([
+  {
+    name: 'study.md',
+    format: 'markdown' as const,
+    source: '# Study notes\n\n- First topic',
+    selector: 'h1',
+    text: 'Study notes',
+  },
+  {
+    name: 'lesson.html',
+    format: 'html' as const,
+    source: '<h2>Lesson notes</h2><p>First topic</p>',
+    selector: 'h2',
+    text: 'Lesson notes',
+  },
+])('$name is imported locally through its controlled parser', async ({ name, format, source, selector, text }) => {
+  const result = await importText(
+    { kind: 'file', file: new File([source], name) },
+    {
+      metadata: {
+        title: 'Uploaded content',
+        rightsAuthority: 'own',
+        rightsAcknowledged: true,
+      },
+    },
+  )
+
+  const document = new DOMParser().parseFromString(result.work.sections[0]!.html, 'text/html')
+  expect(result.work.format).toBe(format)
+  expect(document.querySelector(selector)?.textContent).toBe(text)
+  expect(result.report).toMatchObject({
+    parser: 'native',
+    format,
+    originalName: name,
+    originalBytes: new TextEncoder().encode(source).byteLength,
+  })
+})
+
+test('file imports accept only enabled text-like extensions even when another format contains UTF-8 text', async () => {
   await expect(importText(
-    { kind: 'file', file: new File(['# Markdown'], 'notes.md', { type: 'text/plain' }) },
+    { kind: 'file', file: new File(['{\\rtf1 not really RTF}'], 'notes.rtf', { type: 'text/plain' }) },
     {
       metadata: {
         title: 'Notes',
@@ -142,7 +296,7 @@ test('file imports accept only .txt files even when another format contains UTF-
         rightsAcknowledged: true,
       },
     },
-  )).rejects.toThrow('Choose a plain-text file with a .txt extension.')
+  )).rejects.toThrow('Choose a text, Markdown, or HTML file')
 })
 
 test('oversized text is rejected before the file is read', async () => {
@@ -163,6 +317,27 @@ test('oversized text is rejected before the file is read', async () => {
       },
     },
   )).rejects.toThrow('Plain-text imports must be 2 MiB or smaller.')
+  expect(arrayBuffer).not.toHaveBeenCalled()
+})
+
+test('an oversized HTML file is rejected by format before the file is read', async () => {
+  const file = new File(['not read'], 'too-large.html', { type: 'text/html' })
+  Object.defineProperty(file, 'size', {
+    configurable: true,
+    value: (2 * 1024 * 1024) + 1,
+  })
+  const arrayBuffer = vi.spyOn(file, 'arrayBuffer')
+
+  await expect(importText(
+    { kind: 'file', file },
+    {
+      metadata: {
+        title: 'Large HTML',
+        rightsAuthority: 'own',
+        rightsAcknowledged: true,
+      },
+    },
+  )).rejects.toThrow('HTML imports must be 2 MiB or smaller.')
   expect(arrayBuffer).not.toHaveBeenCalled()
 })
 

@@ -32,21 +32,24 @@ vi.mock('./engine', async (importOriginal) => ({
 
 vi.mock('./engine/export/download', () => ({ downloadCartridge }))
 
-test('plain text travels from Content through Review and Plan to a cartridge download', async () => {
+test('sanitized Markdown travels from Content through Review and Plan to a cartridge download', async () => {
   render(<App />)
   fireEvent.click(screen.getByRole('button', { name: /A cartridge file/i }))
 
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Content')
-  fireEvent.click(screen.getByRole('tab', { name: 'Plain text' }))
+  fireEvent.click(screen.getByRole('tab', { name: 'Text / Markdown / HTML' }))
+  fireEvent.click(screen.getByRole('radio', { name: 'Markdown' }))
   fireEvent.change(screen.getByLabelText('Document title'), { target: { value: 'Week 1 notes' } })
-  fireEvent.change(screen.getByLabelText('Text to import'), { target: { value: 'Cell structure notes.' } })
+  fireEvent.change(screen.getByLabelText('Content to import'), {
+    target: { value: '# Cell structure notes\n\n<script>globalThis.importExecuted=true</script>' },
+  })
   fireEvent.click(screen.getByRole('radio', { name: 'I created or own this content' }))
   fireEvent.click(screen.getByRole('checkbox', { name: /I am responsible for rights/i }))
   fireEvent.click(screen.getByRole('button', { name: 'Create one-page preview' }))
   fireEvent.click(await screen.findByRole('button', { name: 'Prepare this page' }))
 
   await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Review'))
-  expect(await screen.findByText('Cell structure notes.')).toBeVisible()
+  expect(await screen.findByText('Cell structure notes')).toBeVisible()
   expect(compileChapter).toHaveBeenCalledWith(
     expect.objectContaining({ source: 'document', title: 'Week 1 notes' }),
     expect.objectContaining({ profile: expect.objectContaining({ id: 'document' }) }),
@@ -55,6 +58,8 @@ test('plain text travels from Content through Review and Plan to a cartridge dow
   fireEvent.click(screen.getByRole('button', { name: /^Plan$/ }))
   expect(screen.getByText('1 chapter becomes 1 page in a cartridge file.')).toBeVisible()
   expect(screen.getByText('Packaged assets: 0.')).toBeVisible()
+  expect(screen.getByRole('heading', { name: 'Import findings' })).toBeVisible()
+  expect(screen.getByText(/Removed active content that could execute or submit data/i)).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: 'Download cartridge — 1 page' }))
 
   await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Result'))
@@ -65,9 +70,9 @@ test('plain text travels from Content through Review and Plan to a cartridge dow
 test('choosing a publisher clears a prepared document before its catalog loads', async () => {
   render(<App />)
   fireEvent.click(screen.getByRole('button', { name: /A cartridge file/i }))
-  fireEvent.click(screen.getByRole('tab', { name: 'Plain text' }))
+  fireEvent.click(screen.getByRole('tab', { name: 'Text / Markdown / HTML' }))
   fireEvent.change(screen.getByLabelText('Document title'), { target: { value: 'Stale notes' } })
-  fireEvent.change(screen.getByLabelText('Text to import'), { target: { value: 'Must not reach Plan.' } })
+  fireEvent.change(screen.getByLabelText('Content to import'), { target: { value: 'Must not reach Plan.' } })
   fireEvent.click(screen.getByRole('radio', { name: 'I created or own this content' }))
   fireEvent.click(screen.getByRole('checkbox', { name: /I am responsible for rights/i }))
   fireEvent.click(screen.getByRole('button', { name: 'Create one-page preview' }))

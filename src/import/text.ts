@@ -2,9 +2,13 @@ import type { ImportMetadata, ImportResult } from './types'
 import { capabilityForFilename } from './capability'
 import { documentIds, importProvenance, sha256Hex, validateImportMetadata } from './common'
 import { escapeHtml } from './html'
+import { renderMarkdown, sanitizeImportedHtml } from './markup'
+import type { ImportedFormat } from './types'
+
+export type TextLikeFormat = Extract<ImportedFormat, 'text' | 'markdown' | 'html'>
 
 export type TextImportInput =
-  | { kind: 'paste'; text: string }
+  | { kind: 'paste'; text: string; format?: TextLikeFormat }
   | { kind: 'file'; file: File }
 
 export interface TextImportOptions {
@@ -12,14 +16,15 @@ export interface TextImportOptions {
   signal?: AbortSignal
 }
 
-// Plain text runs on the main thread through hashing, HTML formation, and a
-// live preview. Worker-parser measurements do not justify raising this tracer's
+// Text-like content runs on the main thread through hashing, normalization, and
+// a live preview. Worker-parser measurements do not justify raising this path's
 // independently conservative limit.
 export const MAX_TEXT_IMPORT_BYTES = 2 * 1024 * 1024
 
-function assertWithinLimit(bytes: number): void {
+function assertWithinLimit(bytes: number, format: TextLikeFormat): void {
   if (bytes > MAX_TEXT_IMPORT_BYTES) {
-    throw new Error('Plain-text imports must be 2 MiB or smaller.')
+    const label = format === 'text' ? 'Plain-text' : format === 'markdown' ? 'Markdown' : 'HTML'
+    throw new Error(`${label} imports must be 2 MiB or smaller.`)
   }
 }
 
@@ -29,6 +34,15 @@ function semanticHtml(text: string): string {
     .split(/\n[\t ]*\n+/)
     .map((paragraph) => `<p>${paragraph.split('\n').map(escapeHtml).join('<br>')}</p>`)
     .join('')
+}
+
+function formatOf(input: TextImportInput): TextLikeFormat {
+  if (input.kind === 'paste') return input.format ?? 'text'
+  const format = capabilityForFilename(input.file.name)?.format
+  if (format === 'text' || format === 'markdown' || format === 'html') return format
+  throw new Error(
+    'Choose a text, Markdown, or HTML file with a .txt, .md, .markdown, .html, or .htm extension.',
+  )
 }
 
 async function readUtf8(file: File): Promise<string> {
@@ -47,19 +61,17 @@ export async function importText(
   options.signal?.throwIfAborted()
   validateImportMetadata(options.metadata)
   const title = options.metadata.title.trim()
+  const format = formatOf(input)
   if (input.kind === 'file') {
-    if (capabilityForFilename(input.file.name)?.format !== 'text') {
-      throw new Error('Choose a plain-text file with a .txt extension.')
-    }
-    assertWithinLimit(input.file.size)
+    assertWithinLimit(input.file.size, format)
   }
   const text = input.kind === 'paste'
     ? input.text
     : await readUtf8(input.file)
   options.signal?.throwIfAborted()
-  if (!text.trim()) throw new Error('Add some text before creating the preview.')
+  if (!text.trim()) throw new Error('Add some content before creating the preview.')
   const bytes = new TextEncoder().encode(text)
-  assertWithinLimit(bytes.byteLength)
+  assertWithinLimit(bytes.byteLength, format)
   const sourceSha256 = await sha256Hex(bytes)
   options.signal?.throwIfAborted()
 
@@ -67,30 +79,33 @@ export async function importText(
   const provenance = importProvenance(options.metadata, input.kind === 'paste'
     ? { kind: 'paste' }
     : { kind: 'local-file', originalName: input.file.name })
+  const normalized = format === 'text'
+    ? {
+        html: semanticHtml(text),
+        findings: [],
+        counts: { headings: 0, tables: 0, images: 0, equations: 0, notes: 0 },
+      }
+    : sanitizeImportedHtml(format === 'markdown' ? renderMarkdown(text) : text)
 
   return {
     work: {
       id,
       title,
-      format: 'text',
-      sections: [{ id: sectionId, title, order: 0, html: semanticHtml(text) }],
+      format,
+      sections: [{ id: sectionId, title, order: 0, html: normalized.html }],
       assets: [],
       provenance,
     },
     report: {
       parser: 'native',
-      format: 'text',
+      format,
       ...(input.kind === 'file' ? { originalName: input.file.name } : {}),
       originalBytes: bytes.byteLength,
       sourceSha256,
-      findings: [],
+      findings: normalized.findings,
       counts: {
         sections: 1,
-        headings: 0,
-        tables: 0,
-        images: 0,
-        equations: 0,
-        notes: 0,
+        ...normalized.counts,
         unavailableAssets: 0,
       },
     },

@@ -33,6 +33,24 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
     limitations: ['Formatting beyond paragraphs and line breaks is not present in plain text.'],
   },
   {
+    format: 'markdown',
+    label: 'Markdown',
+    extensions: ['.md', '.markdown'],
+    mediaTypes: ['text/markdown', 'text/x-markdown'],
+    parser: 'native',
+    status: 'enabled',
+    limitations: ['Raw HTML is untrusted and is reduced to the same controlled semantic subset as HTML imports.'],
+  },
+  {
+    format: 'html',
+    label: 'HTML',
+    extensions: ['.html', '.htm'],
+    mediaTypes: ['text/html', 'application/xhtml+xml'],
+    parser: 'native',
+    status: 'enabled',
+    limitations: ['Scripts, active embeds, forms, source styling, and unsafe URLs are not imported.'],
+  },
+  {
     format: 'docx',
     label: 'Word document',
     extensions: ['.docx'],
@@ -86,6 +104,10 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
 
 const plainText = DOCUMENT_FORMAT_CAPABILITIES.find((entry) => entry.format === 'text')!
 export const PLAIN_TEXT_FILE_ACCEPT = [...plainText.extensions, ...plainText.mediaTypes].join(',')
+export const TEXT_CONTENT_FILE_ACCEPT = DOCUMENT_FORMAT_CAPABILITIES
+  .filter((entry) => entry.status === 'enabled' && entry.parser === 'native')
+  .flatMap((entry) => [...entry.extensions, ...entry.mediaTypes])
+  .join(',')
 const docx = DOCUMENT_FORMAT_CAPABILITIES.find((entry) => entry.format === 'docx')!
 export const DOCX_FILE_ACCEPT = [...docx.extensions, ...docx.mediaTypes].join(',')
 

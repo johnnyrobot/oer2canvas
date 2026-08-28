@@ -71,18 +71,18 @@ test('browses and selects a Pressbooks network catalog book', async () => {
   ))
 })
 
-test('plain text is a content choice without removing the publisher catalogs', () => {
+test('text and markup are a content choice without removing the publisher catalogs', () => {
   render(<SourceBrowser onPick={() => {}} onImportText={() => {}} />)
 
-  fireEvent.click(screen.getByRole('tab', { name: 'Plain text' }))
-  expect(screen.getByLabelText('Text to import')).toBeVisible()
+  fireEvent.click(screen.getByRole('tab', { name: 'Text / Markdown / HTML' }))
+  expect(screen.getByLabelText('Content to import')).toBeVisible()
   expect(screen.getByRole('button', { name: 'Create one-page preview' })).toBeVisible()
 
   fireEvent.click(screen.getByRole('tab', { name: 'OpenStax' }))
   expect(screen.getByRole('button', { name: 'Algebra and Trigonometry' })).toBeVisible()
 })
 
-test('tested structured formats are one document choice beside plain text and publisher catalogs', () => {
+test('tested structured formats are one document choice beside text-like content and publisher catalogs', () => {
   render(
     <SourceBrowser
       onPick={() => {}}
@@ -99,8 +99,8 @@ test('tested structured formats are one document choice beside plain text and pu
   expect(input).toHaveAttribute('accept', expect.stringContaining('.rtf'))
   expect(screen.getByRole('button', { name: 'Inspect document' })).toBeVisible()
 
-  fireEvent.click(screen.getByRole('tab', { name: 'Plain text' }))
-  expect(screen.getByLabelText('Text to import')).toBeVisible()
+  fireEvent.click(screen.getByRole('tab', { name: 'Text / Markdown / HTML' }))
+  expect(screen.getByLabelText('Content to import')).toBeVisible()
   fireEvent.click(screen.getByRole('tab', { name: 'OpenStax' }))
   expect(screen.getByRole('button', { name: 'Algebra and Trigonometry' })).toBeVisible()
 })

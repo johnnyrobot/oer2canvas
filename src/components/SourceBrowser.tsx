@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { OpenStaxBrowser } from './OpenStaxBrowser'
-import { PlainTextImporter } from './PlainTextImporter'
+import { TextContentImporter } from './TextContentImporter'
 import { DocumentImporter } from './DocumentImporter'
 import {
   loadLibreTextsCatalog,
@@ -21,7 +21,7 @@ const TAB_LABELS: Readonly<Record<SourceTab, string>> = {
   libretexts: 'LibreTexts',
   pressbooks: 'Pressbooks',
   document: 'Document',
-  text: 'Plain text',
+  text: 'Text / Markdown / HTML',
 }
 
 const CATALOG_TABS: Readonly<Record<CatalogTab, {
@@ -114,7 +114,7 @@ export function SourceBrowser({
     <section aria-labelledby="source-heading">
       <h2 id="source-heading" className="text-xl font-semibold">Choose content</h2>
       <p className="mt-1 text-sm text-neutral-700 dark:text-neutral-300">
-        Search an OER publisher, upload a document, or import plain text from this browser.
+        Search an OER publisher, upload a document, or import text, Markdown, or HTML in this browser.
       </p>
       <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Content source">
         {[
@@ -142,7 +142,7 @@ export function SourceBrowser({
       <div className="mt-5">
         {tab === 'openstax' && <OpenStaxBrowser onPick={onPick} />}
         {tab === 'document' && onImportDocument && <DocumentImporter onConfirm={onImportDocument} />}
-        {tab === 'text' && onImportText && <PlainTextImporter onConfirm={onImportText} />}
+        {tab === 'text' && onImportText && <TextContentImporter onConfirm={onImportText} />}
         {catalog && (
           <section aria-labelledby={`${tab}-catalog-heading`}>
             <h3 id={`${tab}-catalog-heading`} className="text-lg font-semibold">
