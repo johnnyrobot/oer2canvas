@@ -280,12 +280,19 @@ test('an asset no image ever refers to raises a warning instead of vanishing sil
   }))
 })
 
-test('missing alt, explicit empty alt, and real alt text are all rendered distinctly', async () => {
-  // Missing (`undefined`) and empty (`''`) alt are opposite signals to the
-  // audit downstream: a genuinely missing `alt` attribute is an axe
-  // `image-alt` blocker, while `alt=""` is the correct decorative marker and
-  // not an issue at all. Folding one into the other here would make an
-  // undescribed image sail through the gate as if deliberately decorative.
+test('missing alt and explicit empty alt both omit the attribute; real alt text renders it', async () => {
+  // anydoc 0.2.4 never actually produces `undefined` for `Inline.alt` on any
+  // supported format (verified empirically against the wasm directly) — it
+  // collapses "no alt carrier at all" and "author wrote alt=''" to the same
+  // `''`. Since those two source states cannot be told apart, this renderer
+  // treats BOTH the synthetic `undefined` case (kept here for robustness,
+  // even though the real parser never sends it) and an explicit `''` as
+  // UNDESCRIBED, omitting the `alt` attribute for both — which routes the
+  // image into the "describe this" queue rather than "confirm decorative".
+  // Only real alt text renders the attribute at all. See `anydoc-html.ts`'s
+  // `alt`/`altAttribute` comment and `engine/compile/steps/alt.ts`'s header
+  // for why an empty alt is treated as an unfilled field, not a decorative
+  // declaration.
   const assets = [
     { id: 0, mediaType: 'image/png', originPart: 'no-alt.png', data: RASTER_FIXTURES.png.bytes },
     { id: 1, mediaType: 'image/gif', originPart: 'empty-alt.gif', data: RASTER_FIXTURES.gif.bytes },
@@ -304,6 +311,6 @@ test('missing alt, explicit empty alt, and real alt text are all rendered distin
   const images = [...new DOMParser().parseFromString(result.html, 'text/html').querySelectorAll('img')]
   expect(images).toHaveLength(3)
   expect(images[0]!.hasAttribute('alt')).toBe(false)
-  expect(images[1]!.getAttribute('alt')).toBe('')
+  expect(images[1]!.hasAttribute('alt')).toBe(false)
   expect(images[2]!.getAttribute('alt')).toBe('A photograph of a cell wall')
 })

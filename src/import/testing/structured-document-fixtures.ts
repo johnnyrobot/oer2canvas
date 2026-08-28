@@ -21,17 +21,27 @@ export async function semanticOdtFixture(
   {
     additionalParagraphs = 0,
     embeddedImage = false,
-  }: { additionalParagraphs?: number; embeddedImage?: boolean } = {},
+    noAltCarrier = false,
+  }: { additionalParagraphs?: number; embeddedImage?: boolean; noAltCarrier?: boolean } = {},
 ): Promise<Uint8Array<ArrayBuffer>> {
   // ODT stores an embedded picture as an ordinary file inside the package
   // (conventionally under `Pictures/`) and references it from a
   // `<draw:frame><draw:image xlink:href="...">` pair — there is no inline
   // binary encoding the way RTF needs. `<svg:desc>` is the ODT alt-text
-  // carrier anydoc reads into `Inline.alt`.
+  // carrier anydoc reads into `Inline.alt`. `noAltCarrier` omits it — verified
+  // empirically that a `<draw:frame>` with no `<svg:desc>` collapses to
+  // `alt === ''`, the same as RTF's `\pict` (which has no carrier at all) and
+  // as DOCX/EPUB with their own alt attribute left out. This is what
+  // `anydoc-html.ts` treats as UNDESCRIBED rather than deliberately
+  // decorative — see its `altAttribute` comment.
   const imageParagraph = embeddedImage
-    ? '<text:p><draw:frame draw:name="Diagram" svg:width="1cm" svg:height="1cm">' +
-      '<draw:image xlink:href="Pictures/diagram.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>' +
-      '<svg:desc>Cell diagram</svg:desc></draw:frame></text:p>'
+    ? noAltCarrier
+      ? '<text:p><draw:frame draw:name="Diagram" svg:width="1cm" svg:height="1cm">' +
+        '<draw:image xlink:href="Pictures/diagram.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>' +
+        '</draw:frame></text:p>'
+      : '<text:p><draw:frame draw:name="Diagram" svg:width="1cm" svg:height="1cm">' +
+        '<draw:image xlink:href="Pictures/diagram.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>' +
+        '<svg:desc>Cell diagram</svg:desc></draw:frame></text:p>'
     : ''
   const imageManifestEntry = embeddedImage
     ? '<manifest:file-entry manifest:full-path="Pictures/diagram.png" manifest:media-type="image/png"/>'
@@ -88,14 +98,20 @@ export async function semanticEpubFixture(
   {
     additionalParagraphs = 0,
     embeddedImage = false,
-  }: { additionalParagraphs?: number; embeddedImage?: boolean } = {},
+    noAltCarrier = false,
+  }: { additionalParagraphs?: number; embeddedImage?: boolean; noAltCarrier?: boolean } = {},
 ): Promise<Uint8Array<ArrayBuffer>> {
   // EPUB is ordinary XHTML plus an OPF manifest: the image is a real
   // `<img>` referencing a package-relative file, which the manifest must
   // also list (a real EPUB reader — and anydoc — trusts the manifest's
-  // declared media type over guessing from the extension).
+  // declared media type over guessing from the extension). `noAltCarrier`
+  // drops the `alt` attribute entirely — verified empirically that an
+  // `<img>` with no `alt` at all collapses to `alt === ''`, exactly like
+  // `alt=""` would; anydoc has no way to tell "missing" from "empty" apart.
   const imageParagraph = embeddedImage
-    ? '<p><img src="images/diagram.png" alt="Cell diagram"/></p>'
+    ? noAltCarrier
+      ? '<p><img src="images/diagram.png"/></p>'
+      : '<p><img src="images/diagram.png" alt="Cell diagram"/></p>'
     : ''
   const imageManifestItem = embeddedImage
     ? '<item id="diagram" href="images/diagram.png" media-type="image/png"/>'
@@ -158,9 +174,18 @@ export function semanticRtfFixture(
   // `\pngblip` names the encoding; `picw`/`pich` are the format's OWN
   // declared dimensions, which `assets.ts` deliberately never trusts —
   // intrinsic size always comes from sniffing the actual bytes, so a lying
-  // `picw`/`pich` here would not change what gets packaged. RTF also has no
-  // attribute that carries alt text, so this image is expected to come
-  // through with `alt === ''`, unlike its DOCX/EPUB/ODT siblings.
+  // `picw`/`pich` here would not change what gets packaged.
+  //
+  // RTF's `\pict` destination has NO attribute that could carry alt text at
+  // all, so every RTF image takes this path unconditionally. That is NOT a
+  // property unique to RTF, though: verified empirically against anydoc
+  // 0.2.4 directly, DOCX (no `descr`), EPUB (no `alt`) and ODT (no
+  // `<svg:desc>`) collapse to the exact same `alt === ''` the moment their
+  // OWN optional alt carrier is left out — anydoc never reports `undefined`
+  // for any of the four formats. RTF is just the one format where that
+  // carrier can never exist in the first place, not the one format where
+  // this behaviour exists at all. See the `noAltCarrier`-gated cases in
+  // `document.browser.test.ts` for DOCX/EPUB/ODT pinned the same way.
   const imageHex = Array.from(EMBEDDED_IMAGE_PNG)
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('')

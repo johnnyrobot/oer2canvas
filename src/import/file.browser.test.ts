@@ -68,11 +68,39 @@ test('a packageable embedded DOCX image becomes a cartridge reference, not a blo
   })
 
   const imported = await importStructuredDocument(file, { metadata })
+  const img = new DOMParser().parseFromString(imported.work.sections[0]!.html, 'text/html').querySelector('img')
 
   expect(imported.report.counts.images).toBe(1)
   expect(imported.report.findings.some((finding) => finding.code === 'embedded-content')).toBe(false)
   expect(imported.work.sections[0]?.html).toContain('$IMS-CC-FILEBASE$/oer2canvas/')
   expect(imported.work.sections[0]?.html).not.toContain('[Embedded image')
+  expect(img?.getAttribute('alt')).toBe('Cell diagram')
+})
+
+// A DOCX `docPr` with no `descr` attribute at all is not a distinct,
+// DOCX-specific case — verified empirically against anydoc directly, it
+// collapses to the exact same `alt === ''` that EPUB's missing `alt` and
+// ODT's missing `<svg:desc>` collapse to (see the matching cases in
+// `document.browser.test.ts`), and that RTF's `\pict` (which never has a
+// carrier at all) always produces. `anydoc-html.ts` treats that `''` as
+// undescribed and omits the `alt` attribute rather than emitting `alt=""`,
+// which is what routes the image into the "describe this" queue kind
+// instead of "confirm decorative" (`engine/compile/steps/alt.ts`).
+test('an embedded DOCX image with no alt carrier is treated as undescribed, not decorative', async () => {
+  const file = new File(
+    [await semanticDocxFixture({ embeddedImage: true, noAltCarrier: true })],
+    'diagram.docx',
+    { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+  )
+
+  const imported = await importStructuredDocument(file, { metadata })
+  const img = new DOMParser().parseFromString(imported.work.sections[0]!.html, 'text/html').querySelector('img')
+
+  expect(imported.report.counts.images).toBe(1)
+  expect(imported.report.findings.some((finding) => finding.code === 'embedded-content')).toBe(false)
+  expect(imported.work.sections[0]?.html).toContain('$IMS-CC-FILEBASE$/oer2canvas/')
+  expect(img).not.toBeNull()
+  expect(img?.hasAttribute('alt')).toBe(false)
 })
 
 test('an embedded DOCX image the workflow cannot package stays a visible blocking finding', async () => {

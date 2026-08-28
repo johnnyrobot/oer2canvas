@@ -73,17 +73,31 @@ export async function semanticDocxFixture(
     embeddedImage = false,
     unsupportedImage = false,
     unresolvedLink = false,
-  }: { embeddedImage?: boolean; unsupportedImage?: boolean; unresolvedLink?: boolean } = {},
+    noAltCarrier = false,
+  }: {
+    embeddedImage?: boolean
+    unsupportedImage?: boolean
+    unresolvedLink?: boolean
+    // Omits `docPr`'s `descr` attribute — DOCX's alt-text carrier — entirely.
+    // Verified empirically that a `docPr` with no `descr` at all collapses to
+    // `alt === ''` in anydoc, the same as EPUB's missing `alt` and ODT's
+    // missing `<svg:desc>`; anydoc has no way to tell "the carrier is absent"
+    // from "the carrier is present and empty" apart, on ANY of the four
+    // formats. See `structured-document-fixtures.ts`'s matching comment on
+    // the RTF fixture, which has no carrier at all.
+    noAltCarrier?: boolean
+  } = {},
 ): Promise<Uint8Array<ArrayBuffer>> {
   const hasImage = embeddedImage || unsupportedImage
   const imageTarget = unsupportedImage ? 'media/image1.svg' : 'media/image1.png'
   const imageAlt = unsupportedImage ? 'Unsupported diagram' : 'Cell diagram'
   const imageBytes = unsupportedImage ? UNSUPPORTED_IMAGE_SVG : EMBEDDED_IMAGE_PNG
+  const imageDescr = noAltCarrier ? '' : ` descr="${imageAlt}"`
   const imageRelationship = hasImage
     ? `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="${imageTarget}"/>`
     : ''
   const imageParagraph = hasImage
-    ? `<w:p><w:r><w:drawing><wp:inline><wp:extent cx="9525" cy="9525"/><wp:docPr id="1" name="Diagram" descr="${imageAlt}"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr/><pic:blipFill><a:blip r:embed="rId2"/></pic:blipFill><pic:spPr/></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`
+    ? `<w:p><w:r><w:drawing><wp:inline><wp:extent cx="9525" cy="9525"/><wp:docPr id="1" name="Diagram"${imageDescr}/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr/><pic:blipFill><a:blip r:embed="rId2"/></pic:blipFill><pic:spPr/></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`
     : ''
   const unresolvedLinkParagraph = unresolvedLink
     ? '<w:p><w:hyperlink w:anchor="missing-section"><w:r><w:t>Missing section</w:t></w:r></w:hyperlink></w:p>'

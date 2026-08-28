@@ -157,18 +157,25 @@ export function normalizeAnyDocDocument(
       return attribute ? `<span${attribute}></span>` : ''
     }
     if (inline.kind === 'image') {
-      // `alt === undefined` (no attribute at all in the source) and
-      // `alt === ''` (an author-declared decorative image) are opposite
-      // signals to the audit this HTML eventually reaches: axe's `image-alt`
-      // rule blocks on a genuinely MISSING attribute, while this project's
-      // own alt-text audit treats `alt=""` as "the correct decorative
-      // marker — not an issue" (see `engine/audit/alt-text.test.ts`). Folding
-      // `undefined` into `''` here would make every undescribed image look
-      // deliberately decorative and sail through the gate unremediated — so
-      // the attribute itself is only ever emitted when the source document
-      // actually had one, empty or not.
+      // anydoc 0.2.4 collapses TWO different source states to the exact same
+      // `''`: "this format has no alt-text carrier at all" (RTF's `\pict`,
+      // every one of the four formats when the author left the carrier
+      // blank) and "the author explicitly wrote alt=''". Verified empirically
+      // against the wasm directly — `Inline.alt` is NEVER `undefined` for any
+      // of DOCX/EPUB/ODT/RTF, so a branch keyed on `=== undefined` here would
+      // be dead code that never fires.
+      //
+      // Since the two cases are indistinguishable, this treats an empty alt
+      // as UNDESCRIBED rather than as a decorative declaration — the same
+      // stance this project's own compile-time audit documents
+      // (`engine/compile/steps/alt.ts`: "an unfilled CMS field ... not an
+      // author's decorative declaration"). Emitting no `alt` attribute at all
+      // routes the image into the `alt` ("describe this") queue kind instead
+      // of `confirm-decorative`; an author who genuinely meant decorative
+      // still clears that queue item in one keystroke, while an author who
+      // never got the chance to describe the image is actually asked to.
       const altText = inline.alt ?? ''
-      const altAttribute = inline.alt === undefined ? '' : ` alt="${escapeHtml(inline.alt)}"`
+      const altAttribute = inline.alt ? ` alt="${escapeHtml(inline.alt)}"` : ''
 
       // External images are not embedded bytes at all — there is nothing for
       // `prepareAssets` to have seen and nothing to package into the
