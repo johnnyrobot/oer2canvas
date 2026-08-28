@@ -25,5 +25,6 @@ export function toChapter(work: ImportedWork): Chapter {
       ...(provenance.license ? { license: provenance.license } : {}),
     },
     xrefs: new Map(),
+    assets: work.assets,
   }
 }

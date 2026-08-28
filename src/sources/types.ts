@@ -1,3 +1,5 @@
+import type { ImportedAsset } from '../import/types'
+
 /**
  * The ONLY thing the three sources agree on.
  *
@@ -40,6 +42,13 @@ export interface Chapter {
    * most targets will not be in the instructor's selection.
    */
   xrefs: Map<string, string>
+  /**
+   * Raster assets packaged into the cartridge alongside this chapter's pages.
+   * Absent for catalog sources (OpenStax/LibreTexts/Pressbooks), whose images
+   * are remote URLs rather than packaged bytes — optional so those adapters
+   * are unaffected by this field's existence.
+   */
+  assets?: readonly ImportedAsset[]
 }
 
 /**

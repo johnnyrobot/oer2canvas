@@ -82,3 +82,36 @@ test('the cartridge writes the exact repaired bytes that passed the gate', async
   expect(exported).toContain(compiled.sections[0]?.gate?.html)
   expect(exported).not.toContain('Before the allowlist')
 })
+
+test('carries packaged assets onto the chapter', () => {
+  const asset = {
+    id: 'a3f91c2e',
+    mediaType: 'image/png',
+    extension: 'png',
+    bytes: new Uint8Array([1, 2, 3]),
+    sha256: 'a3f91c2e',
+    originPart: 'word/media/image1.png',
+    name: 'image1-a3f91c2e.png',
+  }
+  const chapter = toChapter({
+    id: 'w',
+    title: 'T',
+    format: 'docx',
+    sections: [{ id: 's', title: 'T', order: 0, html: '<p>x</p>' }],
+    assets: [asset],
+    provenance: { kind: 'local-file', rights: { authority: 'own', acknowledged: true } },
+  })
+  expect(chapter.assets).toEqual([asset])
+})
+
+test('a chapter with no assets carries none rather than an empty promise', () => {
+  const chapter = toChapter({
+    id: 'w',
+    title: 'T',
+    format: 'text',
+    sections: [{ id: 's', title: 'T', order: 0, html: '<p>x</p>' }],
+    assets: [],
+    provenance: { kind: 'paste', rights: { authority: 'own', acknowledged: true } },
+  })
+  expect(chapter.assets).toEqual([])
+})

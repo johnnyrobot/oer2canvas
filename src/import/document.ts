@@ -83,7 +83,21 @@ export async function importStructuredDocument(
       title,
       format: capability.format,
       sections: [{ id: sectionId, title, order: 0, html: parsed.normalized.html }],
-      assets: [],
+      // `name` is carried through as-is from the packaged record: it is
+      // assigned once at import (`prepareAssets`), deduped by content hash
+      // with the first-seen origin winning the name, and the HTML already
+      // references that exact name via the `$IMS-CC-FILEBASE$/oer2canvas/`
+      // token. Recomputing it here from `originPart` would disagree with
+      // that reference whenever this occurrence isn't the first-seen one.
+      assets: parsed.normalized.packagedAssets.map((asset) => ({
+        id: asset.sha256,
+        mediaType: asset.mediaType,
+        extension: asset.extension,
+        bytes: asset.bytes,
+        sha256: asset.sha256,
+        originPart: asset.originPart,
+        name: asset.name,
+      })),
       provenance: importProvenance(options.metadata, { kind: 'local-file', originalName: file.name }),
     },
     report: {
