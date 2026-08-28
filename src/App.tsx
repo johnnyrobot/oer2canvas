@@ -689,7 +689,7 @@ export default function App() {
         <SourceBrowser
           onPick={(book) => { void pickBook(book) }}
           onImportText={(result) => { void prepareImportedContent(result) }}
-          onImportDocx={(result) => { void prepareImportedContent(result) }}
+          onImportDocument={(result) => { void prepareImportedContent(result) }}
         />
       )}
       {phase === 'chapters' && book && (

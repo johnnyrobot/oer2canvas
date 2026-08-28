@@ -2,21 +2,36 @@ import type { ImportMetadata, ImportResult } from './types'
 import type { ParserProbeProgress } from './parsers/probe'
 import { DOCUMENT_IMPORT_LIMITS } from './limits'
 import { documentIds, importProvenance, sha256Hex, validateImportMetadata } from './common'
+import {
+  ENABLED_ANYDOC_CAPABILITIES,
+  capabilityForFilename,
+  type DocumentFormatCapability,
+} from './capability'
 
-export interface DocxImportOptions {
+export interface StructuredDocumentImportOptions {
   metadata: ImportMetadata
   signal?: AbortSignal
   onProgress?: (progress: ParserProbeProgress) => void
 }
 
-export async function importDocx(file: File, options: DocxImportOptions): Promise<ImportResult> {
+function enabledCapabilityFor(file: File): DocumentFormatCapability {
+  const capability = capabilityForFilename(file.name)
+  if (!capability || capability.status !== 'enabled' || capability.parser !== 'anydoc') {
+    const extensions = ENABLED_ANYDOC_CAPABILITIES.flatMap((entry) => entry.extensions).join(', ')
+    throw new Error(`Choose a supported document file (${extensions}).`)
+  }
+  return capability
+}
+
+export async function importStructuredDocument(
+  file: File,
+  options: StructuredDocumentImportOptions,
+): Promise<ImportResult> {
   options.signal?.throwIfAborted()
   validateImportMetadata(options.metadata)
-  if (!file.name.toLowerCase().endsWith('.docx')) {
-    throw new Error('Choose a Word document with a .docx extension.')
-  }
+  const capability = enabledCapabilityFor(file)
   if (file.size > DOCUMENT_IMPORT_LIMITS.maximumInputBytes) {
-    throw new Error('This DOCX exceeds the 16 MiB browser limit.')
+    throw new Error(`This ${capability.label} exceeds the 16 MiB browser limit.`)
   }
 
   const bytes = await file.arrayBuffer()
@@ -28,16 +43,24 @@ export async function importDocx(file: File, options: DocxImportOptions): Promis
   const parsed = await probeParser({
     parser: 'anydoc',
     bytes,
-    formatHint: 'docx',
+    formatHint: capability.format,
     signal: options.signal,
     onProgress: options.onProgress,
   })
-  if (parsed.formatDetection !== 'content' || parsed.detectedFormat !== 'docx') {
+  if (parsed.formatDetection !== 'content' || parsed.detectedFormat !== capability.format) {
+    const detected = parsed.formatDetection === 'content'
+      ? parsed.detectedFormat.toUpperCase()
+      : 'not recognized'
+    const article = /^[aeiou]/i.test(capability.format) ? 'an' : 'a'
     throw new Error(
-      `The file contents are ${parsed.detectedFormat || 'not recognized'}, not a DOCX document.`,
+      `The file contents are ${detected}, not ${article} ${capability.format.toUpperCase()} document.`,
     )
   }
   if (!parsed.normalized) throw new Error('AnyDoc returned no normalized document content.')
+  const visibleText = parsed.normalized.html.replace(/<[^>]*>/g, '').trim()
+  if (!visibleText) {
+    throw new Error(`AnyDoc found no readable structured content in this ${capability.label} file.`)
+  }
 
   const title = options.metadata.title.trim()
   const { id, sectionId } = documentIds(sourceSha256)
@@ -47,7 +70,7 @@ export async function importDocx(file: File, options: DocxImportOptions): Promis
     work: {
       id,
       title,
-      format: 'docx',
+      format: capability.format,
       sections: [{ id: sectionId, title, order: 0, html: parsed.normalized.html }],
       assets: [],
       provenance: importProvenance(options.metadata, { kind: 'local-file', originalName: file.name }),
@@ -55,7 +78,7 @@ export async function importDocx(file: File, options: DocxImportOptions): Promis
     report: {
       parser: 'anydoc',
       parserVersion: parsed.parserVersion,
-      format: 'docx',
+      format: capability.format,
       originalName: file.name,
       originalBytes: parsed.inputBytes,
       sourceSha256,

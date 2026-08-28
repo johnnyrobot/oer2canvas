@@ -129,7 +129,7 @@ workerScope.addEventListener('message', (event: MessageEvent<ParserProbeRequest>
           assetBytes,
           largestAssetBytes,
           counts: { ...counts, assets: document.assets.length },
-          normalized: normalizeAnyDocDocument(document),
+          normalized: normalizeAnyDocDocument(document, detectedFormat ?? 'document'),
         },
       })
     } catch (error) {

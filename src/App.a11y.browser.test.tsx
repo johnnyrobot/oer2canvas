@@ -4,7 +4,7 @@ import App from './App'
 import { ChapterPicker } from './components/ChapterPicker'
 import { ChapterView } from './components/ChapterView'
 import { PlainTextImporter } from './components/PlainTextImporter'
-import { DocxImporter } from './components/DocxImporter'
+import { DocumentImporter } from './components/DocumentImporter'
 import { QueueView } from './components/queue/QueueView'
 import { newSession, reduce, type QueueSession } from './components/queue/session'
 import { fetchChapter, flattenToc } from './sources/openstax'
@@ -222,18 +222,18 @@ test('screen 1b — the plain-text form and preview have no accessibility violat
   expect(duplicateIds(container)).toEqual([])
 })
 
-test('screen 1c — the DOCX form and extracted preview have no accessibility violations', async () => {
-  const { container } = render(<DocxImporter onConfirm={() => {}} />)
+test('screen 1c — the document form and extracted preview have no accessibility violations', async () => {
+  const { container } = render(<DocumentImporter onConfirm={() => {}} />)
   expect(await violationsIn(container)).toEqual([])
   expect(duplicateIds(container)).toEqual([])
 
   const file = new File([await semanticDocxFixture()], 'accessible.docx', {
     type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   })
-  fireEvent.change(screen.getByLabelText('Word document'), { target: { files: [file] } })
+  fireEvent.change(screen.getByLabelText('Document file'), { target: { files: [file] } })
   fireEvent.click(screen.getByRole('radio', { name: 'I created or own this content' }))
   fireEvent.click(screen.getByRole('checkbox', { name: /I am responsible for rights/i }))
-  fireEvent.click(screen.getByRole('button', { name: 'Inspect DOCX' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Inspect document' }))
   await screen.findByRole('heading', { name: 'Preview: accessible' })
 
   expect(await violationsIn(container)).toEqual([])

@@ -33,7 +33,11 @@ function anchorSlug(value: string): string {
     .replace(/^-+|-+$/g, '') || 'document-anchor'
 }
 
-export function normalizeAnyDocDocument(document: Document): ParserProbeNormalizedContent {
+export function normalizeAnyDocDocument(
+  document: Document,
+  sourceFormat = 'document',
+): ParserProbeNormalizedContent {
+  const sourceLabel = sourceFormat === 'document' ? 'document' : sourceFormat.toUpperCase()
   const findings: ParserProbeFinding[] = []
   const anchorIds = new Map<string, string>()
   const usedIds = new Set<string>()
@@ -122,17 +126,17 @@ export function normalizeAnyDocDocument(document: Document): ParserProbeNormaliz
       finding(
         'embedded-content',
         'blocker',
-        'This DOCX contains images or embedded content. The text-only DOCX workflow cannot publish it yet.',
+        `This ${sourceLabel} contains images or embedded content. The text-oriented document workflow cannot publish it yet.`,
       )
       return `<span>[Embedded image${inline.alt ? `: ${escapeHtml(inline.alt)}` : ''}]</span>`
     }
     if (inline.kind === 'math') {
       equations += 1
-      finding('unsupported-equation', 'blocker', 'This DOCX contains an equation that requires a later remediation workflow.')
+      finding('unsupported-equation', 'blocker', `This ${sourceLabel} contains an equation that requires a later remediation workflow.`)
       return `<span>[Equation: ${escapeHtml(inline.text ?? '')}]</span>`
     }
     if (inline.kind === 'noteRef') {
-      finding('unsupported-note', 'blocker', 'This DOCX contains notes that the text-only workflow cannot publish yet.')
+      finding('unsupported-note', 'blocker', `This ${sourceLabel} contains notes that the text-oriented workflow cannot publish yet.`)
       return '<span>[Note reference]</span>'
     }
     if (inline.kind === 'checkbox') {
@@ -153,7 +157,7 @@ export function normalizeAnyDocDocument(document: Document): ParserProbeNormaliz
     if (block.kind === 'rule') return '<hr>'
     if (block.kind === 'math') {
       equations += 1
-      finding('unsupported-equation', 'blocker', 'This DOCX contains an equation that requires a later remediation workflow.')
+      finding('unsupported-equation', 'blocker', `This ${sourceLabel} contains an equation that requires a later remediation workflow.`)
       return `<p>[Equation: ${escapeHtml(block.text ?? '')}]</p>`
     }
     if (block.kind === 'list' && block.list) {
@@ -213,11 +217,11 @@ export function normalizeAnyDocDocument(document: Document): ParserProbeNormaliz
     finding(
       'embedded-content',
       'blocker',
-      'This DOCX contains images or embedded content. The text-only DOCX workflow cannot publish it yet.',
+      `This ${sourceLabel} contains images or embedded content. The text-oriented document workflow cannot publish it yet.`,
     )
   }
   if (document.notes.length > 0) {
-    finding('unsupported-note', 'blocker', 'This DOCX contains notes that the text-only workflow cannot publish yet.')
+    finding('unsupported-note', 'blocker', `This ${sourceLabel} contains notes that the text-oriented workflow cannot publish it yet.`)
   }
 
   return {

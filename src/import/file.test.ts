@@ -1,4 +1,4 @@
-import { importDocx } from './docx'
+import { importStructuredDocument } from './document'
 import { DOCUMENT_IMPORT_LIMITS } from './limits'
 
 const metadata = {
@@ -15,16 +15,16 @@ test('an oversized DOCX is refused before allocating its source buffer or starti
   })
   const read = vi.spyOn(file, 'arrayBuffer')
 
-  await expect(importDocx(file, { metadata })).rejects.toThrow(/exceeds the 16 MiB browser limit/i)
+  await expect(importStructuredDocument(file, { metadata })).rejects.toThrow(/exceeds the 16 MiB browser limit/i)
   expect(read).not.toHaveBeenCalled()
 })
 
-test('file selection stays narrow even when an unsupported file claims the DOCX MIME type', async () => {
+test('file selection stays capability-driven even when an unsupported file claims a supported MIME type', async () => {
   const file = new File(['plain'], 'notes.txt', {
     type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   })
   const read = vi.spyOn(file, 'arrayBuffer')
 
-  await expect(importDocx(file, { metadata })).rejects.toThrow(/\.docx extension/i)
+  await expect(importStructuredDocument(file, { metadata })).rejects.toThrow(/supported document file/i)
   expect(read).not.toHaveBeenCalled()
 })

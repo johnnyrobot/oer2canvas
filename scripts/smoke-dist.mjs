@@ -31,6 +31,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { pdfFixture } from '../src/import/testing/pdf-fixture.ts'
 import { semanticDocxFixture } from '../src/import/testing/docx-fixture.ts'
+import { semanticEpubFixture } from '../src/import/testing/structured-document-fixtures.ts'
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const DIST = join(ROOT, 'dist')
@@ -200,6 +201,7 @@ async function main() {
     }
 
     const docxBytes = await semanticDocxFixture()
+    const epubBytes = await semanticEpubFixture()
     const anydoc = await page.evaluate(async ({ probeUrl, source }) => {
       const { probeParser } = await import(probeUrl)
       return probeParser({
@@ -274,45 +276,45 @@ async function main() {
       }
     }
 
-    // Drive the release-enabled DOCX path through the built UI and inspect the
+    // Drive a newly release-enabled EPUB through the built UI and inspect the
     // file it downloads. The direct parser probe above proves artifact loading;
     // this proves the production UI actually connects parsing to audit, Plan,
     // and the same cartridge writer used by publisher content.
     await page.getByRole('button', { name: /A cartridge file/i }).click()
-    await page.getByRole('tab', { name: 'Word document' }).click()
-    await page.getByLabel('Word document').setInputFiles({
-      name: 'production-docx.docx',
-      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      buffer: Buffer.from(docxBytes),
+    await page.getByRole('tab', { name: 'Document' }).click()
+    await page.getByLabel('Document file').setInputFiles({
+      name: 'production-reader.epub',
+      mimeType: 'application/epub+zip',
+      buffer: Buffer.from(epubBytes),
     })
     await page.getByRole('radio', { name: 'I created or own this content' }).click()
     await page.getByRole('checkbox', { name: /I am responsible for rights/i }).click()
-    await page.getByRole('button', { name: 'Inspect DOCX' }).click()
-    await page.getByRole('heading', { name: 'Preview: production-docx' }).waitFor()
+    await page.getByRole('button', { name: 'Inspect document' }).click()
+    await page.getByRole('heading', { name: 'Preview: production-reader' }).waitFor()
     await page.getByRole('button', { name: 'Prepare this document' }).click()
     await page.getByText('Stores DNA').waitFor({ state: 'visible', timeout: 120_000 })
     await page.getByRole('button', { name: /^Plan$/ }).click()
 
-    const docxDownload = page.waitForEvent('download', { timeout: 60_000 })
+    const documentDownload = page.waitForEvent('download', { timeout: 60_000 })
     await page.getByRole('button', { name: /^Download cartridge/ }).click()
-    const docxFile = await docxDownload
-    const savedDocxCartridge = join(tmpdir(), `docx-${docxFile.suggestedFilename()}`)
-    await docxFile.saveAs(savedDocxCartridge)
+    const documentFile = await documentDownload
+    const savedDocumentCartridge = join(tmpdir(), `epub-${documentFile.suggestedFilename()}`)
+    await documentFile.saveAs(savedDocumentCartridge)
     try {
-      execFileSync('unzip', ['-t', savedDocxCartridge], { stdio: 'pipe' })
-      const listed = execFileSync('unzip', ['-Z1', savedDocxCartridge], { encoding: 'utf8' }).trim().split('\n')
+      execFileSync('unzip', ['-t', savedDocumentCartridge], { stdio: 'pipe' })
+      const listed = execFileSync('unzip', ['-Z1', savedDocumentCartridge], { encoding: 'utf8' }).trim().split('\n')
       const pages = listed.filter((name) => name.startsWith('wiki_content/'))
-      if (pages.length !== 1) failures.push(`built DOCX cartridge has ${pages.length} page(s), expected 1`)
+      if (pages.length !== 1) failures.push(`built EPUB cartridge has ${pages.length} page(s), expected 1`)
       if (pages[0]) {
-        const html = execFileSync('unzip', ['-p', savedDocxCartridge, pages[0]], { encoding: 'utf8' })
+        const html = execFileSync('unzip', ['-p', savedDocumentCartridge, pages[0]], { encoding: 'utf8' })
         if (!html.includes('Cell Biology') || !html.includes('Stores DNA') || !html.includes('<table')) {
-          failures.push('built DOCX cartridge did not retain its heading, table text, and table semantics')
+          failures.push('built EPUB cartridge did not retain its heading, table text, and table semantics')
         }
       }
     } catch (e) {
-      failures.push(`built DOCX workflow downloaded an unreadable cartridge: ${e.message}`)
+      failures.push(`built EPUB workflow downloaded an unreadable cartridge: ${e.message}`)
     } finally {
-      rmSync(savedDocxCartridge, { force: true })
+      rmSync(savedDocumentCartridge, { force: true })
     }
 
     // Start a fresh UI session for the independent publisher smoke below.

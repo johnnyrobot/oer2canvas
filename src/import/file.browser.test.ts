@@ -1,5 +1,5 @@
 import { semanticDocxFixture } from './testing/docx-fixture'
-import { importDocx } from './docx'
+import { importStructuredDocument } from './document'
 import { toChapter } from './to-chapter'
 import { compileAndAuditChapter } from '../engine'
 import { DOCUMENT } from '../engine/compile/context'
@@ -19,7 +19,7 @@ test('a real DOCX worker produces safe ordered semantics through the public file
     type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   })
 
-  const imported = await importDocx(file, { metadata })
+  const imported = await importStructuredDocument(file, { metadata })
   expect(fetchSpy).not.toHaveBeenCalled()
   fetchSpy.mockRestore()
   const doc = new DOMParser().parseFromString(imported.work.sections[0]!.html, 'text/html')
@@ -59,7 +59,7 @@ test('content detection rejects a non-DOCX even when its name and MIME type clai
     { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
   )
 
-  await expect(importDocx(renamedRtf, { metadata })).rejects.toThrow(/contents are rtf, not a DOCX/i)
+  await expect(importStructuredDocument(renamedRtf, { metadata })).rejects.toThrow(/contents are rtf, not a DOCX/i)
 })
 
 test('embedded DOCX content is visible as a blocking finding instead of disappearing', async () => {
@@ -67,14 +67,14 @@ test('embedded DOCX content is visible as a blocking finding instead of disappea
     type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   })
 
-  const imported = await importDocx(file, { metadata })
+  const imported = await importStructuredDocument(file, { metadata })
 
   expect(imported.report.counts.images).toBe(1)
   expect(imported.report.findings).toContainEqual(expect.objectContaining({
     code: 'embedded-content',
     severity: 'blocker',
     sectionId: imported.work.sections[0]?.id,
-    message: expect.stringMatching(/text-only DOCX workflow cannot publish/i),
+    message: expect.stringMatching(/text-oriented document workflow cannot publish/i),
   }))
   expect(imported.work.sections[0]?.html).toContain('[Embedded image: Cell diagram]')
   expect(imported.work.assets).toEqual([])
@@ -83,7 +83,7 @@ test('embedded DOCX content is visible as a blocking finding instead of disappea
 test('a DOCX parse can be cancelled at the public progress seam and retried cleanly', async () => {
   const bytes = await semanticDocxFixture()
   const controller = new AbortController()
-  const cancelled = importDocx(new File([bytes], 'cancel.docx'), {
+  const cancelled = importStructuredDocument(new File([bytes], 'cancel.docx'), {
     metadata,
     signal: controller.signal,
     onProgress: (progress) => {
@@ -92,12 +92,12 @@ test('a DOCX parse can be cancelled at the public progress seam and retried clea
   })
 
   await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' })
-  await expect(importDocx(new File([bytes], 'retry.docx'), { metadata }))
+  await expect(importStructuredDocument(new File([bytes], 'retry.docx'), { metadata }))
     .resolves.toMatchObject({ report: { parser: 'anydoc', format: 'docx' } })
 })
 
 test('a text DOCX reaches the existing compile, audit, and cartridge seams without a format bypass', async () => {
-  const imported = await importDocx(
+  const imported = await importStructuredDocument(
     new File([await semanticDocxFixture()], 'workflow.docx'),
     { metadata },
   )

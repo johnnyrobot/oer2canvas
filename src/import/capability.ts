@@ -5,10 +5,12 @@ export type DocumentCapabilityStatus = 'enabled' | 'probe-only'
 
 export interface DocumentFormatCapability {
   format: ImportedFormat
+  label: string
   extensions: readonly `.${string}`[]
   mediaTypes: readonly string[]
   parser: 'native' | ParserKind
   status: DocumentCapabilityStatus
+  limitations: readonly string[]
   /** Lazy by construction: importing the table does not import either Worker client. */
   probe?: (options: Omit<ParserProbeOptions, 'parser' | 'formatHint'>) => Promise<ParserProbeResult>
 }
@@ -23,49 +25,61 @@ function parserProbe(parser: ParserKind, formatHint: string): NonNullable<Docume
 export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] = [
   {
     format: 'text',
+    label: 'Plain text',
     extensions: ['.txt'],
     mediaTypes: ['text/plain'],
     parser: 'native',
     status: 'enabled',
+    limitations: ['Formatting beyond paragraphs and line breaks is not present in plain text.'],
   },
   {
     format: 'docx',
+    label: 'Word document',
     extensions: ['.docx'],
     mediaTypes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
     parser: 'anydoc',
     status: 'enabled',
+    limitations: ['Text boxes, complex pagination, and embedded content may require manual remediation.'],
     probe: parserProbe('anydoc', 'docx'),
   },
   {
     format: 'odt',
+    label: 'OpenDocument text',
     extensions: ['.odt'],
     mediaTypes: ['application/vnd.oasis.opendocument.text'],
     parser: 'anydoc',
-    status: 'probe-only',
+    status: 'enabled',
+    limitations: ['Page styling and visual layout are not reproduced.'],
     probe: parserProbe('anydoc', 'odt'),
   },
   {
     format: 'rtf',
+    label: 'Rich Text Format',
     extensions: ['.rtf'],
     mediaTypes: ['application/rtf', 'text/rtf'],
     parser: 'anydoc',
-    status: 'probe-only',
+    status: 'enabled',
+    limitations: ['Complex drawings and visual layout may be flattened.'],
     probe: parserProbe('anydoc', 'rtf'),
   },
   {
     format: 'epub',
+    label: 'EPUB',
     extensions: ['.epub'],
     mediaTypes: ['application/epub+zip'],
     parser: 'anydoc',
-    status: 'probe-only',
+    status: 'enabled',
+    limitations: ['Source styling is discarded; embedded images block this text-oriented workflow.'],
     probe: parserProbe('anydoc', 'epub'),
   },
   {
     format: 'pdf',
+    label: 'PDF',
     extensions: ['.pdf'],
     mediaTypes: ['application/pdf'],
     parser: 'pdf-inspector',
     status: 'probe-only',
+    limitations: ['Scanned pages require OCR and complex reading order requires review.'],
     probe: parserProbe('pdf-inspector', 'pdf'),
   },
 ] as const
@@ -74,6 +88,20 @@ const plainText = DOCUMENT_FORMAT_CAPABILITIES.find((entry) => entry.format === 
 export const PLAIN_TEXT_FILE_ACCEPT = [...plainText.extensions, ...plainText.mediaTypes].join(',')
 const docx = DOCUMENT_FORMAT_CAPABILITIES.find((entry) => entry.format === 'docx')!
 export const DOCX_FILE_ACCEPT = [...docx.extensions, ...docx.mediaTypes].join(',')
+
+export const ENABLED_ANYDOC_CAPABILITIES = DOCUMENT_FORMAT_CAPABILITIES.filter(
+  (entry) => entry.status === 'enabled' && entry.parser === 'anydoc',
+)
+export const STRUCTURED_DOCUMENT_FILE_ACCEPT = ENABLED_ANYDOC_CAPABILITIES
+  .flatMap((entry) => [...entry.extensions, ...entry.mediaTypes])
+  .join(',')
+const structuredDocumentExtensionLabels = ENABLED_ANYDOC_CAPABILITIES
+  .flatMap((entry) => entry.extensions)
+  .map((extension) => extension.slice(1).toUpperCase())
+export const STRUCTURED_DOCUMENT_FORMAT_SUMMARY = [
+  structuredDocumentExtensionLabels.slice(0, -1).join(', '),
+  structuredDocumentExtensionLabels.at(-1),
+].filter(Boolean).join(', or ')
 
 export function releaseEnabledFormats(): ImportedFormat[] {
   return DOCUMENT_FORMAT_CAPABILITIES
@@ -85,4 +113,8 @@ export function capabilityForFilename(filename: string): DocumentFormatCapabilit
   const lower = filename.toLowerCase()
   return DOCUMENT_FORMAT_CAPABILITIES.find((entry) =>
     entry.extensions.some((extension) => lower.endsWith(extension)))
+}
+
+export function capabilityForFormat(format: ImportedFormat): DocumentFormatCapability | undefined {
+  return DOCUMENT_FORMAT_CAPABILITIES.find((entry) => entry.format === format)
 }

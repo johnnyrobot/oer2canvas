@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { OpenStaxBrowser } from './OpenStaxBrowser'
 import { PlainTextImporter } from './PlainTextImporter'
-import { DocxImporter } from './DocxImporter'
+import { DocumentImporter } from './DocumentImporter'
 import {
   loadLibreTextsCatalog,
   loadPressbooksCatalog,
@@ -12,7 +12,7 @@ import type { BookRef } from '../sources/types'
 import type { ImportResult } from '../import/types'
 import { messageOf } from '../errors'
 
-type SourceTab = 'openstax' | 'libretexts' | 'pressbooks' | 'docx' | 'text'
+type SourceTab = 'openstax' | 'libretexts' | 'pressbooks' | 'document' | 'text'
 type CatalogTab = Extract<SourceTab, 'libretexts' | 'pressbooks'>
 
 const BASE_TABS = ['openstax', 'libretexts', 'pressbooks'] as const
@@ -20,7 +20,7 @@ const TAB_LABELS: Readonly<Record<SourceTab, string>> = {
   openstax: 'OpenStax',
   libretexts: 'LibreTexts',
   pressbooks: 'Pressbooks',
-  docx: 'Word document',
+  document: 'Document',
   text: 'Plain text',
 }
 
@@ -54,11 +54,11 @@ const defaultPressbooks = pressbooksNetworks.find((network) => network.isDefault
 export function SourceBrowser({
   onPick,
   onImportText,
-  onImportDocx,
+  onImportDocument,
 }: {
   onPick: (book: BookRef) => void
   onImportText?: (result: ImportResult) => void
-  onImportDocx?: (result: ImportResult) => void
+  onImportDocument?: (result: ImportResult) => void
 }) {
   const [tab, setTab] = useState<SourceTab>('openstax')
   const [libreUrl, setLibreUrl] = useState('')
@@ -114,12 +114,12 @@ export function SourceBrowser({
     <section aria-labelledby="source-heading">
       <h2 id="source-heading" className="text-xl font-semibold">Choose content</h2>
       <p className="mt-1 text-sm text-neutral-700 dark:text-neutral-300">
-        Search an OER publisher, upload a Word document, or import plain text from this browser.
+        Search an OER publisher, upload a document, or import plain text from this browser.
       </p>
       <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Content source">
         {[
           ...BASE_TABS,
-          ...(onImportDocx ? ['docx' as const] : []),
+          ...(onImportDocument ? ['document' as const] : []),
           ...(onImportText ? ['text' as const] : []),
         ].map((source) => (
           <button
@@ -141,7 +141,7 @@ export function SourceBrowser({
 
       <div className="mt-5">
         {tab === 'openstax' && <OpenStaxBrowser onPick={onPick} />}
-        {tab === 'docx' && onImportDocx && <DocxImporter onConfirm={onImportDocx} />}
+        {tab === 'document' && onImportDocument && <DocumentImporter onConfirm={onImportDocument} />}
         {tab === 'text' && onImportText && <PlainTextImporter onConfirm={onImportText} />}
         {catalog && (
           <section aria-labelledby={`${tab}-catalog-heading`}>

@@ -82,18 +82,22 @@ test('plain text is a content choice without removing the publisher catalogs', (
   expect(screen.getByRole('button', { name: 'Algebra and Trigonometry' })).toBeVisible()
 })
 
-test('DOCX upload is a content choice beside plain text and publisher catalogs', () => {
+test('tested structured formats are one document choice beside plain text and publisher catalogs', () => {
   render(
     <SourceBrowser
       onPick={() => {}}
       onImportText={() => {}}
-      onImportDocx={() => {}}
+      onImportDocument={() => {}}
     />,
   )
 
-  fireEvent.click(screen.getByRole('tab', { name: 'Word document' }))
-  expect(screen.getByLabelText('Word document')).toHaveAttribute('accept', expect.stringContaining('.docx'))
-  expect(screen.getByRole('button', { name: 'Inspect DOCX' })).toBeVisible()
+  fireEvent.click(screen.getByRole('tab', { name: 'Document' }))
+  const input = screen.getByLabelText('Document file')
+  expect(input).toHaveAttribute('accept', expect.stringContaining('.docx'))
+  expect(input).toHaveAttribute('accept', expect.stringContaining('.epub'))
+  expect(input).toHaveAttribute('accept', expect.stringContaining('.odt'))
+  expect(input).toHaveAttribute('accept', expect.stringContaining('.rtf'))
+  expect(screen.getByRole('button', { name: 'Inspect document' })).toBeVisible()
 
   fireEvent.click(screen.getByRole('tab', { name: 'Plain text' }))
   expect(screen.getByLabelText('Text to import')).toBeVisible()
