@@ -42,6 +42,18 @@ export interface ImportedAsset {
   bytes: Uint8Array
   sha256: string
   originPart?: string
+  /**
+   * The packaged archive filename (e.g. `image1-a3f91c2e.png`), assigned once
+   * at import by `prepareAssets` (src/import/assets.ts). Content-identical
+   * assets share one `name` even when their `originPart`s differ, because
+   * `originPart` records where THIS occurrence came from while `name` records
+   * the ONE archive entry all occurrences of that content resolve to.
+   * Consumers must use this field as-is rather than recomputing it from
+   * `originPart` via `packagedAssetName` — recomputing from a non-winning
+   * occurrence's `originPart` would produce a name that does not match the
+   * archive entry actually referenced elsewhere.
+   */
+  name: string
 }
 
 export interface ImportedWork {

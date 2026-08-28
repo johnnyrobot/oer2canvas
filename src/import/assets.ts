@@ -14,7 +14,7 @@ import { PARSER_PROBE_LIMITS } from './parser-limit-values'
 export const PACKAGED_ASSET_DIRECTORY = 'oer2canvas'
 const FILEBASE = '$IMS-CC-FILEBASE$'
 
-export type AssetRejection = 'unavailable' | 'unsupported-type' | 'undecodable' | 'too-large' | 'too-many'
+export type AssetRejection = 'unavailable' | 'unsupported-type' | 'too-large' | 'too-many'
 
 export interface PreparedAsset {
   assetId: number
@@ -93,21 +93,49 @@ function jpeg(bytes: Uint8Array): SniffedRaster | undefined {
   return undefined
 }
 
+/**
+ * Sniffs the actual bytes against the four supported signatures and reads
+ * intrinsic size from the same header. Returns `undefined` both for content
+ * that is not one of these four formats at all (e.g. SVG, or a declared
+ * `image/*` type that lies) AND for a truncated or otherwise corrupt header
+ * of a real format (e.g. a PNG cut off before its `IHDR` chunk) — the two
+ * cases are deliberately NOT distinguished, because there is no reliable
+ * signal to distinguish "not this format" from "this format, broken" without
+ * guessing. Both are refused identically: an asset this function can't read
+ * a true size for must never be shipped.
+ */
 export function sniffRaster(bytes: Uint8Array): SniffedRaster | undefined {
   const found = png(bytes) ?? gif(bytes) ?? webp(bytes) ?? jpeg(bytes)
   if (!found || found.width <= 0 || found.height <= 0) return undefined
   return found
 }
 
+/**
+ * A handful of ordinary Latin letters have no Unicode decomposition mapping
+ * at all, so `normalize('NFKD')` below leaves them untouched and they would
+ * otherwise survive to the final `[^a-z0-9]` reduction and get flattened to a
+ * hyphen instead of folding to a readable letter (e.g. "Ünïcødé" losing its
+ * `o` rather than becoming "unicode"). This table is deliberately small — the
+ * common cases likely to appear in real document or author names (Nordic,
+ * German, Polish, and the French/Latin ligatures) — not a general
+ * transliteration engine. Anything outside it still degrades safely to a
+ * hyphen, which is an acceptable trade-off for a filename slug.
+ */
+const NON_DECOMPOSING_LETTERS: Record<string, string> = {
+  ø: 'o', Ø: 'o',
+  æ: 'ae', Æ: 'ae',
+  œ: 'oe', Œ: 'oe',
+  đ: 'd', Đ: 'd',
+  ł: 'l', Ł: 'l',
+  ß: 'ss',
+}
+const NON_DECOMPOSING_LETTERS_PATTERN = new RegExp(`[${Object.keys(NON_DECOMPOSING_LETTERS).join('')}]`, 'g')
+
 export function packagedAssetName(originPart: string, sha256: string, extension: string): string {
   const basename = originPart.split(/[\\/]/).pop() ?? ''
   const slug = basename
     .replace(/\.[^.]*$/, '')
-    // `ø`/`Ø` (and similarly "letter with stroke" glyphs) have no Unicode
-    // decomposition mapping at all — NFKD leaves them untouched — so they must
-    // be transliterated by hand before the generic diacritic strip below, or a
-    // name like "Ünïcødé" loses its `o` entirely instead of folding to it.
-    .replace(/[øØ]/g, 'o')
+    .replace(NON_DECOMPOSING_LETTERS_PATTERN, (letter) => NON_DECOMPOSING_LETTERS[letter]!)
     .normalize('NFKD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
@@ -165,11 +193,18 @@ export async function prepareAssets(
       prepared.set(asset.id, { rejected: 'unsupported-type' })
       continue
     }
-    // `sha256Hex` is typed against `Uint8Array<ArrayBuffer>`; a `Uint8Array`
-    // arriving from elsewhere (e.g. a DataView-backed slice) may carry the
-    // wider `ArrayBufferLike`, so `.slice()` produces a fresh, concretely
-    // `ArrayBuffer`-backed copy that satisfies the signature.
-    const sha256 = await sha256Hex(asset.data.slice())
+    // `sha256Hex` is typed against `ArrayBuffer | Uint8Array<ArrayBuffer>`; a
+    // `Uint8Array` arriving from elsewhere (e.g. a DataView-backed slice) may
+    // carry the wider `ArrayBufferLike`, which isn't assignable. `sha256Hex`
+    // itself already takes a defensive copy of anything that isn't literally
+    // an `ArrayBuffer` (so an in-flight digest can't observe the caller
+    // mutating the source afterwards) — passing `.slice().buffer` here does
+    // that ONE required copy ourselves and hands over a concrete `ArrayBuffer`,
+    // so `sha256Hex` takes its `bytes instanceof ArrayBuffer` branch and skips
+    // its own copy. Passing `.slice()` (a `Uint8Array`) instead would still
+    // typecheck but would silently double the copy for every asset, up to
+    // 4 MiB each.
+    const sha256 = await sha256Hex(asset.data.slice().buffer)
     let identity = byHash.get(sha256)
     if (!identity) {
       const name = packagedAssetName(asset.originPart, sha256, sniffed.extension)

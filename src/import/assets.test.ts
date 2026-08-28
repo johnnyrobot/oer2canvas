@@ -2,6 +2,7 @@ import { RASTER_FIXTURES } from './testing/raster-fixtures'
 import {
   isPackagedReference, packagedArchivePath, packagedAssetName, packagedReference,
   prepareAssets, sniffRaster,
+  type PreparedAsset,
 } from './assets'
 
 test.each(['png', 'jpeg', 'gif', 'webp'] as const)('sniffs %s and reads its true size', (key) => {
@@ -49,6 +50,32 @@ test('identical bytes prepare to one identity regardless of origin name', async 
   expect((prepared.get(0) as { sha256: string }).sha256).toBe((prepared.get(1) as { sha256: string }).sha256)
   expect((prepared.get(0) as { archivePath: string }).archivePath)
     .toBe((prepared.get(1) as { archivePath: string }).archivePath)
+})
+
+test('the packaged name is carried on every occurrence, never recomputed from its own originPart', async () => {
+  // Regression for a real hazard: a downstream consumer that recomputes
+  // `packagedAssetName` from an asset's OWN `originPart` instead of using the
+  // `name` carried on the record would get a different filename for the
+  // second occurrence than the archive entry that content actually landed
+  // at — the page would reference `first-occurrence-<hash>.png` while the
+  // cartridge shipped `second-occurrence-<hash>.png`.
+  const prepared = await prepareAssets([
+    { id: 0, mediaType: 'image/png', originPart: 'assets/first-occurrence.png', data: RASTER_FIXTURES.png.bytes },
+    { id: 1, mediaType: 'image/png', originPart: 'assets/second-occurrence.png', data: RASTER_FIXTURES.png.bytes },
+  ])
+  const first = prepared.get(0) as PreparedAsset
+  const second = prepared.get(1) as PreparedAsset
+
+  // One archive identity, shared...
+  expect(second.name).toBe(first.name)
+  expect(second.archivePath).toBe(first.archivePath)
+  // ...but provenance stays per-occurrence: each keeps its own originPart.
+  expect(first.originPart).toBe('assets/first-occurrence.png')
+  expect(second.originPart).toBe('assets/second-occurrence.png')
+  // Recomputing from the second occurrence's own originPart would NOT
+  // reproduce the name it was actually given — proof that a consumer must
+  // use `.name` as carried, not `packagedAssetName(asset.originPart, ...)`.
+  expect(packagedAssetName(second.originPart, second.sha256, second.extension)).not.toBe(second.name)
 })
 
 test('rejects an oversized asset and an over-count document', async () => {
