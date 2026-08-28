@@ -71,7 +71,7 @@ export function parseStoredImages(html) {
   return images
 }
 
-class Canvas {
+export class Canvas {
   constructor(baseUrl, token) {
     this.baseUrl = baseUrl.replace(/\/$/, '')
     this.token = token
@@ -153,7 +153,7 @@ class Canvas {
   }
 }
 
-async function createCourse(canvas, accountId, name) {
+export async function createCourse(canvas, accountId, name) {
   const form = new URLSearchParams({
     'course[name]': name,
     'course[course_code]': name,
@@ -165,7 +165,7 @@ async function createCourse(canvas, accountId, name) {
 }
 
 /** Canvas's two-step file upload, then the migration it feeds. */
-async function importCartridge(canvas, courseId, filePath, filename) {
+export async function importCartridge(canvas, courseId, filePath, filename) {
   const bytes = readFileSync(filePath)
   const form = new URLSearchParams({
     migration_type: 'common_cartridge_importer',
@@ -282,7 +282,7 @@ function inspectExport(path) {
   }
 }
 
-async function readCourseContent(canvas, courseId) {
+export async function readCourseContent(canvas, courseId) {
   const pageList = await canvas.paginate(`/api/v1/courses/${courseId}/pages`)
   const pages = []
   for (const summary of pageList) {
@@ -314,7 +314,7 @@ async function readCourseContent(canvas, courseId) {
  * `src` proves nothing about whether Canvas served decodable bytes, and Canvas is
  * documented to store one value while rendering another.
  */
-async function renderPages(context, baseUrl, courseId, pages, evidenceDirectory, label) {
+export async function renderPages(context, baseUrl, courseId, pages, evidenceDirectory, label) {
   const page = await context.newPage()
   const consoleErrors = []
   page.on('console', (message) => {

@@ -1,0 +1,70 @@
+import { commands } from 'vitest/browser'
+import { semanticDocxFixture } from './testing/docx-fixture'
+import { importStructuredDocument } from './document'
+import { toChapter } from './to-chapter'
+import { compileAndAuditChapter } from '../engine'
+import { DOCUMENT } from '../engine/compile/context'
+import { buildCartridge } from '../engine/export/cartridge'
+import { writeZip } from '../engine/export/zip'
+
+const metadata = {
+  title: 'Biology handout',
+  author: 'Ada Instructor',
+  sourceName: 'Biology Department',
+  rightsAuthority: 'own' as const,
+  rightsAcknowledged: true,
+}
+
+/**
+ * `commands.writeFile` (Vitest's browser-mode bridge back to the real Node
+ * `fs` running the test server — see `@vitest/browser/dist/index.js`) only
+ * accepts a string body, never bytes. Base64, chunked rather than spread in
+ * one `String.fromCharCode(...bytes)` call: a cartridge with any real content
+ * is well past the argument-count ceiling that blows the call stack on a
+ * naive spread.
+ */
+function toBase64(bytes: Uint8Array): string {
+  const CHUNK = 0x8000
+  let binary = ''
+  for (let offset = 0; offset < bytes.length; offset += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + CHUNK))
+  }
+  return btoa(binary)
+}
+
+/**
+ * Produces the acceptance artifact `scripts/verify-canvas-image-tracer.mjs`
+ * imports into a live Canvas (document-import issue 08). It drives the REAL
+ * pipeline — the anydoc Worker (via the public `importStructuredDocument`
+ * seam `file.browser.test.ts` already exercises), the real compile+gate
+ * (`compileAndAuditChapter` with NO `deps` override, so this runs the actual
+ * production allowlist and axe audit rather than a stub — the same call
+ * `App.tsx`'s `compileForReview` makes), and the real `buildCartridge` +
+ * `writeZip` pair `download.ts` uses for a genuine export. What Canvas is
+ * handed here is exactly what an instructor's browser would hand it.
+ *
+ * Driving the app's UI with Playwright instead would rest this acceptance
+ * proof on brittle selectors and re-test the interface rather than the
+ * packaging this issue is actually about.
+ */
+test('emits a cartridge whose packaged image survives the gate', async () => {
+  const file = new File([await semanticDocxFixture({ embeddedImage: true })], 'diagram.docx', {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  })
+
+  const imported = await importStructuredDocument(file, { metadata })
+  const compiled = await compileAndAuditChapter(toChapter(imported.work), { profile: DOCUMENT })
+
+  // The load-bearing assertion: if the real gate ever stopped preserving the
+  // packaged-image reference (allowlist regression, gate rewriting `img.src`,
+  // etc.), this is what catches it — BEFORE the bytes below ship into an
+  // artifact and get handed to a live Canvas that would otherwise just render
+  // a broken picture with nobody the wiser.
+  const gateHtml = compiled.sections[0]?.gate?.html ?? ''
+  expect(gateHtml).toContain('$IMS-CC-FILEBASE$/oer2canvas/')
+
+  const cartridge = await writeZip(buildCartridge([compiled]))
+  await commands.writeFile('artifacts/packaged-image-tracer/tracer.imscc', toBase64(cartridge), {
+    encoding: 'base64',
+  })
+})
