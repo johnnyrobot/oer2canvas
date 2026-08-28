@@ -189,6 +189,7 @@ instance. See [ACCESSIBILITY.md](ACCESSIBILITY.md).
 - [Production operations runbook](docs/OPERATIONS.md)
 - [Proposed browser document import specification](docs/DOCUMENT_IMPORT_SPEC.md)
 - [Proposed browser document import implementation plan](docs/DOCUMENT_IMPORT_IMPLEMENTATION_PLAN.md)
+- [Canvas embedded-image probe procedure](docs/canvas-image-probes/README.md)
 - [Privacy notice](PRIVACY.md)
 - [Security policy](SECURITY.md)
 - [Accessibility statement](ACCESSIBILITY.md)

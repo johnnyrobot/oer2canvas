@@ -1,6 +1,6 @@
 # Document import map
 
-**Frontier:** 06 — Generate deterministic Canvas embedded-image probe cartridges.
+**Frontier:** 07 — Validate embedded-image behavior in a real Canvas sandbox.
 
 | Issue | Status | Blocked by |
 | --- | --- | --- |
@@ -9,7 +9,7 @@
 | [03 — Import text-only DOCX](issues/03-import-text-only-docx.md) | resolved | 01, 02 |
 | [04 — Enable EPUB, ODT, and RTF](issues/04-enable-epub-odt-rtf.md) | resolved | 03 |
 | [05 — Import Markdown and HTML safely](issues/05-import-markdown-html-safely.md) | resolved | 01 |
-| [06 — Generate Canvas image probes](issues/06-generate-canvas-image-probes.md) | ready-for-agent | — |
+| [06 — Generate Canvas image probes](issues/06-generate-canvas-image-probes.md) | resolved | — |
 | [07 — Validate images in Canvas](issues/07-validate-images-in-canvas.md) | ready-for-human | 06 |
 | [08 — Ship embedded-image tracer](issues/08-ship-embedded-image-tracer.md) | ready-for-agent | 04, 07 |
 | [09 — Harden packaged assets](issues/09-harden-packaged-assets.md) | ready-for-agent | 08 |

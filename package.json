@@ -17,6 +17,8 @@
     "benchmark:vlm": "node scripts/benchmark-vlm.mjs",
     "benchmark:vlm:review": "node scripts/vlm-review.mjs",
     "benchmark:document-parsers": "node scripts/benchmark-document-parsers.mjs",
+    "probe:canvas-images": "node scripts/canvas-image-probes.mjs",
+    "probe:canvas-images:validate": "node scripts/canvas-image-probes.mjs --validate",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
     "build": "npm run typecheck && vite build",
     "test": "vitest run",
