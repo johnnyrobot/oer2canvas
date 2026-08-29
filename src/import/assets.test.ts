@@ -99,6 +99,37 @@ test('the packaged name is carried on every occurrence, never recomputed from it
   expect(packagedAssetName(second.originPart, second.sha256, second.extension)).not.toBe(second.name)
 })
 
+/**
+ * Every extension in this system is an OUTPUT of `sniffRaster`, never an
+ * input to a decision — `originPart`'s trailing `.png`/`.svg` is provenance
+ * for the display name only, and `prepareAssets` never reads it to decide
+ * whether to accept an asset or what to call its format. Nothing else in this
+ * suite exercises a MISMATCH between the origin filename and the true
+ * content, so nothing would notice a future regression that started trusting
+ * the filename instead of the sniff — e.g. a "fast path" that skips sniffing
+ * when the name already looks like a supported image.
+ */
+test('refusal is decided by content, never by the origin filename', async () => {
+  const svgBytes = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>')
+  // An SVG wearing a .png name is still refused: the declared mediaType and
+  // the origin path both claim PNG, but the bytes are not a raster this
+  // system understands, and content wins.
+  const disguised = await prepareAssets([
+    { id: 0, mediaType: 'image/png', originPart: 'media/diagram.png', data: svgBytes },
+  ])
+  expect(disguised.get(0)).toEqual({ rejected: 'unsupported-type' })
+
+  // ... and a real PNG wearing a .svg name still packages, with the sniffed
+  // extension rather than the one in its path — the archive entry and the
+  // reference must be internally consistent with what the bytes actually are,
+  // not with what the source document happened to call them.
+  const mislabelled = await prepareAssets([
+    { id: 0, mediaType: 'image/svg+xml', originPart: 'media/diagram.svg', data: RASTER_FIXTURES.png.bytes },
+  ])
+  expect(mislabelled.get(0)).toMatchObject({ mediaType: 'image/png', extension: 'png' })
+  expect((mislabelled.get(0) as { name: string }).name).toMatch(/\.png$/)
+})
+
 test('rejects an oversized asset and an over-count document', async () => {
   const huge = new Uint8Array(4 * 1024 * 1024 + 1)
   huge.set(RASTER_FIXTURES.png.bytes)

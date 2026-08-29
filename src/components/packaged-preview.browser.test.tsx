@@ -224,6 +224,36 @@ describe('ChapterView', () => {
 
     revoke.mockRestore()
   })
+
+  /**
+   * `App.tsx`'s `clearDerivedOutput` calls `setConfirmedImport(undefined)`
+   * whenever a prepared import is discarded — cancelled, replanned, or
+   * superseded by starting a new one. That state change unmounts the whole
+   * review subtree this component lives in, exactly like the `unmount()`
+   * above, but is worth pinning under its own name: this is the actual
+   * product event ("discard an import") the lifecycle guarantee exists for,
+   * not just an incidental way to trigger a real unmount in a test. Without
+   * it, an import/discard/import cycle would leak one blob url per packaged
+   * image in the discarded chapter, for the life of the tab.
+   */
+  test('discarding the import revokes its object urls', async () => {
+    const revoke = vi.spyOn(URL, 'revokeObjectURL')
+    const chapter: Chapter = { ...baseChapter, assets: [PACKAGED_ASSET] }
+    const compiled = compiledWith(chapter, `<img alt="A diagram" src="${PACKAGED_REFERENCE}">`)
+
+    const { container, rerender } = render(<ChapterView compiled={compiled} />)
+    const image = container.querySelector('img')!
+    await waitForDecode(image)
+    const used = image.getAttribute('src')!
+    expect(used).toMatch(/^blob:/)
+
+    // Standing in for `setConfirmedImport(undefined)`: the consumer of these
+    // urls goes away entirely, and its urls must go with it.
+    rerender(<></>)
+    await waitFor(() => expect(revoke).toHaveBeenCalledWith(used))
+
+    revoke.mockRestore()
+  })
 })
 
 describe('ImportPlanEditor', () => {
