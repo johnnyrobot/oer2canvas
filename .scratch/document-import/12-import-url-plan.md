@@ -161,7 +161,7 @@ no API key and spends no credit.
   the assertion logic without touching the network.
 - The default export / `main()` drives Playwright and is never run by `vitest`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `scripts/verify-firecrawl-cors.test.mjs` (the `unit` project already includes
 `scripts/**/*.test.mjs`):
@@ -192,13 +192,13 @@ test('a preflight is accepted only when it admits both headers this feature send
 })
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project unit scripts/verify-firecrawl-cors.test.mjs`
 Expected: FAIL — `scripts/verify-firecrawl-cors.mjs` does not exist, so the import throws
 `ERR_MODULE_NOT_FOUND`.
 
-- [ ] **Step 3: Write the probe**
+- [x] **Step 3: Write the probe**
 
 `scripts/verify-firecrawl-cors.mjs`. The assertion half is pure and exported; the Playwright half
 runs only from `main()`.
@@ -260,12 +260,12 @@ Add to `package.json`:
 "verify:firecrawl-cors": "node scripts/verify-firecrawl-cors.mjs"
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run --project unit scripts/verify-firecrawl-cors.test.mjs`
 Expected: PASS.
 
-- [ ] **Step 5: Run the live probe once, out of band, and record what it said**
+- [x] **Step 5: Run the live probe once, out of band, and record what it said**
 
 Run: `npm run verify:firecrawl-cors`
 Expected: it prints the three header values and exits 0.
@@ -274,13 +274,38 @@ do not weaken the assertion. Everything after this task assumes a browser can re
 `api.firecrawl.dev`; if it cannot, the plan's premise is gone and the human must re-choose from the
 design's option table. Paste the printed headers into the task report either way.
 
-- [ ] **Step 6: Run the whole suite and commit**
+- [x] **Step 6: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
 git add scripts/verify-firecrawl-cors.mjs scripts/verify-firecrawl-cors.test.mjs package.json
 git commit -m "test: prove a real browser is allowed to preflight firecrawl"
 ```
+
+**Measured 2026-08-29 — live run, headless Chromium, origin `http://127.0.0.1:<ephemeral>`:**
+
+```
+preflight status:                   204
+access-control-allow-origin:        *
+access-control-allow-headers:       authorization,content-type
+access-control-allow-methods:       GET,HEAD,PUT,PATCH,POST,DELETE
+keyless POST readable by page script: HTTP 401
+```
+
+Identical to the four curl probes. The browser-direct posture holds; Task 3 onward may proceed.
+
+**Two deviations from this task as written, both forced by how Chromium orders the work:**
+
+1. The preflight is observed over **CDP** (`Network.requestWillBeSent` /
+   `responseReceivedExtraInfo`), not `page.on('response')`. Playwright does not report preflights
+   through page events — they are issued beneath that layer. The first draft watched the right
+   endpoint and observed zero preflights.
+2. The probe is **not preflight-only**. Routing intercepts a request *before* the network stack
+   issues its preflight, so `route.abort()` means no preflight is ever sent and nothing is measured.
+   The keyless POST is allowed to land instead: it carries a placeholder rather than a key, stops at
+   Firecrawl's 401 before anything is scraped, and spends no credit. It also proves the half that
+   matters most — the 401 is **readable** by page script rather than an opaque CORS failure, which is
+   the only reason this feature can ever tell a user their key is wrong.
 
 ---
 
