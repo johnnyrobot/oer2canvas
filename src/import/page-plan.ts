@@ -101,7 +101,13 @@ function serializeText(node: Node): string {
   return holder.innerHTML
 }
 
-function blocksOf(html: string): PlanBlock[] {
+/**
+ * Exported so a caller that needs to count blocks the way a plan does can use
+ * THIS function rather than a copy of its rule. Two definitions that disagree
+ * about whether a whitespace text node is a block would misattribute every
+ * index derived from them.
+ */
+export function blocksOf(html: string): PlanBlock[] {
   const document = new DOMParser().parseFromString(html, 'text/html')
   const blocks: PlanBlock[] = []
   for (const node of document.body.childNodes) {
