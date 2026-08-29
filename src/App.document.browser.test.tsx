@@ -23,7 +23,7 @@ test.each(DOCUMENT_FIXTURE_CASES)('a user takes a local $format document through
   expect(await screen.findByText('Stores DNA')).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: /^Plan$/ }))
   expect(screen.getByText(`1 chapter becomes ${pages} ${pages === 1 ? 'page' : 'pages'} in a cartridge file.`)).toBeVisible()
-  expect(screen.getByText('Packaged assets: 0.')).toBeVisible()
+  expect(screen.getByText('Packaged assets: 0 (1 KB of 8 MB budget).')).toBeVisible()
 })
 
 test('a recoverable DOCX extraction warning remains visible in Plan', async () => {

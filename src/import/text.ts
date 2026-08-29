@@ -119,6 +119,9 @@ export async function importText(
       findings: normalized.findings,
       counts: {
         sections: 1,
+        // Text-like imports never package assets (`work.assets` is always
+        // `[]` above), so there is nothing to total against the budget.
+        packagedAssetBytes: 0,
         ...normalized.counts,
       },
     },

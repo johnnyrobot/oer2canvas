@@ -801,6 +801,7 @@ export default function App() {
           unansweredCount={partial?.queue.length ?? 0}
           {...(confirmedImport ? {
             assetCount: confirmedImport.work.assets.length,
+            assetBytes: confirmedImport.report.counts.packagedAssetBytes,
             importFindings: [...confirmedImport.report.findings, ...(imported?.planFindings ?? [])],
           } : {})}
           {...(existingPages ? { existingPages } : {})}

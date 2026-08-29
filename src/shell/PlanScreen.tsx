@@ -4,6 +4,17 @@ import type { CanvasPage } from '../canvas/client'
 import { buildPlan, commitLabel, reRunBehaviour, type PageStatus } from './plan'
 import type { Destination } from './phases'
 import type { ImportFinding } from '../import/types'
+import { PARSER_PROBE_LIMITS } from '../import/parser-limit-values'
+
+/*
+ * The budget shown is read from the same constant the importer ENFORCES, never
+ * written as a literal, so the number a user is told cannot drift from the
+ * number that actually refuses their images.
+ */
+const formatBytes = (bytes: number): string =>
+  bytes >= 1024 * 1024
+    ? `${(bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, '')} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`
 
 /**
  * What committing would do, before it does it.
@@ -17,7 +28,7 @@ import type { ImportFinding } from '../import/types'
  * would lose the only structure the user actually chose.
  */
 export function PlanScreen({
-  destination, chapters, unansweredCount, onCommit, existingPages, assetCount, importFindings,
+  destination, chapters, unansweredCount, onCommit, existingPages, assetCount, assetBytes, importFindings,
 }: {
   destination?: Destination
   chapters: readonly CompiledChapter[]
@@ -30,6 +41,8 @@ export function PlanScreen({
   existingPages?: readonly CanvasPage[]
   /** Present for browser imports, whose packaged assets must be disclosed exactly. */
   assetCount?: number
+  /** Total bytes of the packaged assets above, shown against the enforced budget. */
+  assetBytes?: number
   /** Parser uncertainty remains visible after the import preview is left behind. */
   importFindings?: readonly ImportFinding[]
 }) {
@@ -56,7 +69,8 @@ export function PlanScreen({
       <p className="mt-2 text-base">{plan.summary}</p>
       {assetCount !== undefined && (
         <p className="mt-1 text-sm text-neutral-700 dark:text-neutral-300">
-          Packaged assets: {assetCount.toLocaleString()}.
+          Packaged assets: {assetCount.toLocaleString()}
+          {assetBytes !== undefined && ` (${formatBytes(assetBytes)} of ${formatBytes(PARSER_PROBE_LIMITS.maximumAssetBytes)} budget)`}.
         </p>
       )}
       {importFindings && importFindings.length > 0 && (

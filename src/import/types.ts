@@ -93,6 +93,8 @@ export interface ImportReport {
     equations: number
     notes: number
     unavailableAssets: number
+    /** Total bytes of assets actually packaged, for pre-export disclosure. */
+    packagedAssetBytes: number
   }
 }
 

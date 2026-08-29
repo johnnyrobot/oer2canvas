@@ -153,8 +153,13 @@ export function buildPlan(
    * `src/canvas/client.ts`, which has no file-upload path at all. A page carrying
    * a packaged reference would therefore import with a broken image. Cartridge
    * export is the only route that carries the bytes, so the plan says so rather
-   * than letting the push half-succeed. Issue 09 owns the Files-API design that
-   * would lift this.
+   * than letting the push half-succeed.
+   *
+   * This is settled, not pending. Uploading through the Canvas Files API would
+   * mean rewriting the packaged reference into a Canvas file url AFTER the gate
+   * approved the html, so the audited bytes would stop being the published
+   * bytes — the invariant that makes the accessibility audit mean anything.
+   * Cartridge export is the route that carries images.
    */
   const packagedAssetCount = chapters.reduce(
     (total, compiled) => total + (compiled.chapter.assets?.length ?? 0),

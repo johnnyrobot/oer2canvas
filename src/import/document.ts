@@ -116,6 +116,10 @@ export async function importStructuredDocument(
         equations: parsed.normalized.equations,
         notes: parsed.normalized.notes,
         unavailableAssets: parsed.normalized.unavailableAssets,
+        packagedAssetBytes: parsed.normalized.packagedAssets.reduce(
+          (total, asset) => total + asset.bytes.byteLength,
+          0,
+        ),
       },
     },
   }

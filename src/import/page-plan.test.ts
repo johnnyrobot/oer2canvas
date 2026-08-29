@@ -33,7 +33,7 @@ function result(html: string): ImportResult {
       parser: 'native',
       format: 'markdown',
       findings: [{ code: 'x', severity: 'warning', message: 'm', sectionId: imported.sections[0]!.id }],
-      counts: { sections: 1, headings: 0, tables: 0, images: 0, equations: 0, notes: 0, unavailableAssets: 0 },
+      counts: { sections: 1, headings: 0, tables: 0, images: 0, equations: 0, notes: 0, unavailableAssets: 0, packagedAssetBytes: 0 },
     },
   }
 }

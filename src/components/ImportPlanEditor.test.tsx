@@ -28,7 +28,7 @@ function imported(html = STRUCTURED, findings: ImportFinding[] = []): ImportResu
       format: 'markdown',
       originalBytes: 120,
       findings,
-      counts: { sections: 1, headings: 4, tables: 0, images: 0, equations: 0, notes: 0, unavailableAssets: 0 },
+      counts: { sections: 1, headings: 4, tables: 0, images: 0, equations: 0, notes: 0, unavailableAssets: 0, packagedAssetBytes: 0 },
     },
   }
 }

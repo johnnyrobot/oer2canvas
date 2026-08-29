@@ -241,7 +241,7 @@ describe('ImportPlanEditor', () => {
         parser: 'native',
         format: 'markdown',
         findings: [],
-        counts: { sections: 1, headings: 0, tables: 0, images: 1, equations: 0, notes: 0, unavailableAssets: 0 },
+        counts: { sections: 1, headings: 0, tables: 0, images: 1, equations: 0, notes: 0, unavailableAssets: 0, packagedAssetBytes: 0 },
       },
     }
   }

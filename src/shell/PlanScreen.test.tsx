@@ -70,6 +70,30 @@ test('a ready plan with no way to commit says the course is not connected', () =
   expect(screen.queryByText(/not built yet/)).not.toBeInTheDocument()
 })
 
+// The budget shown must be read from PARSER_PROBE_LIMITS, never a literal — a
+// hardcoded number that drifted from what the importer actually enforces would
+// be worse than showing nothing, because the user would trust it.
+test('discloses packaged bytes against the budget', () => {
+  render(
+    <PlanScreen
+      destination={CANVAS}
+      chapters={CHAPTERS}
+      unansweredCount={0}
+      assetCount={3}
+      assetBytes={1_258_291}
+    />,
+  )
+  const line = screen.getByText(/Packaged assets/)
+  expect(line.textContent).toMatch(/3/)
+  expect(line.textContent).toMatch(/1\.2 MB/)
+  expect(line.textContent).toMatch(/8 MB/)
+})
+
+test('says nothing about bytes when nothing was packaged', () => {
+  render(<PlanScreen destination={CANVAS} chapters={CHAPTERS} unansweredCount={0} />)
+  expect(screen.queryByText(/Packaged assets/)).toBeNull()
+})
+
 test('browser-import warnings remain visible in the plan summary', () => {
   render(
     <PlanScreen

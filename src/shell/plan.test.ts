@@ -254,6 +254,16 @@ test('a canvas destination is unaffected when nothing is packaged', () => {
   expect(plan.blockers.some((blocker) => /image/i.test(blocker))).toBe(false)
 })
 
+// The block is permanent — it was a considered trade against rewriting audited
+// html after the gate, not a placeholder waiting on a design. The message must
+// name the real remedy (cartridge export) and never suggest this is temporary.
+test('the push blocker does not describe itself as temporary', () => {
+  const plan = buildPlan([chapterWithAsset('Ch 1', [section('a')])], CANVAS, 0)
+  const blocker = plan.blockers.find((b) => /image/i.test(b))!
+  expect(blocker).toMatch(/cartridge/i)
+  expect(blocker).not.toMatch(/yet|for now|currently|not supported yet/i)
+})
+
 test('an unknown status carries why it is unknown', () => {
   const notLoaded = buildPlan([chapter('Chapter 1', [section('a')])], CANVAS, 0)
   expect(notLoaded.groups[0]!.pages[0]!.status).toEqual({ kind: 'unknown', reason: 'not-loaded' })
