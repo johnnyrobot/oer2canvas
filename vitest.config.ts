@@ -44,6 +44,11 @@ export default defineConfig({
         test: {
           name: 'browser',
           globals: true,
+          setupFiles: ['./src/test/browser-setup.ts'],
+          // Comfortably above the async-query budget that file sets, so a real
+          // hang is reported by the query that hung rather than by a bare
+          // per-test timeout that names nothing.
+          testTimeout: 20_000,
           include: ['src/**/*.browser.test.{ts,tsx}'],
           // The forced-colors file matches the glob above and must NOT run here
           // too: this project's context has forced colors off, so every
@@ -64,6 +69,8 @@ export default defineConfig({
         test: {
           name: 'browser-forced-colors',
           globals: true,
+          setupFiles: ['./src/test/browser-setup.ts'],
+          testTimeout: 20_000,
           include: ['src/**/*.forced-colors.browser.test.{ts,tsx}'],
           browser: {
             enabled: true,
