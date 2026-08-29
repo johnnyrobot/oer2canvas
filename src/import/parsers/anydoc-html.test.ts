@@ -1,7 +1,7 @@
 import type { Document } from '@firecrawl/anydoc-wasm'
 import { prepareAssets } from '../assets'
 import { PARSER_PROBE_LIMITS } from '../parser-limit-values'
-import { RASTER_FIXTURES } from '../testing/raster-fixtures'
+import { pngHeaderDeclaring, RASTER_FIXTURES } from '../testing/raster-fixtures'
 import { normalizeAnyDocDocument, UnsupportedAnyDocVersionError } from './anydoc-html'
 
 const paragraph = (text: string) => ({
@@ -323,6 +323,15 @@ test('every reason an image was refused is reported, with counts', async () => {
   const assets = [
     { id: 0, mediaType: 'image/svg+xml', originPart: 'a.svg', data: svg },
     { id: 1, mediaType: 'image/png', originPart: 'b.png', data: oversized },
+    // The decoded-pixel cap's END-TO-END arm, and the reason this asset is here
+    // rather than only in `assets.test.ts`. `too-many-pixels` is this branch's
+    // headline rejection, and it is the one whose user-facing label ("too large
+    // to decode safely") nothing else exercises. Everything downstream of
+    // `prepareAssets` is shared code, so it was ARGUED that the blocking finding
+    // and the visible placeholder follow — this pins them instead. Note it is a
+    // 24-byte file: it passes every BYTE budget and is refused purely on what it
+    // declares it would decode to.
+    { id: 2, mediaType: 'image/png', originPart: 'c.png', data: pngHeaderDeclaring(20_000, 20_000) },
   ]
   const document = {
     kind: 'document',
@@ -330,6 +339,7 @@ test('every reason an image was refused is reported, with counts', async () => {
       { kind: 'image', alt: 'A', source: { kind: 'asset', assetId: 0 } },
       { kind: 'image', alt: 'B', source: { kind: 'asset', assetId: 1 } },
       { kind: 'image', alt: 'C', source: { kind: 'unavailable' } },
+      { kind: 'image', alt: 'D', source: { kind: 'asset', assetId: 2 } },
     ] }],
     assets, notes: [],
   } as never
@@ -337,15 +347,19 @@ test('every reason an image was refused is reported, with counts', async () => {
   const result = normalizeAnyDocDocument(document, 'docx', await prepareAssets(assets))
   const blocker = result.findings.find((f) => f.code === 'embedded-content')!
 
-  // One finding, not three — but it must name all three causes with counts.
+  // One finding, not four — but it must name all four causes with counts.
   expect(result.findings.filter((f) => f.code === 'embedded-content')).toHaveLength(1)
-  expect(blocker.message).toMatch(/3 images/)
+  expect(blocker.severity).toBe('blocker')
+  expect(blocker.message).toMatch(/4 images/)
   expect(blocker.message).toMatch(/1 in an unsupported or corrupt format/)
+  expect(blocker.message).toMatch(/1 too large to decode safely/)
   expect(blocker.message).toMatch(/1 over the size budget/)
   expect(blocker.message).toMatch(/1 with missing or unreadable bytes/)
-  // Every one still leaves a visible placeholder.
-  expect(result.html.match(/\[Embedded image/g)).toHaveLength(3)
-  expect(result.unavailableAssets).toBe(3)
+  // Every one still leaves a visible placeholder, the pixel-capped one included:
+  // its alt text survives the refusal, so the page says what is missing.
+  expect(result.html.match(/\[Embedded image/g)).toHaveLength(4)
+  expect(result.html).toContain('[Embedded image: D]')
+  expect(result.unavailableAssets).toBe(4)
 })
 
 test('a single refusal reads naturally rather than as a list of one', async () => {
