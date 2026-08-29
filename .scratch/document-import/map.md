@@ -20,3 +20,4 @@
 | [14 — Graduate presentations](issues/14-graduate-presentations.md) | ready-for-agent | 04, 09, 10 |
 | [15 — Evaluate legacy DOC/PPT](issues/15-evaluate-legacy-doc-ppt.md) | ready-for-agent | 13, 14 |
 | [16 — Decide spreadsheet imports](issues/16-decide-spreadsheet-imports.md) | ready-for-agent | 13 |
+| [17 — Extract web articles self-hosted](issues/17-extract-web-articles-self-hosted.md) | ready-for-agent | 12 |
