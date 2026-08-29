@@ -1,5 +1,6 @@
 import { commands } from 'vitest/browser'
 import { semanticDocxFixture } from './testing/docx-fixture'
+import { DOCUMENT_FIXTURE_CASES } from './testing/document-fixture-cases'
 import { importStructuredDocument } from './document'
 import { toChapter } from './to-chapter'
 import { compileAndAuditChapter } from '../engine'
@@ -68,3 +69,40 @@ test('emits a cartridge whose packaged image survives the gate', async () => {
     encoding: 'base64',
   })
 })
+
+/**
+ * Issue 09 requires acceptance across all four supported document formats,
+ * not just the DOCX the live-Canvas tracer above exercises. The Canvas-side
+ * behaviour depends entirely on the cartridge shape (manifest entries, file
+ * bytes, resource wiring) — so this asserts offline that docx, epub, odt and
+ * rtf all converge on the SAME cartridge shape rather than re-running the one
+ * live import four times.
+ */
+test.each(DOCUMENT_FIXTURE_CASES)(
+  '$format produces a cartridge with the manifest shape Canvas accepts',
+  async ({ format, fixture, mediaType }) => {
+    const file = new File([await fixture({ embeddedImage: true })], `diagram.${format}`, {
+      type: mediaType,
+    })
+    const imported = await importStructuredDocument(file, { metadata })
+    const compiled = await compileAndAuditChapter(toChapter(imported.work), { profile: DOCUMENT })
+
+    // Same gate assertion as the DOCX case: if the reference did not survive,
+    // the manifest checks below would be inspecting an empty cartridge and
+    // would pass while proving nothing.
+    expect(compiled.sections[0]?.gate?.html ?? '').toContain('$IMS-CC-FILEBASE$/oer2canvas/')
+
+    const entries = buildCartridge([compiled])
+    const assetEntries = entries.filter((entry) => entry.name.startsWith('web_resources/oer2canvas/'))
+    expect(assetEntries).toHaveLength(1)
+
+    const manifest = new TextDecoder().decode(
+      entries.find((entry) => entry.name === 'imsmanifest.xml')!.data,
+    )
+    // Issue 07 measured this exact shape as one Canvas accepts: a standalone
+    // webcontent resource with a matching file child, and no page dependencies.
+    expect(manifest).toContain(`type="webcontent" href="${assetEntries[0]!.name}"`)
+    expect(manifest).toContain(`<file href="${assetEntries[0]!.name}"/>`)
+    expect(manifest).not.toContain('<dependency')
+  },
+)
