@@ -1,6 +1,5 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { setTimeout as sleep } from 'node:timers/promises'
 import { releaseEnabledFormats } from './capability'
 import { cartridgeArtifactPath } from './testing/cartridge-artifact-paths'
 
@@ -23,73 +22,48 @@ import { cartridgeArtifactPath } from './testing/cartridge-artifact-paths'
  * the audit's iframe. `zip.test.ts` gets away with one file because it only
  * needs `writeZip`, which is pure JS with no parser and no audit underneath it.
  *
- * WHY THIS FILE WAITS INSTEAD OF JUST READING: `unit` (this file's project) and
- * `browser` (the file that writes the artifacts) are separate Vitest projects,
- * and nothing in this repo's `vitest.config.ts` orders one project's test files
- * ahead of another's. That is not a theoretical concern — it was checked by hand
- * before writing this file: a throwaway `unit` test asserting an artifact a
- * throwaway `browser` test writes 3 seconds later exists FAILED consistently,
- * because `unit` tests start and finish in single-digit milliseconds while the
- * `browser` project is still launching Chromium. `beforeAll` below waits for
- * every artifact this file needs, with a bounded timeout and a message naming
- * the fix, rather than either racing (flaky-or-worse: reliably wrong) or
- * silently hanging forever if the writer genuinely never runs.
+ * WHY THIS FILE DOES NOT WAIT FOR THE WRITER: an earlier version of this file
+ * had a `beforeAll` that polled for the artifacts with a bounded timeout,
+ * because `unit` (this file's project) and `browser` (the writer's project)
+ * are separate Vitest projects with no ordering between them. That polling was
+ * itself the bug: its ceiling was sized against a LOCAL wall-clock measurement,
+ * but `.github/workflows/ci.yml` records this suite at 77s on CI against 6s
+ * locally — roughly 13x, not the ~3x the local number implied — which put the
+ * real CI timing uncomfortably close to the bound. Worse, "wait for a sibling
+ * project" does not fit Vitest's project model at all: `npx vitest run
+ * --project unit` alone — an entirely ordinary command — would burn the whole
+ * timeout on a clean tree and then fail, with nothing actually broken.
+ *
+ * The actual fix is sequencing, not waiting: `npm run test:artifacts`
+ * (`package.json`) runs the browser writer and then this file, in that order,
+ * as two separate `vitest run` invocations joined by `&&` — so the writer has
+ * either finished or already failed before this file's process even starts.
+ * This file is EXCLUDED from the `unit` project's default `include` in
+ * `vitest.config.ts` for the same reason: it depends on an artifact only
+ * `test:artifacts` guarantees exists, so a plain `npx vitest run` must not run
+ * it. `test:artifacts` reaches this file anyway through its own tiny config,
+ * `vitest.artifact-reader.config.ts` — see that file for why a CLI filter
+ * cannot simply un-exclude it from `vitest.config.ts`'s `unit` project.
+ * CI runs `npm run test:artifacts` as its own step to keep this coverage
+ * rather than trading it away.
  */
 
-// Measured on this machine: the full suite (`npx vitest run`, currently 130
-// files / 1224 tests, unthrottled) completes in about 14 seconds wall-clock,
-// and `cartridge-artifact.browser.test.ts` — the file this wait is for — is
-// one small piece of that, itself measured at under 3 seconds together with
-// its two sibling browser files. This ceiling is roughly 3x the whole suite's
-// measured wall time, so a slower or more loaded CI runner has real headroom
-// without letting a genuinely broken writer hang the suite indefinitely.
-const ARTIFACT_WAIT_TIMEOUT_MS = 45_000
-// How often to re-check, once the artifact still doesn't exist. Small enough
-// not to visibly delay the common case (the file is usually already there by
-// the time this runs), large enough not to spin the event loop pointlessly.
-const ARTIFACT_POLL_INTERVAL_MS = 250
-// Vitest's own hook timeout has to be strictly longer than the wait loop's own
-// deadline, or Vitest's generic "hook timed out" fires first and this file's
-// specific, actionable error below never gets the chance to.
-const HOOK_TIMEOUT_MARGIN_MS = 5_000
-
-async function waitForArtifact(path: string): Promise<void> {
-  const deadline = Date.now() + ARTIFACT_WAIT_TIMEOUT_MS
-  while (!existsSync(path)) {
-    if (Date.now() >= deadline) {
-      throw new Error(
-        `${path} was never written within ${ARTIFACT_WAIT_TIMEOUT_MS}ms. ` +
-          "cartridge-artifact.browser.test.ts (the 'browser' vitest project) builds it; run " +
-          "'npx vitest run --project browser src/import/cartridge-artifact.browser.test.ts' " +
-          'on its own to see whether it is failing outright rather than just running slowly.',
-      )
-    }
-    await sleep(ARTIFACT_POLL_INTERVAL_MS)
-  }
-}
-
-beforeAll(async () => {
-  await Promise.all(releaseEnabledFormats().map((format) => waitForArtifact(cartridgeArtifactPath(format))))
-}, ARTIFACT_WAIT_TIMEOUT_MS + HOOK_TIMEOUT_MARGIN_MS)
-
-/**
- * A REAL unzip, because our own reader agreeing with our own writer proves
- * nothing — the same helper shape `zip.test.ts`'s `roundTrip` uses, adapted to
- * read an archive that is already on disk (this file's job is verification,
- * not production) rather than one it just wrote itself.
- */
-function unzipped(path: string): { list: string; read: (name: string) => string } {
-  execFileSync('unzip', ['-t', path])
-  return {
-    list: execFileSync('unzip', ['-l', path], { encoding: 'utf8' }),
-    read: (name) => execFileSync('unzip', ['-p', path, name], { encoding: 'utf8' }),
-  }
-}
+/** Named once so both the guard below and a human reading the failure agree on it. */
+const PRODUCE_ARTIFACTS_COMMAND = 'npm run test:artifacts'
 
 test.each(releaseEnabledFormats())(
   '%s cartridge is a valid archive with the manifest shape Canvas accepts',
   (format) => {
-    const archive = unzipped(cartridgeArtifactPath(format))
+    const path = cartridgeArtifactPath(format)
+    // Fails FAST and names the fix, rather than the opaque ENOENT `unzip`
+    // itself would throw, or — worse — silently passing on a stale artifact
+    // left over from a previous run. This file is only ever meant to run via
+    // `test:artifacts`, immediately after the writer that produces this path.
+    if (!existsSync(path)) {
+      throw new Error(`${path} does not exist. Run '${PRODUCE_ARTIFACTS_COMMAND}' to build it, then re-run.`)
+    }
+
+    const archive = unzipped(path)
     expect(archive.list).toContain('imsmanifest.xml')
     // THE MARKER (`engine/export/cartridge.ts`'s `buildCartridge`): measured
     // against a live Canvas to be the difference between wiki pages and a
@@ -107,3 +81,17 @@ test.each(releaseEnabledFormats())(
     expect(manifest).toContain('type="webcontent"')
   },
 )
+
+/**
+ * A REAL unzip, because our own reader agreeing with our own writer proves
+ * nothing — the same helper shape `zip.test.ts`'s `roundTrip` uses, adapted to
+ * read an archive that is already on disk (this file's job is verification,
+ * not production) rather than one it just wrote itself.
+ */
+function unzipped(path: string): { list: string; read: (name: string) => string } {
+  execFileSync('unzip', ['-t', path])
+  return {
+    list: execFileSync('unzip', ['-l', path], { encoding: 'utf8' }),
+    read: (name) => execFileSync('unzip', ['-p', path, name], { encoding: 'utf8' }),
+  }
+}

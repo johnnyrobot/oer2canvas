@@ -83,6 +83,18 @@ jobs:
       - name: Tests (unit in jsdom, browser in headless Chromium)
         run: npx vitest run
 
+      # A SEPARATE step, not folded into the run above: `cartridge-artifact.test.ts`
+      # (the real-`unzip` cartridge check `vitest.config.ts` deliberately excludes
+      # from the `unit` project's default `include`) depends on artifacts a sibling
+      # `browser`-project test writes to disk, and Vitest gives no ordering
+      # guarantee between projects — so `npm run test:artifacts` runs the writer
+      # and then the reader as two SEQUENTIAL `vitest run` invocations instead of
+      # one racy combined run. Without this step that coverage would simply stop
+      # running in CI, since excluding the reader from `npx vitest run` is exactly
+      # what makes the step above safe to run alone.
+      - name: Cartridge artifact check (real unzip, sequenced after the writer)
+        run: npm run test:artifacts
+
       - run: npm run build
 
       # The point of this file. Serves the built bundle over loopback, stubs

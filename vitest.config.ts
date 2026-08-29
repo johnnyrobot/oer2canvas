@@ -37,7 +37,21 @@ export default defineConfig({
           environment: 'jsdom',
           setupFiles: ['./src/test/setup.ts'],
           include: ['src/**/*.test.{ts,tsx}', 'worker/**/*.test.ts', 'scripts/**/*.test.mjs'],
-          exclude: ['src/**/*.browser.test.{ts,tsx}'],
+          exclude: [
+            'src/**/*.browser.test.{ts,tsx}',
+            // Depends on an artifact `cartridge-artifact.browser.test.ts` (the
+            // `browser` project) writes to disk, and nothing in this config
+            // orders one project's files ahead of another's — so a plain
+            // `npx vitest run` (or `--project unit` alone) must not run it,
+            // or it fails on a clean tree with nothing actually broken.
+            // `npm run test:artifacts` (`package.json`) runs the writer and
+            // then this file, sequentially, via the separate
+            // `vitest.artifact-reader.config.ts` — see that file for why a
+            // CLI filter on `--project unit` cannot simply un-exclude it here
+            // instead. CI runs `npm run test:artifacts` as its own step so
+            // this coverage is not lost, just moved out of the default run.
+            'src/import/cartridge-artifact.test.ts',
+          ],
         },
       },
       {
