@@ -119,10 +119,16 @@ export async function importText(
       findings: normalized.findings,
       counts: {
         sections: 1,
+        ...normalized.counts,
         // Text-like imports never package assets (`work.assets` is always
         // `[]` above), so there is nothing to total against the budget.
+        //
+        // AFTER the spread, not before. `normalized.counts` is produced by the
+        // sanitizers and is not statically known to omit this key; ahead of the
+        // spread, a future sanitizer that started reporting a byte total would
+        // silently overwrite the zero this line exists to guarantee. Last write
+        // wins, so this is the position that makes the comment above true.
         packagedAssetBytes: 0,
-        ...normalized.counts,
       },
     },
   }

@@ -73,7 +73,14 @@ test('a ready plan with no way to commit says the course is not connected', () =
 // The budget shown must be read from PARSER_PROBE_LIMITS, never a literal — a
 // hardcoded number that drifted from what the importer actually enforces would
 // be worse than showing nothing, because the user would trust it.
-test('discloses packaged bytes against the budget', () => {
+//
+// The WORDING is pinned too, not just the two numbers. These are different
+// measures — the cartridge's deduped, packaged-only weight, and a per-occurrence
+// pre-sniff accumulator the importer enforces against — so the line must state
+// them as two facts. An "X of Y budget" phrasing would read as a fraction of a
+// single quantity and assert a relationship that is not true; see the comment at
+// the call site in `PlanScreen.tsx`.
+test('discloses packaged bytes alongside, not against, the budget', () => {
   render(
     <PlanScreen
       destination={CANVAS}
@@ -85,8 +92,10 @@ test('discloses packaged bytes against the budget', () => {
   )
   const line = screen.getByText(/Packaged assets/)
   expect(line.textContent).toMatch(/3/)
-  expect(line.textContent).toMatch(/1\.2 MB/)
-  expect(line.textContent).toMatch(/8 MB/)
+  expect(line.textContent).toMatch(/1\.2 MiB packaged/)
+  expect(line.textContent).toMatch(/the per-document budget is 8 MiB/)
+  // The measured total must never be presented as a share of the budget.
+  expect(line.textContent).not.toMatch(/of 8 MiB budget/)
 })
 
 test('says nothing about bytes when nothing was packaged', () => {
@@ -97,8 +106,10 @@ test('says nothing about bytes when nothing was packaged', () => {
 // A document or text import that packaged no images still passes assetCount
 // and assetBytes (both 0) rather than omitting them, so this pins the actual
 // zero case rather than the "prop absent" case above: the line must read
-// exactly as it did before byte disclosure existed, with no invented "0 KB"
-// or "1 KB" budget clause tacked onto a fact that isn't there.
+// exactly as it did before byte disclosure existed, with no invented "0 KiB"
+// or "1 KiB" budget clause tacked onto a fact that isn't there. This is also
+// what makes `formatBytes` correct without a zero branch — the zero case never
+// reaches it, because this guard answers it first.
 test('a zero-byte import shows the plain count, with no byte clause at all', () => {
   render(
     <PlanScreen
@@ -110,7 +121,7 @@ test('a zero-byte import shows the plain count, with no byte clause at all', () 
     />,
   )
   expect(screen.getByText('Packaged assets: 0.')).toBeInTheDocument()
-  expect(screen.queryByText(/KB|MB/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/KiB|MiB/)).not.toBeInTheDocument()
 })
 
 test('browser-import warnings remain visible in the plan summary', () => {

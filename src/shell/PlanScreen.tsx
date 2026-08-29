@@ -11,19 +11,23 @@ import { PARSER_PROBE_LIMITS } from '../import/parser-limit-values'
  * written as a literal, so the number a user is told cannot drift from the
  * number that actually refuses their images.
  *
- * Zero is special-cased to "0 KB" rather than folded into the same rounding as
- * everything else: `Math.max(1, ...)` exists so a genuinely small but nonzero
- * amount (e.g. 200 bytes) reads as "1 KB" instead of the more misleading
- * "0 KB", but applying that floor to an actual zero would print "1 KB" for an
- * import that packaged nothing at all — a number this line exists specifically
- * to never get wrong.
+ * MiB/KiB, not MB/KB, because these divide by 1024 and the quantity they
+ * describe is a 1024-based budget — the same unit `DocumentImporter` already
+ * uses for `maximumInputBytes` and `TextContentImporter` for its own limit.
+ *
+ * NEVER CALLED WITH ZERO, and deliberately has no branch for it. The only call
+ * sites are `maximumAssetBytes` (a nonzero constant) and an `assetBytes` behind
+ * a truthiness guard, so a zero arm would be unreachable code pretending to
+ * handle a case the caller already decided. `Math.max(1, ...)` below exists so a
+ * genuinely small but nonzero amount (e.g. 200 bytes) reads as "1 KiB" rather
+ * than the more misleading "0 KiB"; the zero case is answered ONE level up, by
+ * omitting the clause entirely, which is the only honest thing to print when
+ * nothing was packaged.
  */
 const formatBytes = (bytes: number): string =>
-  bytes === 0
-    ? '0 KB'
-    : bytes >= 1024 * 1024
-      ? `${(bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, '')} MB`
-      : `${Math.max(1, Math.round(bytes / 1024))} KB`
+  bytes >= 1024 * 1024
+    ? `${(bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, '')} MiB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KiB`
 
 /**
  * What committing would do, before it does it.
@@ -84,8 +88,23 @@ export function PlanScreen({
             is not a budget fact worth stating, and disclosing it unconditionally
             would change the asset-free line's wording as a side effect of adding
             a budget display rather than leaving it exactly as it read before.
+
+            TWO FACTS SIDE BY SIDE, NOT ONE FRACTION — and the wording has to keep
+            them apart, because they are not the same measure. "X of Y budget"
+            reads as a progress bar: X accumulated toward the limit Y. It isn't.
+            `assetBytes` is `counts.packagedAssetBytes`, the weight of what the
+            cartridge will actually carry — deduped by content hash and counting
+            only assets that packaged. `maximumAssetBytes` is enforced in
+            `prepareAssets` against a running total of EVERY occurrence that
+            cleared the per-image cap, including duplicates of the same bytes and
+            images later refused by the sniff or the pixel check. So the shown
+            total can be far below the accumulator the budget actually watches,
+            and a document can be refused for exceeding a budget the number on
+            screen never approached. Stating them as two separate facts is
+            accurate; a fraction would have been a claim about a relationship
+            that does not exist.
           */}
-          {!!assetBytes && ` (${formatBytes(assetBytes)} of ${formatBytes(PARSER_PROBE_LIMITS.maximumAssetBytes)} budget)`}.
+          {!!assetBytes && ` (${formatBytes(assetBytes)} packaged; the per-document budget is ${formatBytes(PARSER_PROBE_LIMITS.maximumAssetBytes)})`}.
         </p>
       )}
       {importFindings && importFindings.length > 0 && (
