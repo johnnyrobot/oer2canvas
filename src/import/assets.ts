@@ -17,7 +17,7 @@ export const PACKAGED_ASSET_DIRECTORY = 'oer2canvas'
 // sync and silently loosen that boundary.
 export const FILEBASE = '$IMS-CC-FILEBASE$'
 
-export type AssetRejection = 'unavailable' | 'unsupported-type' | 'too-large' | 'too-many'
+export type AssetRejection = 'unavailable' | 'unsupported-type' | 'too-large' | 'too-many' | 'too-many-pixels'
 
 export interface PreparedAsset {
   assetId: number
@@ -208,6 +208,17 @@ export async function prepareAssets(
     const sniffed = sniffRaster(asset.data)
     if (!sniffed) {
       prepared.set(asset.id, { rejected: 'unsupported-type' })
+      continue
+    }
+    /*
+     * A distinct rejection rather than folding into `sniffRaster` returning
+     * undefined: the import findings count causes separately, and "would decode
+     * to 400 MP" is a different thing to tell a user than "not a recognised
+     * image format". Checked after sniffing because the dimensions come from the
+     * sniffed header, which is the only size claim we have.
+     */
+    if (sniffed.width * sniffed.height > PARSER_PROBE_LIMITS.maximumAssetPixels) {
+      prepared.set(asset.id, { rejected: 'too-many-pixels' })
       continue
     }
     // `sha256Hex` is typed against `ArrayBuffer | Uint8Array<ArrayBuffer>`; a

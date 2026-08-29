@@ -12,6 +12,7 @@ test('browser import guardrails are the conservative bounds selected from the co
     maximumAssetCount: 64,
     maximumAssetBytes: 8 * 1024 * 1024,
     maximumIndividualAssetBytes: 4 * 1024 * 1024,
+    maximumAssetPixels: 40_000_000,
     parserTimeoutMs: 30_000,
     maximumWasmMemoryBytes: 128 * 1024 * 1024,
   })

@@ -78,6 +78,7 @@ export function normalizeAnyDocDocument(
     'unsupported-type': 'an image in a format this workflow cannot package, or whose file is corrupt',
     'too-large': 'an image larger than the packaging budget',
     'too-many': 'more images than the packaging budget allows',
+    'too-many-pixels': 'an image too large to decode safely',
   }
 
   const finding = (code: string, severity: 'warning' | 'blocker', message: string) => {

@@ -4,6 +4,27 @@ import {
   prepareAssets, sniffRaster,
   type PreparedAsset,
 } from './assets'
+import { PARSER_PROBE_LIMITS } from './parser-limit-values'
+
+/**
+ * A PNG header declaring `width` x `height`, with no image data behind it.
+ * `sniffRaster` reads dimensions from the IHDR alone, which is exactly the
+ * property an attacker exploits: a tiny file can claim an enormous bitmap.
+ */
+function pngHeaderDeclaring(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array(24)
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0)
+  bytes.set([0x49, 0x48, 0x44, 0x52], 12)
+  const be = (value: number, at: number) => {
+    bytes[at] = (value >>> 24) & 0xff
+    bytes[at + 1] = (value >>> 16) & 0xff
+    bytes[at + 2] = (value >>> 8) & 0xff
+    bytes[at + 3] = value & 0xff
+  }
+  be(width, 16)
+  be(height, 20)
+  return bytes
+}
 
 test.each(['png', 'jpeg', 'gif', 'webp'] as const)('sniffs %s and reads its true size', (key) => {
   const fixture = RASTER_FIXTURES[key]
@@ -89,6 +110,38 @@ test('rejects an oversized asset and an over-count document', async () => {
   }))
   const overCount = await prepareAssets(many)
   expect(overCount.get(64)).toEqual({ rejected: 'too-many' })
+})
+
+test('a small file declaring an enormous bitmap is refused', async () => {
+  // The attack is a DECLARED size, not a large file: these bytes are 24 long.
+  const bomb = pngHeaderDeclaring(20_000, 20_000)
+  const prepared = await prepareAssets([
+    { id: 0, mediaType: 'image/png', originPart: 'word/media/bomb.png', data: bomb },
+  ])
+  expect(prepared.get(0)).toEqual({ rejected: 'too-many-pixels' })
+})
+
+test('an image just under the pixel budget still packages', async () => {
+  const side = Math.floor(Math.sqrt(PARSER_PROBE_LIMITS.maximumAssetPixels)) - 1
+  const prepared = await prepareAssets([
+    { id: 0, mediaType: 'image/png', originPart: 'a.png', data: pngHeaderDeclaring(side, side) },
+  ])
+  expect(prepared.get(0)).toMatchObject({ width: side, height: side })
+})
+
+test('an image just over the pixel budget is refused', async () => {
+  const side = Math.ceil(Math.sqrt(PARSER_PROBE_LIMITS.maximumAssetPixels)) + 1
+  const prepared = await prepareAssets([
+    { id: 0, mediaType: 'image/png', originPart: 'a.png', data: pngHeaderDeclaring(side, side) },
+  ])
+  expect(prepared.get(0)).toEqual({ rejected: 'too-many-pixels' })
+})
+
+test('the ordinary fixtures are nowhere near the pixel budget', async () => {
+  const prepared = await prepareAssets([
+    { id: 0, mediaType: 'image/png', originPart: 'a.png', data: RASTER_FIXTURES.png.bytes },
+  ])
+  expect(prepared.get(0)).toMatchObject({ width: 16, height: 16 })
 })
 
 test('recognises only its own reference form', () => {
