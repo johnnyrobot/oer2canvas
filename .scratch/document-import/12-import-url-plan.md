@@ -2013,12 +2013,18 @@ Settled here, with the evidence, so an implementer does not re-open them:
 
 **Escalate rather than guess:**
 
-1. **Is there a near-empty extraction floor, and what is it?** Empty is refused (`importText` throws
-   on `!text.trim()`, and `sanitizeImportedHtml` raises `import-no-supported-content` when nothing
-   semantic survives). Three garbled words from a JavaScript app shell are not. A
-   characters-per-page floor is a product decision needing real pages, and there is nothing in this
-   repo to derive one from. **Same shape and same answer as design 11's open question 2 and plan 11's
-   escalation 1** — if one of them is ever answered, answer both together.
+1. ~~**Is there a near-empty extraction floor, and what is it?**~~ **ANSWERED 2026-08-29** — see
+   [`decision-extraction-floor.md`](decision-extraction-floor.md). The two escalations were assumed
+   to share an answer; they share a question but not the available evidence, which is what decides
+   it. A PDF page can be measured against its own document's other pages; one article has no such
+   distribution. So: no absolute character count here either. Preferred route is to compare the
+   extracted body against the page's own `metadata.description` — a body shorter than its own summary
+   is incoherent — but **whether Firecrawl returns `description` is UNVERIFIED**; the probe recorded
+   `statusCode`, `error`, `sourceURL`, `url` and `contentType` and never established it. Settle it
+   with the Task 2 probe. If no description is returned, **disclose rather than judge**: report the
+   extracted word count as a neutral note, the same move issue 09 made with packaged bytes. Warning
+   only, never a blocker. Do NOT detect this by matching English phrases — that is the same defect
+   this plan already records as a residual for `encrypted`/`malformed`.
 2. **Should `open-license` require a named licence?** `validateImportMetadata` requires
    `licenseName` only when `licenseUrl` is given, so `open-license` naming nothing is legal on
    **every** import path today, not just this one. Task 7 discloses it on the web path with a

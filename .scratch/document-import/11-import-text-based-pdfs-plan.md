@@ -1550,10 +1550,15 @@ Settled here, with the evidence, so an implementer does not re-open them:
 
 **Escalate rather than guess:**
 
-1. **Is a graded extraction-poor threshold wanted?** The zero boundary catches a page that yielded
-   nothing. It does not catch a page that yielded three garbled words. A characters-per-page floor is
-   a product decision needing real PDFs; there is no evidence in this repo to derive one from, and
-   `confidence` is not it. Do not invent one to make a task look finished.
+1. ~~**Is a graded extraction-poor threshold wanted?**~~ **ANSWERED 2026-08-29** — see
+   [`decision-extraction-floor.md`](decision-extraction-floor.md). No absolute characters-per-page
+   number, here or anywhere: a floor is either zero or derived from the artifact in hand. For a PDF
+   the document supplies its own baseline, so a page far below its document's median page length —
+   **in a document that is otherwise text-rich** — WARNS. The guard is load-bearing: a mostly-scanned
+   document has a low median, and that case is already owned by scanned-page detection, which blocks.
+   The ratio is specified but NOT tuned; it needs real textbook PDFs including a legitimately sparse
+   page (a part divider, a full-page figure) that must not warn. **Until it is measured, ship the zero
+   floor alone** rather than a ratio guessed to look finished.
 2. **Is the blank-page warning right for a document with MANY blank pages?** One `pdf-page-empty`
    warning naming forty pages is honest and useless. There is no evidence for a count at which it
    should become something else, so it stays a single warning; escalate if a real document makes it
