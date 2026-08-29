@@ -80,18 +80,65 @@ function webp(bytes: Uint8Array): SniffedRaster | undefined {
   return undefined
 }
 
-/** JPEG: walk the marker chain to the first frame header, which carries the size. */
+/**
+ * Markers that carry NO length field. A decoder steps over each of these by two
+ * bytes and reads nothing; the `+2+length` walk below would instead read the
+ * next two bytes — the following marker, or padding — as a segment length.
+ *
+ * TEM (0x01), RSTn (0xd0-0xd7), SOI (0xd8) and EOI (0xd9). Listed by name
+ * because getting this set wrong is not a parse error, it is a silent
+ * disagreement with the browser about where the frame header lives.
+ */
+const PARAMETERLESS_JPEG_MARKER = (marker: number): boolean =>
+  marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9)
+
+/**
+ * JPEG: walk the marker chain to the first frame header, which carries the size.
+ *
+ * FAILS CLOSED ON ANYTHING IT CANNOT WALK THE WAY A REAL DECODER WOULD, because
+ * the alternative is a parser differential, and a parser differential here
+ * defeats `maximumAssetPixels` outright. This walk assumes every marker is
+ * followed by a 2-byte length; libjpeg-turbo (and so Chrome) does not, because
+ * TEM and RSTn carry none. Guess a length for one of those and the walk jumps a
+ * distance the decoder never jumps — into bytes an attacker chose — and reads a
+ * decoy `SOF0` there. `src/import/assets.test.ts`'s
+ * `a jpeg whose marker chain cannot be walked deterministically is refused`
+ * builds exactly that file: it sniffed 16x16 while Chrome decoded 8000x6000.
+ *
+ * So every divergence below returns `undefined` rather than continuing on a
+ * best guess. Refusing an unusual-but-valid JPEG is the safe direction: it
+ * becomes an `unsupported-type` refusal, which keeps both its blocking finding
+ * and its visible placeholder, so nothing publishes with a silent hole. This is
+ * the same stance `sniffRaster` states below — an asset we cannot read a true
+ * size for must never be shipped — applied to a chain we cannot read at all.
+ */
 function jpeg(bytes: Uint8Array): SniffedRaster | undefined {
   if (bytes.length < 4 || !starts(bytes, [0xff, 0xd8])) return undefined
   let offset = 2
   while (offset + 9 < bytes.length) {
     if (bytes[offset] !== 0xff) return undefined
     const marker = bytes[offset + 1]!
+    // 0xff is a fill byte and 0x00 is a stuffed byte; neither is a marker, and
+    // a decoder resynchronises past them. We would instead treat the bytes
+    // behind them as a length.
+    if (marker === 0xff || marker === 0x00) return undefined
+    if (PARAMETERLESS_JPEG_MARKER(marker)) return undefined
+    // Everything outside 0xc0-0xfe is reserved or not a segment marker at all.
+    if (marker < 0xc0 || marker > 0xfe) return undefined
+    const length = u16be(bytes, offset + 2)
+    // A segment length counts its own two bytes, so anything under 2 is not a
+    // length — and stepping by it could not advance the offset, which is how a
+    // malformed file turns this walk into a non-terminating or backwards scan.
+    if (length < 2) return undefined
     // SOF0..SOF15, excluding the non-frame markers DHT (c4), JPGA (c8) and DAC (cc).
     if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      // The smallest legal frame header is 8 bytes: length, precision, height,
+      // width, component count. Shorter means the size we are about to read is
+      // not inside the segment claiming to hold it.
+      if (length < 8) return undefined
       return { mediaType: 'image/jpeg', extension: 'jpg', height: u16be(bytes, offset + 5), width: u16be(bytes, offset + 7) }
     }
-    offset += 2 + u16be(bytes, offset + 2)
+    offset += 2 + length
   }
   return undefined
 }
@@ -216,6 +263,17 @@ export async function prepareAssets(
      * to 400 MP" is a different thing to tell a user than "not a recognised
      * image format". Checked after sniffing because the dimensions come from the
      * sniffed header, which is the only size claim we have.
+     *
+     * WHAT THIS BOUNDS, EXACTLY. It is worth stating what this cap can and
+     * cannot promise, because an earlier version of this comment overstated it.
+     * The cap binds only where the size we sniff is the size the browser will
+     * decode. That holds for PNG/GIF/WebP, whose dimensions sit at a fixed
+     * offset, and it holds for JPEG only because `jpeg()` above now REFUSES any
+     * marker chain it cannot walk the way a real decoder does — before that, a
+     * crafted chain could steer this check onto a decoy 16x16 header while
+     * Chrome decoded 8000x6000 from the same bytes. It is also PER IMAGE: the
+     * document total is bounded only by `maximumAssetCount` x this cap, a known
+     * residual recorded in the issue's `## Answer`.
      */
     if (sniffed.width * sniffed.height > PARSER_PROBE_LIMITS.maximumAssetPixels) {
       prepared.set(asset.id, { rejected: 'too-many-pixels' })

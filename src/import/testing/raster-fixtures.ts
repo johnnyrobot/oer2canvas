@@ -28,3 +28,28 @@ export const RASTER_FIXTURES = Object.fromEntries(
   width: 16
   height: 16
 }>
+
+/**
+ * A PNG header declaring `width` x `height`, with no image data behind it.
+ * `sniffRaster` reads dimensions from the IHDR alone, which is exactly the
+ * property an attacker exploits: a 24-byte file can claim an enormous bitmap.
+ *
+ * Lives here rather than in one test file because two suites need the same
+ * bytes — `assets.test.ts` pins the refusal itself, and `anydoc-html.test.ts`
+ * pins that the refusal reaches the user as a counted finding plus a visible
+ * placeholder. A second copy would let those two drift apart.
+ */
+export function pngHeaderDeclaring(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array(24)
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0)
+  bytes.set([0x49, 0x48, 0x44, 0x52], 12)
+  const be = (value: number, at: number) => {
+    bytes[at] = (value >>> 24) & 0xff
+    bytes[at + 1] = (value >>> 16) & 0xff
+    bytes[at + 2] = (value >>> 8) & 0xff
+    bytes[at + 3] = value & 0xff
+  }
+  be(width, 16)
+  be(height, 20)
+  return bytes
+}
