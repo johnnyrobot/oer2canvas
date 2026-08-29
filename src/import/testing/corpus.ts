@@ -53,6 +53,17 @@ export interface CorpusCase {
   bytes: () => Promise<Uint8Array<ArrayBuffer>>
   /** Substrings the imported html must contain, proving the structure survived. */
   expectInHtml: readonly string[]
+  /**
+   * Finding codes this case is EXPECTED to block on, if any.
+   *
+   * Declared per case rather than asserting no case blocks, because some
+   * constructs legitimately do — a DOCX footnote and an equation both raise
+   * blockers, verified against anydoc 0.2.4 on 2026-08-29. Declaring them makes
+   * this list the machine-readable record of WHICH constructs a released format
+   * cannot publish, which is what criterion 1 needs; a blanket "nothing blocks"
+   * assertion would simply have been false.
+   */
+  expectBlockers?: readonly string[]
 }
 
 // Four times the 1,000-paragraph fixture `document.browser.test.ts` already
@@ -134,7 +145,15 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     format: 'odt',
     standsInFor: 'A document authored in LibreOffice, whose visual layout is not reproducible and whose semantics must come through anyway.',
     bytes: () => semanticOdtFixture(),
-    expectInHtml: ['<h1>', 'Cell Biology'],
+    // `<h1`, not `<h1>`: verified empirically against anydoc 0.2.4 that ODT's
+    // `<text:h>` heading gets an `id` attribute in the output (e.g.
+    // `<h1 id="Cell-Biology">`), unlike the DOCX/EPUB semantic cases, whose
+    // headings carry no id. Other tests in this suite (`structured-formats.
+    // browser.test.ts`, `document.browser.test.ts`) confirm an id is not part
+    // of what "a heading survived" means: they select on the `h1` tag name
+    // and ignore attributes entirely. An exact `<h1>` match here would assert
+    // something this corpus case never claimed to prove.
+    expectInHtml: ['<h1', 'Cell Biology'],
   },
   {
     id: 'rtf-semantic',
@@ -199,6 +218,10 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     standsInFor: 'A journal-style footnote citing a source. Verified empirically against anydoc 0.2.4 that a DOCX footnote becomes a real `Document.notes` entry, which `anydoc-html.ts` treats as an unconditional `unsupported-note` blocker — the note BODY is never rendered at all, but the reference must not vanish silently: it becomes a visible `[Note reference]` placeholder instead.',
     bytes: () => semanticDocxFixture({ footnote: true }),
     expectInHtml: ['[Note reference]'],
+    // `anydoc-html.ts` raises `unsupported-note` unconditionally whenever
+    // `Document.notes` is non-empty — see the `finding('unsupported-note', …)`
+    // calls in that module. Verified empirically against anydoc 0.2.4.
+    expectBlockers: ['unsupported-note'],
   },
   {
     id: 'epub-footnote',
@@ -216,6 +239,10 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     // `anydoc-html.ts` renders as `[Equation: x^{2}]` and flags as a blocker.
     bytes: () => semanticDocxFixture({ equation: true }),
     expectInHtml: ['[Equation: x^{2}]'],
+    // `anydoc-html.ts` raises `unsupported-equation` whenever an inline `math`
+    // node appears — see the `finding('unsupported-equation', …)` calls in
+    // that module. Verified empirically against anydoc 0.2.4.
+    expectBlockers: ['unsupported-equation'],
   },
   {
     id: 'epub-equation',
@@ -223,6 +250,9 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     standsInFor: 'The same formula, but embedded as inline MathML rather than OOXML — verified empirically against anydoc 0.2.4 to convert to the identical LaTeX text and the identical blocker placeholder as the DOCX case, unlike footnotes, where the two formats disagree.',
     bytes: () => semanticEpubFixture({ equation: true }),
     expectInHtml: ['[Equation: x^{2}]'],
+    // Same `unsupported-equation` blocker as the DOCX case — verified
+    // empirically to fire identically against anydoc 0.2.4 for MathML.
+    expectBlockers: ['unsupported-equation'],
   },
   {
     id: 'docx-rtl-cjk',
