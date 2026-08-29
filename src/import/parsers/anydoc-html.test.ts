@@ -1,5 +1,6 @@
 import type { Document } from '@firecrawl/anydoc-wasm'
 import { prepareAssets } from '../assets'
+import { PARSER_PROBE_LIMITS } from '../parser-limit-values'
 import { RASTER_FIXTURES } from '../testing/raster-fixtures'
 import { normalizeAnyDocDocument, UnsupportedAnyDocVersionError } from './anydoc-html'
 
@@ -313,4 +314,59 @@ test('missing alt and explicit empty alt both omit the attribute; real alt text 
   expect(images[0]!.hasAttribute('alt')).toBe(false)
   expect(images[1]!.hasAttribute('alt')).toBe(false)
   expect(images[2]!.getAttribute('alt')).toBe('A photograph of a cell wall')
+})
+
+test('every reason an image was refused is reported, with counts', async () => {
+  const svg = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>')
+  const oversized = new Uint8Array(PARSER_PROBE_LIMITS.maximumIndividualAssetBytes + 1)
+  oversized.set(RASTER_FIXTURES.png.bytes)
+  const assets = [
+    { id: 0, mediaType: 'image/svg+xml', originPart: 'a.svg', data: svg },
+    { id: 1, mediaType: 'image/png', originPart: 'b.png', data: oversized },
+  ]
+  const document = {
+    kind: 'document',
+    blocks: [{ kind: 'paragraph', content: [
+      { kind: 'image', alt: 'A', source: { kind: 'asset', assetId: 0 } },
+      { kind: 'image', alt: 'B', source: { kind: 'asset', assetId: 1 } },
+      { kind: 'image', alt: 'C', source: { kind: 'unavailable' } },
+    ] }],
+    assets, notes: [],
+  } as never
+
+  const result = normalizeAnyDocDocument(document, 'docx', await prepareAssets(assets))
+  const blocker = result.findings.find((f) => f.code === 'embedded-content')!
+
+  // One finding, not three — but it must name all three causes with counts.
+  expect(result.findings.filter((f) => f.code === 'embedded-content')).toHaveLength(1)
+  expect(blocker.message).toMatch(/3 images/)
+  expect(blocker.message).toMatch(/1 in an unsupported or corrupt format/)
+  expect(blocker.message).toMatch(/1 over the size budget/)
+  expect(blocker.message).toMatch(/1 with missing or unreadable bytes/)
+  // Every one still leaves a visible placeholder.
+  expect(result.html.match(/\[Embedded image/g)).toHaveLength(3)
+  expect(result.unavailableAssets).toBe(3)
+})
+
+test('a single refusal reads naturally rather than as a list of one', async () => {
+  const assets = [{
+    id: 0, mediaType: 'image/svg+xml', originPart: 'a.svg',
+    data: new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>'),
+  }]
+  const document = {
+    kind: 'document',
+    blocks: [{ kind: 'paragraph', content: [
+      { kind: 'image', alt: 'A', source: { kind: 'asset', assetId: 0 } },
+    ] }],
+    assets, notes: [],
+  } as never
+  const result = normalizeAnyDocDocument(document, 'docx', await prepareAssets(assets))
+  const blocker = result.findings.find((f) => f.code === 'embedded-content')!
+  // CONTROLLER RULING: the brief's original regex here was
+  // `/1 image could not be packaged/`, but the message this same brief
+  // specifies renders "1 image THAT could not be packaged" — the multi-cause
+  // example sentence includes "that" and the singular case reuses the same
+  // template. The message text is correct; the brief's test regex had a typo.
+  expect(blocker.message).toMatch(/1 image that could not be packaged/)
+  expect(blocker.message).toMatch(/unsupported or corrupt format/)
 })

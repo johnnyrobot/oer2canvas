@@ -66,20 +66,25 @@ export function normalizeAnyDocDocument(
   // own, narrower signal instead of silently producing zero findings.
   const consultedAssetIds = new Set<number>()
 
-  // Exactly the four media types `prepareAssets` can ever produce a
-  // `PreparedAsset` for. There is no `undecodable` entry: the byte sniffer
-  // cannot tell "not a raster" from "a truncated header of a real format",
-  // so that variant is unreachable and was removed rather than kept as dead
-  // weight in this table (see assets.ts `AssetRejection`). The
-  // `unsupported-type` wording below therefore has to honestly cover both
-  // an unrecognized format and a corrupt file of a real one.
-  const BLOCKED_REASON: Record<AssetRejection, string> = {
-    unavailable: 'an image whose bytes are missing or unreadable',
-    'unsupported-type': 'an image in a format this workflow cannot package, or whose file is corrupt',
-    'too-large': 'an image larger than the packaging budget',
-    'too-many': 'more images than the packaging budget allows',
-    'too-many-pixels': 'an image too large to decode safely',
+  /**
+   * Why an image could not be packaged, as a noun phrase that completes
+   * "N images ... ". These are COUNTED and joined, so they must read correctly
+   * in a list and must not repeat the word "image".
+   *
+   * `external-unsafe` is not an `AssetRejection` — `prepareAssets` never saw
+   * those bytes, because an external image has none to see — but it refuses
+   * publication for the same reason and belongs in the same tally.
+   */
+  type RefusalCause = AssetRejection | 'external-unsafe'
+  const CAUSE_LABEL: Record<RefusalCause, string> = {
+    'unsupported-type': 'in an unsupported or corrupt format',
+    'too-many-pixels': 'too large to decode safely',
+    'too-large': 'over the size budget',
+    'too-many': 'beyond the number of images this workflow can package',
+    unavailable: 'with missing or unreadable bytes',
+    'external-unsafe': 'hosted at a network address that cannot be safely embedded',
   }
+  const refusals: RefusalCause[] = []
 
   const finding = (code: string, severity: 'warning' | 'blocker', message: string) => {
     if (!findings.some((entry) => entry.code === code)) findings.push({ code, severity, message })
@@ -248,15 +253,12 @@ export function normalizeAnyDocDocument(
       // that count is shown to users before export and must reflect every
       // image that did not make it, not just the `unavailable`-kind subset.
       unavailableAssets += 1
-      const reason = entry && 'rejected' in entry
-        ? BLOCKED_REASON[entry.rejected]
-        : inline.source?.kind === 'external'
-          ? 'an external image at a network address that cannot be safely embedded'
-          : BLOCKED_REASON.unavailable
-      finding(
-        'embedded-content',
-        'blocker',
-        `This ${sourceLabel} contains ${reason}. Remove or replace it before publishing.`,
+      refusals.push(
+        entry && 'rejected' in entry
+          ? entry.rejected
+          : inline.source?.kind === 'external'
+            ? 'external-unsafe'
+            : 'unavailable',
       )
       return `<span>[Embedded image${altText ? `: ${escapeHtml(altText)}` : ''}]</span>`
     }
@@ -354,6 +356,27 @@ export function normalizeAnyDocDocument(
   // makes the dependency explicit instead of leaving it as a property-order
   // trap for the next person editing this literal.
   const html = renderBlocks(document.blocks)
+
+  /*
+   * ONE finding for every refused image, not one per image and not one per
+   * cause. `finding()` dedupes on code, so raising this inside the walk meant
+   * the first cause encountered spoke for all of them — a document with an SVG
+   * and an oversized image reported only the SVG. The placeholder in the page
+   * says WHERE something is missing; this says WHY, for every reason at once.
+   */
+  if (refusals.length > 0) {
+    const counted = (Object.keys(CAUSE_LABEL) as RefusalCause[])
+      .map((cause) => ({ cause, count: refusals.filter((refusal) => refusal === cause).length }))
+      .filter(({ count }) => count > 0)
+      .map(({ cause, count }) => `${count} ${CAUSE_LABEL[cause]}`)
+    finding(
+      'embedded-content',
+      'blocker',
+      `This ${sourceLabel} contains ${refusals.length === 1 ? '1 image' : `${refusals.length} images`}` +
+        ` that could not be packaged: ${counted.join(', ')}.` +
+        ' Remove or replace them before publishing.',
+    )
+  }
 
   // An asset no inline image ever looked up cannot be an image the reader is
   // missing from the page — by definition nothing on the page pointed at
