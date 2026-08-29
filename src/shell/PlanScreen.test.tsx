@@ -94,6 +94,25 @@ test('says nothing about bytes when nothing was packaged', () => {
   expect(screen.queryByText(/Packaged assets/)).toBeNull()
 })
 
+// A document or text import that packaged no images still passes assetCount
+// and assetBytes (both 0) rather than omitting them, so this pins the actual
+// zero case rather than the "prop absent" case above: the line must read
+// exactly as it did before byte disclosure existed, with no invented "0 KB"
+// or "1 KB" budget clause tacked onto a fact that isn't there.
+test('a zero-byte import shows the plain count, with no byte clause at all', () => {
+  render(
+    <PlanScreen
+      destination={CANVAS}
+      chapters={CHAPTERS}
+      unansweredCount={0}
+      assetCount={0}
+      assetBytes={0}
+    />,
+  )
+  expect(screen.getByText('Packaged assets: 0.')).toBeInTheDocument()
+  expect(screen.queryByText(/KB|MB/)).not.toBeInTheDocument()
+})
+
 test('browser-import warnings remain visible in the plan summary', () => {
   render(
     <PlanScreen

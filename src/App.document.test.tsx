@@ -86,7 +86,7 @@ test('sanitized Markdown travels from Content through the page plan, Review, and
 
   fireEvent.click(screen.getByRole('button', { name: /^Plan$/ }))
   expect(screen.getByText('1 chapter becomes 1 page in a cartridge file.')).toBeVisible()
-  expect(screen.getByText('Packaged assets: 0 (1 KB of 8 MB budget).')).toBeVisible()
+  expect(screen.getByText('Packaged assets: 0.')).toBeVisible()
   expect(screen.getByRole('heading', { name: 'Import findings' })).toBeVisible()
   expect(screen.getByText(/Removed active content that could execute or submit data/i)).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: 'Download cartridge — 1 page' }))

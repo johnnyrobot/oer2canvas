@@ -10,11 +10,20 @@ import { PARSER_PROBE_LIMITS } from '../import/parser-limit-values'
  * The budget shown is read from the same constant the importer ENFORCES, never
  * written as a literal, so the number a user is told cannot drift from the
  * number that actually refuses their images.
+ *
+ * Zero is special-cased to "0 KB" rather than folded into the same rounding as
+ * everything else: `Math.max(1, ...)` exists so a genuinely small but nonzero
+ * amount (e.g. 200 bytes) reads as "1 KB" instead of the more misleading
+ * "0 KB", but applying that floor to an actual zero would print "1 KB" for an
+ * import that packaged nothing at all — a number this line exists specifically
+ * to never get wrong.
  */
 const formatBytes = (bytes: number): string =>
-  bytes >= 1024 * 1024
-    ? `${(bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, '')} MB`
-    : `${Math.max(1, Math.round(bytes / 1024))} KB`
+  bytes === 0
+    ? '0 KB'
+    : bytes >= 1024 * 1024
+      ? `${(bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, '')} MB`
+      : `${Math.max(1, Math.round(bytes / 1024))} KB`
 
 /**
  * What committing would do, before it does it.
@@ -70,7 +79,13 @@ export function PlanScreen({
       {assetCount !== undefined && (
         <p className="mt-1 text-sm text-neutral-700 dark:text-neutral-300">
           Packaged assets: {assetCount.toLocaleString()}
-          {assetBytes !== undefined && ` (${formatBytes(assetBytes)} of ${formatBytes(PARSER_PROBE_LIMITS.maximumAssetBytes)} budget)`}.
+          {/*
+            Only shown once something was actually packaged: a `0` byte total
+            is not a budget fact worth stating, and disclosing it unconditionally
+            would change the asset-free line's wording as a side effect of adding
+            a budget display rather than leaving it exactly as it read before.
+          */}
+          {!!assetBytes && ` (${formatBytes(assetBytes)} of ${formatBytes(PARSER_PROBE_LIMITS.maximumAssetBytes)} budget)`}.
         </p>
       )}
       {importFindings && importFindings.length > 0 && (
