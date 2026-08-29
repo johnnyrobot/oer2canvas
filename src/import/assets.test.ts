@@ -103,11 +103,17 @@ test('the packaged name is carried on every occurrence, never recomputed from it
  * Every extension in this system is an OUTPUT of `sniffRaster`, never an
  * input to a decision — `originPart`'s trailing `.png`/`.svg` is provenance
  * for the display name only, and `prepareAssets` never reads it to decide
- * whether to accept an asset or what to call its format. Nothing else in this
- * suite exercises a MISMATCH between the origin filename and the true
- * content, so nothing would notice a future regression that started trusting
- * the filename instead of the sniff — e.g. a "fast path" that skips sniffing
- * when the name already looks like a supported image.
+ * whether to accept an asset or what to call its format. The earlier "sniffed
+ * type wins over a lying declared type" test above already mismatches
+ * `originPart` against true content (a `.bin` name, `image/gif` declared,
+ * real PNG bytes) but only for the ACCEPT path. What is new here is the
+ * REFUSAL arm — content that a name would suggest is fine but the sniff
+ * rejects — and the `.name` assertion pinning that the winning extension in
+ * the emitted filename is the sniffed one, not the one from `originPart`.
+ * Without this, nothing would notice a future regression that started
+ * trusting the filename instead of the sniff to decide acceptance — e.g. a
+ * "fast path" that skips sniffing when the name already looks like a
+ * supported image.
  */
 test('refusal is decided by content, never by the origin filename', async () => {
   const svgBytes = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>')

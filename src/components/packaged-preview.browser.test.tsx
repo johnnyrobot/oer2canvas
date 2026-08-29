@@ -226,15 +226,24 @@ describe('ChapterView', () => {
   })
 
   /**
-   * `App.tsx`'s `clearDerivedOutput` calls `setConfirmedImport(undefined)`
-   * whenever a prepared import is discarded — cancelled, replanned, or
-   * superseded by starting a new one. That state change unmounts the whole
-   * review subtree this component lives in, exactly like the `unmount()`
-   * above, but is worth pinning under its own name: this is the actual
-   * product event ("discard an import") the lifecycle guarantee exists for,
-   * not just an incidental way to trigger a real unmount in a test. Without
-   * it, an import/discard/import cycle would leak one blob url per packaged
-   * image in the discarded chapter, for the life of the tab.
+   * `App.tsx`'s `clearDerivedOutput` (App.tsx:348-357) is what runs when a
+   * prepared import is discarded — cancelled, replanned, or superseded by
+   * starting a new one. It clears `chapter`, `audited`, `compiling`,
+   * `confirmedImport` AND, critically, `prepared` (`setPrepared([])`,
+   * App.tsx:353) in one go. `prepared` is what actually keeps this preview
+   * subtree mounted: the `review`-phase render only reaches `ChapterHandoff`
+   * (and, inside it, `ChapterView`) when `prepared.length > 0`
+   * (App.tsx:784-786), and `ChapterHandoff` renders `ChapterView` directly
+   * from its `compiled` prop, not from `confirmedImport` (App.tsx:134-141) —
+   * `confirmedImport` only ever reaches `PlanScreen`, a different screen
+   * (App.tsx:802-805). So discard unmounts this subtree via `setPrepared([])`,
+   * not via `setConfirmedImport(undefined)`; `clearDerivedOutput` clearing
+   * both together is exactly why "revoked on discard" is true here. This is
+   * worth pinning under its own name rather than relying only on the generic
+   * `unmount()` test above: it is the actual product event ("discard an
+   * import") the lifecycle guarantee exists for. Without it, an
+   * import/discard/import cycle would leak one blob url per packaged image in
+   * the discarded chapter, for the life of the tab.
    */
   test('discarding the import revokes its object urls', async () => {
     const revoke = vi.spyOn(URL, 'revokeObjectURL')
@@ -246,9 +255,16 @@ describe('ChapterView', () => {
     await waitForDecode(image)
     const used = image.getAttribute('src')!
     expect(used).toMatch(/^blob:/)
+    // Still on screen, decoded: must not have been revoked yet. Without this,
+    // the assertion below would stay green even if the url were revoked
+    // while the image was still displayed — the exact prior defect this
+    // file's header documents (a StrictMode double-effect revoking a url
+    // still in use).
+    expect(revoke).not.toHaveBeenCalledWith(used)
 
-    // Standing in for `setConfirmedImport(undefined)`: the consumer of these
-    // urls goes away entirely, and its urls must go with it.
+    // Standing in for the unmount `clearDerivedOutput` causes via
+    // `setPrepared([])`: the consumer of these urls goes away entirely, and
+    // its urls must go with it.
     rerender(<></>)
     await waitFor(() => expect(revoke).toHaveBeenCalledWith(used))
 
