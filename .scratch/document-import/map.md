@@ -1,6 +1,6 @@
 # Document import map
 
-**Frontier:** 09 — Harden packaged assets across document formats.
+**Frontier:** 11 — Import text-based PDFs.
 
 | Issue | Status | Blocked by |
 | --- | --- | --- |
@@ -12,7 +12,7 @@
 | [06 — Generate Canvas image probes](issues/06-generate-canvas-image-probes.md) | resolved | — |
 | [07 — Validate images in Canvas](issues/07-validate-images-in-canvas.md) | resolved | 06 |
 | [08 — Ship embedded-image tracer](issues/08-ship-embedded-image-tracer.md) | resolved | 04, 07 |
-| [09 — Harden packaged assets](issues/09-harden-packaged-assets.md) | ready-for-agent | 08 |
+| [09 — Harden packaged assets](issues/09-harden-packaged-assets.md) | resolved | 08 |
 | [10 — Edit proposed page plan](issues/10-edit-proposed-page-plan.md) | resolved | 01, 04, 05 |
 | [11 — Import text-based PDFs](issues/11-import-text-based-pdfs.md) | ready-for-agent | 02, 05, 10 |
 | [12 — Import URL with Firecrawl](issues/12-import-url-with-firecrawl.md) | ready-for-agent | 05, 10 |
