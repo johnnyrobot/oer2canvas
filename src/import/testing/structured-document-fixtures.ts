@@ -7,6 +7,11 @@ import { RASTER_FIXTURES } from './raster-fixtures.ts'
 
 const utf8 = (value: string) => new TextEncoder().encode(value)
 
+// XHTML text content: only `&`/`<`/`>` are unsafe here, the same rule as
+// `docx-fixture.ts`'s matching helper. Used by the `text` options this
+// module's builders add for the RTL/CJK corpus case.
+const xmlEscape = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+
 // The same Canvas-proven 16x16 PNG the DOCX fixture embeds (see
 // `docx-fixture.ts`'s `EMBEDDED_IMAGE_PNG`), reused here so all four formats
 // exercise packaging against IDENTICAL bytes rather than four fixtures that
@@ -99,7 +104,48 @@ export async function semanticEpubFixture(
     additionalParagraphs = 0,
     embeddedImage = false,
     noAltCarrier = false,
-  }: { additionalParagraphs?: number; embeddedImage?: boolean; noAltCarrier?: boolean } = {},
+    mergedCells = false,
+    deepHeadings = false,
+    footnote = false,
+    equation = false,
+    text,
+  }: {
+    additionalParagraphs?: number
+    embeddedImage?: boolean
+    noAltCarrier?: boolean
+    // A `<td colspan="2">` header cell — ordinary HTML, which is exactly why
+    // it matters: EPUB carries a table as real XHTML rather than a package
+    // format's own grid model, so this is the format's most literal test of
+    // `markup.ts`'s allowance of `colspan`/`rowspan` on `td`/`th` (see the
+    // matching `mergedCells` option on `semanticDocxFixture` for the DOCX
+    // side of the same property).
+    mergedCells?: boolean
+    // `<h2>`/`<h3>`/`<h4>` nested under the fixture's own `<h1>`. EPUB's
+    // headings are literal HTML heading tags, no style-to-outline-level
+    // translation the way DOCX needs — so this is the property's simplest
+    // possible carrier, deliberately unlike the DOCX side.
+    deepHeadings?: boolean
+    // An EPUB3 `epub:type="noteref"`/`epub:type="footnote"` pair — the
+    // format's own footnote convention. Verified empirically against anydoc
+    // 0.2.4 that this convention is NOT recognized as a note at all: no
+    // `Document.notes` entry is produced, so the `unsupported-note` blocker
+    // in `anydoc-html.ts` never fires, and the reference plus the footnote
+    // BODY both flow through as ordinary anchored paragraph text. That is
+    // the opposite of the DOCX footnote case, where the body is dropped and
+    // only a blocking placeholder survives — the two together are what make
+    // "footnotes" a property worth testing on both formats rather than one.
+    footnote?: boolean
+    // An inline MathML `<math>` element — verified empirically against
+    // anydoc 0.2.4 to convert to the same `math` inline kind, with the same
+    // LaTeX text (`x^{2}`), that DOCX's OMML equation produces. Unlike the
+    // footnote property, EPUB and DOCX equations behave identically: both
+    // become a visible `[Equation: ...]` blocker placeholder.
+    equation?: boolean
+    // Appends one extra paragraph verbatim, mirroring the option of the
+    // same name added to `semanticDocxFixture`. See that option's comment
+    // for why the RTL/CJK property needs it.
+    text?: string
+  } = {},
 ): Promise<Uint8Array<ArrayBuffer>> {
   // EPUB is ordinary XHTML plus an OPF manifest: the image is a real
   // `<img>` referencing a package-relative file, which the manifest must
@@ -116,16 +162,41 @@ export async function semanticEpubFixture(
   const imageManifestItem = embeddedImage
     ? '<item id="diagram" href="images/diagram.png" media-type="image/png"/>'
     : ''
+  const deepHeadingsBlock = deepHeadings
+    ? '<h2>Membrane Structure</h2><h3>Phospholipid Bilayer</h3><h4>Hydrophobic Tails</h4>'
+    : ''
+  const mergedCellsTable = mergedCells
+    ? '<table><tr><td colspan="2">Week</td></tr><tr><td>1</td><td>Intro to cells</td></tr></table>'
+    : ''
+  // `id`/`href` values below are arbitrary strings, not the anchor scheme
+  // `anydoc` assigns internally (its own anchors are file-path-qualified —
+  // see the `EPUB/chapter.xhtml#fn1` shape in the verification notes on the
+  // `footnote` option above); they only need to resolve to each other
+  // within this one chapter, which an ordinary same-document `href="#fn1"`
+  // does.
+  const footnoteMarkup = footnote
+    ? '<p>Migration patterns vary<a epub:type="noteref" href="#fn1" id="fnref1">1</a>.</p>' +
+      '<aside epub:type="footnote" id="fn1"><p>Source: field observation, 2019.</p></aside>'
+    : ''
+  const equationParagraph = equation
+    ? '<p>Solve <math xmlns="http://www.w3.org/1998/Math/MathML"><msup><mi>x</mi><mn>2</mn></msup></math> for x.</p>'
+    : ''
+  const customTextParagraph = text ? `<p>${xmlEscape(text)}</p>` : ''
 
   const chapter = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Cell Biology</title></head><body>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>Cell Biology</title></head><body>
   <h1 id="cell-biology">Cell Biology</h1>
+  ${deepHeadingsBlock}
   <p>Cells are organized. <a href="https://example.edu/cells">Read the cell guide</a></p>
   ${imageParagraph}
+  ${footnoteMarkup}
+  ${equationParagraph}
+  ${customTextParagraph}
   <ul><li>Membrane</li><li>Cytoplasm</li></ul>
   <table><thead><tr><th>Structure</th><th>Function</th></tr></thead>
     <tbody><tr><td>Nucleus</td><td>Stores DNA</td></tr></tbody></table>
+  ${mergedCellsTable}
   ${longParagraphs(additionalParagraphs, (index) => `<p>Long EPUB paragraph ${index}.</p>`)}
 </body></html>`
 
