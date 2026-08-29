@@ -111,6 +111,11 @@ reshape the implementation:
 
 ### Task 2: Extend the PDF fixture builder, and pin what the real module does
 
+> **Commit with Task 3.** This task leaves one test red — it pins a signal the Worker does not carry
+> until Task 3 puts it on the wire. Every commit in this repository's history is green, and a
+> knowingly-red commit would break that for no benefit, so Tasks 2 and 3 land as ONE commit. Write
+> and run them as two tasks; commit once, at the end of Task 3, using Task 3's message.
+
 Every later task rests on runtime facts that no test currently asserts. Pin them first, against the
 real WASM in a real Worker, so a version bump breaks a test instead of quietly breaking an import.
 
@@ -1427,7 +1432,13 @@ git commit -m "test: prove pdf blockers block, cancellation stops, and audited b
 
 ---
 
-### Task 11: Label split points with the PDF page they start
+### Task 11: Label split points with the PDF page they start — DEFERRED, do not implement
+
+> **Deferred by decision, 2026-08-29.** No acceptance criterion depends on this task, and it is the
+> only one in the plan that changes a public type (`ImportResult` gains an optional `sourcePages`).
+> Deferring it removes that type change from the issue entirely. Skip it: go from Task 10 to Task 12.
+> It is kept here, rather than deleted, so the next person can see what was considered and why it was
+> left out — criterion 2's page-specific evidence lives in the findings, not in the split picker.
 
 The only task here that no acceptance criterion depends on. If time runs out, stop after Task 10 and
 say so — criterion 2's page-specific evidence lives in the findings, not in the split picker.
