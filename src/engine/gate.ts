@@ -17,6 +17,18 @@ export interface AllowlistResult {
   html: string
   /** Semantic elements that had to be removed (not merely decorative) — these block. */
   removedSemantic: string[]
+  /**
+   * Url attributes stripped for a disallowed scheme, as `tag.attribute` — these
+   * block too. Stripping a url leaves the ELEMENT behind, so an `<img>` whose
+   * `src` was a `data:` uri publishes as a sourceless `<img alt="…">`: the
+   * picture is gone and the page never says so. `removedSemantic` cannot carry
+   * it, because nothing semantic was removed.
+   *
+   * Optional so existing validators keep typechecking. Absent means "nothing was
+   * stripped", never "unknown" — a validator that cannot report must not be made
+   * to fail every page it sees.
+   */
+  strippedUrls?: readonly string[]
 }
 
 export interface GateDeps {
@@ -59,6 +71,17 @@ export async function enforceGate(html: string, deps: GateDeps): Promise<GateRes
       id: `allowlist-removed-semantic:${tag}`,
       severity: 'blocker',
       message: `Removed semantic <${tag}>`,
+    })
+  }
+  // Same reasoning as above, one level down: the element survived but the url it
+  // pointed at did not, so the published bytes no longer carry what the author
+  // put there. Scoped by `tag.attribute` for the same reason — a constant id
+  // would collapse every stripped url into one row.
+  for (const target of allow.strippedUrls ?? []) {
+    blockers.push({
+      id: `allowlist-stripped-url:${target}`,
+      severity: 'blocker',
+      message: `Removed a disallowed url from <${target.split('.')[0]}> (${target.split('.')[1]})`,
     })
   }
   const warnings = issues.filter((i) => i.severity === 'warning')

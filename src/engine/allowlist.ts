@@ -467,7 +467,7 @@ function filterStyle(value: string): string {
   return kept.join('; ');
 }
 
-function filterAttrs(tag: string, attrs: Attr[]): Attr[] {
+function filterAttrs(tag: string, attrs: Attr[], stripped: Set<string>): Attr[] {
   const perElement = PER_ELEMENT_ATTRS[tag];
   const urlAttrs = URL_ATTRS[tag];
   const out: Attr[] = [];
@@ -534,8 +534,12 @@ function filterAttrs(tag: string, attrs: Attr[]): Attr[] {
          * narrowly. It is anchored to our own prefix and rejects traversal,
          * queries, encoded separators and any leading noise.
          */
-        if (!(tag === 'img' && name === 'src' && isPackagedReference(value))) continue;
+        if (!(tag === 'img' && name === 'src' && isPackagedReference(value))) {
+          stripped.add(`${tag}.${name}`);
+          continue;
+        }
       } else if (!isSchemeAllowed(value, schemeSet)) {
+        stripped.add(`${tag}.${name}`);
         continue;
       }
     }
@@ -560,6 +564,7 @@ function finalizeElement(
   out: Node[],
   removed: string[],
   removedSet: Set<string>,
+  stripped: Set<string>,
   shiftHeadings: boolean,
 ): void {
   const tag = node.tag;
@@ -570,11 +575,11 @@ function finalizeElement(
   const headingLevel = HEADING_LEVELS[tag];
   if (headingLevel !== undefined && shiftHeadings) {
     const shiftedTag = `h${Math.min(6, headingLevel + 1)}`;
-    out.push({ type: 'element', tag: shiftedTag, attrs: filterAttrs(shiftedTag, node.attrs), children: kids });
+    out.push({ type: 'element', tag: shiftedTag, attrs: filterAttrs(shiftedTag, node.attrs, stripped), children: kids });
     return;
   }
   if (ALLOWED_TAGS.has(tag)) {
-    out.push({ type: 'element', tag, attrs: filterAttrs(tag, node.attrs), children: kids });
+    out.push({ type: 'element', tag, attrs: filterAttrs(tag, node.attrs, stripped), children: kids });
     return;
   }
   // Disallowed -> unwrap (keep children); flag if it was semantic.
@@ -603,7 +608,7 @@ interface TransformFrame {
  * `removedSemantic` records inner tags before outer — identical to the recursion
  * it replaced.
  */
-function transform(nodes: Node[], removed: string[], removedSet: Set<string>, shiftHeadings: boolean): Node[] {
+function transform(nodes: Node[], removed: string[], removedSet: Set<string>, stripped: Set<string>, shiftHeadings: boolean): Node[] {
   const result: Node[] = [];
   const stack: TransformFrame[] = [{ nodes, index: 0, kids: result, node: null, parentOut: result }];
   while (stack.length > 0) {
@@ -611,7 +616,7 @@ function transform(nodes: Node[], removed: string[], removedSet: Set<string>, sh
     if (frame.index >= frame.nodes.length) {
       stack.pop();
       if (frame.node !== null) {
-        finalizeElement(frame.node, frame.kids, frame.parentOut, removed, removedSet, shiftHeadings);
+        finalizeElement(frame.node, frame.kids, frame.parentOut, removed, removedSet, stripped, shiftHeadings);
       }
       continue;
     }
@@ -676,8 +681,13 @@ export function repairAllowlist(html: string): AllowlistResult {
   const shiftHeadings = tokens.some((t) => t.kind === 'open' && t.tag === 'h1');
   const tree = buildTree(tokens);
   const removed: string[] = [];
-  const repaired = transform(tree, removed, new Set<string>(), shiftHeadings);
-  return { html: serialize(repaired), removedSemantic: removed };
+  // A Set, not a list: one entry per `tag.attribute` however many elements lost
+  // one, because three broken images are one problem to fix and three gate rows
+  // would bury the rest of the report. Sorted so the gate's blocker order is
+  // stable across runs rather than dependent on traversal.
+  const stripped = new Set<string>();
+  const repaired = transform(tree, removed, new Set<string>(), stripped, shiftHeadings);
+  return { html: serialize(repaired), removedSemantic: removed, strippedUrls: [...stripped].sort() };
 }
 
 export const validateAllowlist: AllowlistValidator = async (html: string): Promise<AllowlistResult> =>

@@ -375,3 +375,38 @@ test.each([
   const { html } = await validateAllowlist(`<p><iframe src="${src}"></iframe></p>`)
   expect(html).not.toContain('IMS-CC-FILEBASE')
 })
+
+/*
+  Stripping a url attribute leaves the ELEMENT behind. For an `<img>` that means
+  a sourceless `<img alt="A chart">`: the picture is gone, the layout box is gone,
+  and until now nothing anywhere said so. `removedSemantic` only reports removed
+  semantic ELEMENTS, so an attribute drop had no channel at all and the gate had
+  nothing to block on.
+
+  The html itself is unchanged and still pinned above — dropping the bad scheme is
+  correct and deliberate. What was missing is that anyone downstream find out.
+*/
+test('stripping a url attribute is reported, so the gate can block on it', async () => {
+  const dataUri = await validateAllowlist('<img src="data:image/png;base64,AAAA" alt="A chart">');
+  expect(dataUri.html).toBe('<img alt="A chart">');
+  expect(dataUri.strippedUrls).toEqual(['img.src']);
+
+  const scripted = await validateAllowlist('<a href="javascript:alert(1)">y</a>');
+  expect(scripted.strippedUrls).toEqual(['a.href']);
+});
+
+test('one entry per tag.attribute, however many elements lost one', async () => {
+  const many = await validateAllowlist(
+    '<img src="data:image/png;base64,AAAA" alt="A"><img src="file:///etc/passwd" alt="B">',
+  );
+  // Scoped by tag.attribute exactly as `removedSemantic` is scoped by tag: the
+  // gate turns each entry into ONE row, and three broken images are one problem
+  // to fix, not three rows that bury the rest of the report.
+  expect(many.strippedUrls).toEqual(['img.src']);
+});
+
+test('a page that loses nothing reports nothing', async () => {
+  const fine = await validateAllowlist('<img src="https://x.test/a.png" alt="A">');
+  expect(fine.html).toBe('<img src="https://x.test/a.png" alt="A">');
+  expect(fine.strippedUrls).toEqual([]);
+});

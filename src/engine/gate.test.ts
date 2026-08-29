@@ -84,3 +84,29 @@ test('GateResult.html is the repaired html', async () => {
   })
   expect(r.html).toBe('<p>hi</p>')
 })
+
+/*
+  A stripped url is a blocker for the same reason a removed <figure> is: the
+  published bytes no longer carry what the author put there, and the person who
+  can fix it is the only one who can decide what to do about it.
+*/
+test('a stripped url attribute blocks', async () => {
+  const r = await enforceGate('<img src="data:image/png;base64,AAAA" alt="A chart">', {
+    validateAllowlist: async () => ({
+      html: '<img alt="A chart">', removedSemantic: [], strippedUrls: ['img.src'],
+    }),
+    audit: async () => ({ issues: [] }),
+  })
+  expect(r.badgeWithheld).toBe(true)
+  expect(r.conformance.blockers).toContainEqual(expect.objectContaining({
+    id: 'allowlist-stripped-url:img.src',
+  }))
+})
+
+test('an allowlist result that reports no stripped urls still gates normally', async () => {
+  // The field is optional so existing validators keep typechecking; absent must
+  // mean "nothing stripped", never "unknown, assume the worst" — a validator
+  // that does not report cannot be made to fail every page.
+  const r = await enforceGate('<p>hi</p>', clean)
+  expect(r.conformance.blockers).toEqual([])
+})
