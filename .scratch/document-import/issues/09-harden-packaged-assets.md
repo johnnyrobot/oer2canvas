@@ -6,6 +6,8 @@
 
 **Design:** [09-harden-packaged-assets-design.md](../09-harden-packaged-assets-design.md)
 
+**Plan:** [09-harden-packaged-assets-plan.md](../09-harden-packaged-assets-plan.md)
+
 **Status:** ready-for-agent
 
 **Rescoped 2026-08-28.** Issue 08's design absorbed five of the seven criteria below, because
