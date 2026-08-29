@@ -331,7 +331,7 @@ the type does not admit one — and no migration is ever needed, because no rele
   `peek(): string | undefined`, `forget(): void`.
 - Consumes: nothing. No import of `KeyValueStore`, `idb`, `localStorage` or `sessionStorage`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 import { createFirecrawlKeyStore } from './firecrawl-key'
@@ -377,12 +377,12 @@ test('the store takes no argument, so no caller can hand it a disk', () => {
 })
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project unit src/import/firecrawl-key.test.ts`
 Expected: FAIL — `src/import/firecrawl-key.ts` does not exist.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```ts
 /**
@@ -430,12 +430,12 @@ export function createFirecrawlKeyStore(): FirecrawlKeyStore {
 }
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run --project unit src/import/firecrawl-key.test.ts && npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Run the whole suite and commit**
+- [x] **Step 5: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -463,7 +463,7 @@ second would drift.
   `{ kind: 'web'; text: string; parser: ImportReport['parser']; sourceUrl: URL }`.
 - `importText` is otherwise unchanged: same signature, same return type, same one-section shape.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `src/import/text.test.ts`:
 
@@ -561,13 +561,13 @@ test('a web import refuses to disagree with itself about the source URL', async 
 })
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project unit src/import/text.test.ts`
 Expected: FAIL — TypeScript rejects `kind: 'web'`; at runtime `formatOf` throws its
 "Choose a text, Markdown, or HTML file" message because the variant is unknown.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/import/text.ts`:
 
@@ -653,13 +653,13 @@ report: {
 
 and `work.format: recordedFormat`.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run --project unit src/import/text.test.ts && npm run typecheck`
 Expected: PASS, with every existing `paste`/`file` test untouched. If an existing test changed
 behaviour, the `recordedFormat` split is wrong — fix it rather than editing the old test.
 
-- [ ] **Step 5: Run the whole suite and commit**
+- [x] **Step 5: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -686,7 +686,7 @@ here and gets all of them for free.
 - Imports **nothing** from `firecrawl-key.ts` or any Firecrawl module. If it does, the seam has
   leaked.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `src/import/web.test.ts`. Every case below is one row of the design's failure table.
 
@@ -817,12 +817,12 @@ test('cancellation propagates and is an AbortError', async () => {
 })
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project unit src/import/web.test.ts`
 Expected: FAIL — `src/import/web.ts` does not exist.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/import/web.ts`. The seam first, because it is the point of the file:
 
@@ -912,12 +912,12 @@ export type WebArticleFetcher = (url: URL, signal: AbortSignal) => Promise<Fetch
    adding a finding does not put a second place in charge of what a `web` import IS, whereas
    rewriting `provenance.kind` or `report.parser` after the fact would.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run --project unit src/import/web.test.ts && npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Run the whole suite and commit**
+- [x] **Step 5: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -943,7 +943,7 @@ in the suite reaches the network.
   string: the panel holds the key and can forget it between the render and the submit, and a captured
   string would outlive the Forget button.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 const SENTINEL = 'fc-SENTINEL-do-not-leak-0123456789'
@@ -1107,12 +1107,12 @@ test('a user cancellation is an AbortError, distinguishable from the deadline', 
 })
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project unit src/import/firecrawl.test.ts`
 Expected: FAIL — `src/import/firecrawl.ts` does not exist.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```ts
 export const FIRECRAWL_ENDPOINT = 'https://api.firecrawl.dev/v2/scrape'
@@ -1175,12 +1175,12 @@ Close the file with the note the second implementation needs:
  */
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run --project unit src/import/firecrawl.test.ts && npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Run the whole suite and commit**
+- [x] **Step 5: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -1214,7 +1214,7 @@ user what they did and did not say is not policy.
 - `ImportMetadataFields` gains two **optional** props, so no existing caller changes:
   `rightsPreface?: ReactNode` and `sourceUrl?: { readOnly: true; note: string }`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `src/import/web.test.ts`:
 
@@ -1277,12 +1277,12 @@ test('the existing callers are unchanged when the new props are absent', () => {
 })
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project unit src/import/web.test.ts src/components/ImportMetadataFields*`
 Expected: FAIL — no `import-web-license-unnamed` finding, and TypeScript rejects the two new props.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `ImportMetadataFields.tsx`, both props optional and rendered only when present. The source-URL
 input becomes `readOnly` with the note as `aria-describedby` text when `sourceUrl` is supplied —
@@ -1307,12 +1307,12 @@ The preface text the web panel passes (Task 9), which is a statement of fact and
 > Extraction is not a license. A page being publicly readable does not make it openly licensed, and
 > this app cannot tell you what license a page carries. Choose the basis you actually have.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run --project unit src/import/web.test.ts src/components/ && npm run typecheck`
 Expected: PASS, with every existing `ImportMetadataFields` caller untouched.
 
-- [ ] **Step 5: Run the whole suite and commit**
+- [x] **Step 5: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -1338,7 +1338,7 @@ disclosure triangle.
   findings and preview belong to `ImportPlanEditor`, so editing them never comes back through this
   form and never re-fetches — which on this path also means never spends a second credit.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 test('the panel states the destination, what is sent, and the cost, before the button', () => {
@@ -1398,12 +1398,12 @@ test('a failed import shows an app-authored message and the panel stays usable',
 test('cancel aborts the in-flight import and reports it as cancelled', async () => { ... })
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project unit src/components/WebArticleImporter.test.tsx`
 Expected: FAIL — the component does not exist.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Follow `TextContentImporter.tsx` for the form shell (`useImportErrorFocus`, the `role="status"` busy
 line, the `role="alert"` error, the `AbortController` in a `useRef`, Cancel beside the status line)
@@ -1439,12 +1439,12 @@ Specifics:
   `src/sources/` beside the catalogs and note in a comment which list it mirrors. Do not duplicate a
   list silently.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run --project unit src/components/WebArticleImporter.test.tsx && npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Run the whole suite and commit**
+- [x] **Step 5: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -1482,7 +1482,7 @@ plus one the grep cannot see):
 - Create: `src/import/web-key-containment.test.ts`
 - Create or extend: `src/components/WebArticleImporter.test.tsx` (the rendered half)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 const SENTINEL = 'fc-SENTINEL-do-not-leak-0123456789'
@@ -1586,25 +1586,25 @@ Injecting `fetch` into the component: give `WebArticleImporter` an optional `fet
 defaults to `globalThis.fetch`, exactly as `RelayDeps` does — `worker/relay.ts`'s header says *"Deps
 are injected so tests run with no network."* Add it in Task 8 if it is not there already.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project unit src/import/web-key-containment.test.ts src/components/WebArticleImporter.test.tsx`
 Expected: FAIL on the missing helpers first. **After they exist, any remaining failure is a real
 leak — find and fix the leak, never loosen the assertion.**
 
-- [ ] **Step 3: Fix whatever the tests find**
+- [x] **Step 3: Fix whatever the tests find**
 
 There is no new production code planned here. If a test fails, the likely causes, in order: an
 `Error` constructed with `{ cause }` carrying the request; a finding built from the response; the key
 placed on the URL; a `console.*` added during Task 6 (there are none in `src/` today and there must
 be none after).
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run --project unit src/import/ src/components/WebArticleImporter.test.tsx && npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Run the whole suite and commit**
+- [x] **Step 5: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -1631,7 +1631,7 @@ git commit -m "test: prove the firecrawl key reaches no storage, message, findin
 - Modify: `README.md`
 - Modify: `SECURITY.md`
 
-- [ ] **Step 1: Read `PRIVACY.md` in full and find every sentence this feature falsifies**
+- [x] **Step 1: Read `PRIVACY.md` in full and find every sentence this feature falsifies**
 
 Do not stop at line 20. Three passages need attention, and the third is the one that is easy to miss:
 
@@ -1649,7 +1649,7 @@ Do not stop at line 20. Three passages need attention, and the third is the one 
    qualifier that names the two remote hosts this app can now talk to on purpose: the Hugging Face
    model host and `api.firecrawl.dev`.
 
-- [ ] **Step 2: Write the new paragraph — plainly what leaves the browser, when, and to whom**
+- [x] **Step 2: Write the new paragraph — plainly what leaves the browser, when, and to whom**
 
 It must state, in the user's terms and without hedging:
 
@@ -1669,7 +1669,7 @@ It must state, in the user's terms and without hedging:
 - **The host table point** the sibling repo's `PRIVACY.md` makes: **any URL you paste is a host this
   app now talks to** — via Firecrawl, on your account.
 
-- [ ] **Step 3: `README.md`**
+- [x] **Step 3: `README.md`**
 
 The Release scope section lists exactly what the public app supports and is very specific. Add web
 page import to that list, and state in the same register as the surrounding text: it requires the
@@ -1685,7 +1685,7 @@ Cloudflare Worker used only where browser CORS prevents a direct request"* is st
 Firecrawl call is browser-direct precisely because CORS does *not* prevent it) — but say so
 explicitly rather than leaving a reader to work it out.
 
-- [ ] **Step 4: `SECURITY.md`**
+- [x] **Step 4: `SECURITY.md`**
 
 Add to *Security boundaries*, beside the Canvas-token bullet it parallels:
 
@@ -1704,7 +1704,7 @@ Add to *Security boundaries*, beside the Canvas-token bullet it parallels:
 - Fetched Markdown is untrusted and passes through the same sanitizer, the same 2 MiB limit and the
   same accessibility gate as pasted Markdown.
 
-- [ ] **Step 5: Check for the same claim anywhere else**
+- [x] **Step 5: Check for the same claim anywhere else**
 
 Run: `grep -rn "not uploaded\|never leaves\|stay(s)\? (in\|on) (the \)\?\(device\|browser\)\|browser-local\|no third[- ]party" --include='*.md' --include='*.tsx' --include='*.ts' . | grep -v node_modules`
 Then check in-app copy specifically: `ACCESSIBILITY.md`, `docs/DOCUMENT_IMPORT_SPEC.md`,
@@ -1714,7 +1714,7 @@ because it is about the file input and must not be reused verbatim on the web pa
 everything found, amend what is now false, and say explicitly in the task report which files you
 checked and found clean.
 
-- [ ] **Step 6: No commit yet**
+- [x] **Step 6: No commit yet**
 
 Proceed to Task 11 and commit both together, for the reason in this task's header.
 
@@ -1730,7 +1730,7 @@ Proceed to Task 11 and commit both together, for the reason in this task's heade
 - Modify: `src/App.tsx`
 - Modify: `src/App.test.tsx` or `src/App.document.test.tsx` (whichever covers staging an import)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 test('the Web page tab appears only when the app supplies a handler', () => {
@@ -1757,12 +1757,12 @@ test('the Web page tab and the LibreTexts box remain different verbs', () => {
 test('the nudge switches tabs only when its button is pressed', () => { ... })
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project unit src/components/SourceBrowser.test.tsx`
 Expected: FAIL — `onImportWeb` is not a prop and no `web` tab exists.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `SourceBrowser.tsx`: add `'web'` to `SourceTab`, `'Web page'` to `TAB_LABELS`, `onImportWeb` to the
 props and to the conditional tab list beside `document` and `text`, and render
@@ -1776,12 +1776,12 @@ incomplete. The web page clause must not claim "in this browser" of the fetch.
 editor, `prepareImportedContent`, the gate and the cartridge are all format-agnostic and already
 take an `ImportResult`.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run --project unit src/components/SourceBrowser.test.tsx src/App.test.tsx && npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Run the whole suite and commit Tasks 10 and 11 together**
+- [x] **Step 5: Run the whole suite and commit Tasks 10 and 11 together**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -1802,7 +1802,7 @@ that crawling does not happen.
 - Create: `src/import/web-endpoints.test.ts`
 - Modify: `scripts/smoke-dist.mjs`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 import { readFileSync } from 'node:fs'
@@ -1837,7 +1837,7 @@ test('the web import path never mentions the relay', () => {
 })
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project unit src/import/web-endpoints.test.ts`
 Expected: it should PASS immediately if Tasks 5 and 6 were written correctly. **That is the point of
@@ -1845,19 +1845,19 @@ writing it late**, and it is the one test in this plan that is allowed to be gre
 prove it can fail by temporarily adding `/v2/crawl` to a comment in `web.ts`, watching it fail,
 and reverting. Record that you did.
 
-- [ ] **Step 3: Add the same check to the built bundle**
+- [x] **Step 3: Add the same check to the built bundle**
 
 In `scripts/smoke-dist.mjs`, beside the existing absence checks, scan every `dist/assets/*.js` for
 the five forbidden path strings and fail on any hit. Also require that `/v2/scrape` **is** present in
 at least one chunk — a check that can pass because the code was tree-shaken out entirely is not a
 check. Comment both halves.
 
-- [ ] **Step 4: Run the built check**
+- [x] **Step 4: Run the built check**
 
 Run: `npm run build && npm run test:dist`
 Expected: PASS.
 
-- [ ] **Step 5: Run the whole suite and commit**
+- [x] **Step 5: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -1875,7 +1875,7 @@ Three properties a jsdom assertion about a finding does not demonstrate. Criteri
 - Create: `src/import/web.browser.test.ts`
 - Create: `src/import/testing/firecrawl-fixture.ts`
 
-- [ ] **Step 1: Capture a real response as a fixture**
+- [x] **Step 1: Capture a real response as a fixture**
 
 `src/import/testing/firecrawl-fixture.ts` holds **captured real envelopes**, not invented JSON — the
 design's failure table was built from live responses on 2026-08-29 and the tests should use those
@@ -1888,7 +1888,7 @@ Trim the article body to something readable — the Wikipedia markdown measured 
 but **do not hand-edit the metadata**, and record in a header comment which URL each was captured
 from and on what date.
 
-- [ ] **Step 2: Write the tests**
+- [x] **Step 2: Write the tests**
 
 ```ts
 test('every refused image leaves both a blocker and a visible placeholder', async () => {
@@ -1925,13 +1925,13 @@ test('the 404 that arrives inside a 200 never reaches the plan editor', async ()
 Follow `src/import/packaged-cartridge.browser.test.ts` for the pipeline calls and the entry lookup
 rather than inventing a second way to build a cartridge.
 
-- [ ] **Step 3: Run them**
+- [x] **Step 3: Run them**
 
 Run: `npx vitest run --project browser src/import/web.browser.test.ts`
 Expected: PASS. A parity failure means something rewrote `html` after the gate — stop and find it; do
 not relax the assertion.
 
-- [ ] **Step 4: Run the whole suite and commit**
+- [x] **Step 4: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -1947,7 +1947,7 @@ git commit -m "test: prove a fetched article marks its images and ships its audi
 - Modify: `.scratch/document-import/issues/12-import-url-with-firecrawl.md`
 - Modify: `.scratch/document-import/map.md`
 
-- [ ] **Step 1: Tick the six criteria, each with the file and test that closes it**
+- [x] **Step 1: Tick the six criteria, each with the file and test that closes it**
 
 1. Disclosure before proceeding — `WebArticleImporter.tsx`, `WebArticleImporter.test.tsx`.
 2. Memory-only, excluded from persistence and logs, Forget — `firecrawl-key.ts`,
@@ -1960,7 +1960,7 @@ git commit -m "test: prove a fetched article marks its images and ships its audi
    `firecrawl.test.ts`, `web.test.ts`.
 6. Provenance and the full preview/audit/plan/export workflow — `web.browser.test.ts`.
 
-- [ ] **Step 2: Write the `## Answer`**
+- [x] **Step 2: Write the `## Answer`**
 
 Record: that the fetch route is browser-direct Firecrawl with the user's own key and **why** (abuse
 liability, not payment); that Keyless was verified to work and rejected anyway; that the seam exists
@@ -1973,9 +1973,9 @@ refused with both a finding and a placeholder by inheritance from `markup.ts`; a
 
 Set `Status: resolved`.
 
-- [ ] **Step 3: Move the frontier in `map.md`**
+- [x] **Step 3: Move the frontier in `map.md`**
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 npm run typecheck && npx vitest run
