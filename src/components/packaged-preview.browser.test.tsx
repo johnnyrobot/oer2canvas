@@ -244,8 +244,18 @@ describe('ChapterView', () => {
    * import") the lifecycle guarantee exists for. Without it, an
    * import/discard/import cycle would leak one blob url per packaged image in
    * the discarded chapter, for the life of the tab.
+   *
+   * WHAT THIS TEST PINS, PRECISELY — and it is narrower than "discard". The
+   * `rerender(<></>)` below is an UNMOUNT of the subtree, the same event the
+   * neighbouring test drives with `unmount()`. That the product's discard path
+   * reaches revocation THROUGH that unmount is the paragraph above: argued from
+   * `App.tsx` (`setPrepared([])` at :353, and the `prepared.length > 0` guard on
+   * the preview at :784-786) and verified by hand, not pinned here. This name
+   * says so, so a reader does not take the test as evidence for the argument.
+   * Pinning discard end to end would need an App-level test that imports,
+   * discards, and observes revocation — worth having, and not what this is.
    */
-  test('discarding the import revokes its object urls', async () => {
+  test('unmounting the preview subtree revokes its object urls — the mechanism discard uses', async () => {
     const revoke = vi.spyOn(URL, 'revokeObjectURL')
     const chapter: Chapter = { ...baseChapter, assets: [PACKAGED_ASSET] }
     const compiled = compiledWith(chapter, `<img alt="A diagram" src="${PACKAGED_REFERENCE}">`)

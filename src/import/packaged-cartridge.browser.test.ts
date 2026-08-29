@@ -103,6 +103,14 @@ test.each(DOCUMENT_FIXTURE_CASES)(
     // webcontent resource with a matching file child, and no page dependencies.
     expect(manifest).toContain(`type="webcontent" href="${assetEntries[0]!.name}"`)
     expect(manifest).toContain(`<file href="${assetEntries[0]!.name}"/>`)
+    // THIS ASSERTION PINS THE SHAPE WE SHIP, NOT A CANVAS REQUIREMENT. The
+    // recorded measurement behind `src/engine/export/cartridge.ts`'s manifest
+    // builder found the `webcontent-dependencies` variant — this same standalone
+    // resource PLUS a `<dependency identifierref="...">` from the page — passed
+    // every required behaviour too. The tie was broken toward the simpler
+    // manifest; the dependency was measured as OPTIONAL, not wrong. So read this
+    // as "all four formats converge on one shape", which is what the test is
+    // for, and not as "Canvas rejects a dependency", which was measured false.
     expect(manifest).not.toContain('<dependency')
   },
 )
