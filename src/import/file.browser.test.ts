@@ -115,7 +115,7 @@ test('an embedded DOCX image the workflow cannot package stays a visible blockin
     code: 'embedded-content',
     severity: 'blocker',
     sectionId: imported.work.sections[0]?.id,
-    message: expect.stringMatching(/cannot package|corrupt/i),
+    message: expect.stringMatching(/could not be packaged/i),
   }))
   expect(imported.work.sections[0]?.html).toContain('[Embedded image: Unsupported diagram]')
   expect(imported.work.assets).toEqual([])

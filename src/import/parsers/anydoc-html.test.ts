@@ -370,3 +370,56 @@ test('a single refusal reads naturally rather than as a list of one', async () =
   expect(blocker.message).toMatch(/1 image that could not be packaged/)
   expect(blocker.message).toMatch(/unsupported or corrupt format/)
 })
+
+test('the refusal message is deterministic regardless of which image the walk reaches first', async () => {
+  // Three DISTINCT causes (not just three images) are required here: with
+  // only one or two causes in play, an encounter-order bug and the correct
+  // fixed-CAUSE_LABEL-order behavior can coincide by accident. Building the
+  // SAME set of causes in two different image orders and asserting the
+  // rendered messages are byte-identical is what actually pins the ordering
+  // guarantee described at anydoc-html.ts's "ONE finding for every refused
+  // image" comment — a regression to iterating `refusals` in encounter order
+  // would make this test fail (verified by hand: temporarily replacing the
+  // `Object.keys(CAUSE_LABEL)` iteration with iteration over `refusals`
+  // itself flips this test red, while every other test in this file still
+  // reports green).
+  const svg = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>')
+  const oversized = new Uint8Array(PARSER_PROBE_LIMITS.maximumIndividualAssetBytes + 1)
+  oversized.set(RASTER_FIXTURES.png.bytes)
+  const assets = [
+    { id: 0, mediaType: 'image/svg+xml', originPart: 'a.svg', data: svg },
+    { id: 1, mediaType: 'image/png', originPart: 'b.png', data: oversized },
+  ]
+  const prepared = await prepareAssets(assets)
+
+  const forwardOrder = {
+    kind: 'document',
+    blocks: [{ kind: 'paragraph', content: [
+      { kind: 'image', alt: 'A', source: { kind: 'asset', assetId: 0 } }, // unsupported-type
+      { kind: 'image', alt: 'B', source: { kind: 'asset', assetId: 1 } }, // too-large
+      { kind: 'image', alt: 'C', source: { kind: 'unavailable' } }, // unavailable
+    ] }],
+    assets, notes: [],
+  } as never
+  const reverseOrder = {
+    kind: 'document',
+    blocks: [{ kind: 'paragraph', content: [
+      { kind: 'image', alt: 'C', source: { kind: 'unavailable' } }, // unavailable
+      { kind: 'image', alt: 'B', source: { kind: 'asset', assetId: 1 } }, // too-large
+      { kind: 'image', alt: 'A', source: { kind: 'asset', assetId: 0 } }, // unsupported-type
+    ] }],
+    assets, notes: [],
+  } as never
+
+  const forward = normalizeAnyDocDocument(forwardOrder, 'docx', prepared)
+  const reverse = normalizeAnyDocDocument(reverseOrder, 'docx', prepared)
+
+  const forwardMessage = forward.findings.find((f) => f.code === 'embedded-content')!.message
+  const reverseMessage = reverse.findings.find((f) => f.code === 'embedded-content')!.message
+  expect(forwardMessage).toBe(reverseMessage)
+  // Sanity check: this is genuinely exercising all three causes, not two
+  // that happen to sort the same as three.
+  expect(forwardMessage).toMatch(/in an unsupported or corrupt format/)
+  expect(forwardMessage).toMatch(/over the size budget/)
+  expect(forwardMessage).toMatch(/with missing or unreadable bytes/)
+})
