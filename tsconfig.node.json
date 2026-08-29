@@ -21,7 +21,14 @@
     "vite.config.ts",
     "vitest.config.ts",
     "src/engine/compile/golden.test.ts",
-    "src/engine/export/zip.test.ts"
+    "src/engine/export/zip.test.ts",
+    // Verifies a whole cartridge with a real `unzip`, for the reason
+    // `zip.test.ts` gives: a zip verified only by its own writer is marking
+    // its own homework. Needs `node:child_process` to shell out to `unzip`
+    // and `node:timers/promises` to wait for the sibling browser test
+    // (`cartridge-artifact.browser.test.ts`) to finish writing the
+    // cartridges this file reads — nothing else about it wants node.
+    "src/import/cartridge-artifact.test.ts"
   ],
   "exclude": []
 }

@@ -1,6 +1,7 @@
 import { commands } from 'vitest/browser'
 import { semanticDocxFixture } from './testing/docx-fixture'
 import { DOCUMENT_FIXTURE_CASES } from './testing/document-fixture-cases'
+import { toBase64 } from './testing/base64'
 import { importStructuredDocument } from './document'
 import { toChapter } from './to-chapter'
 import { compileAndAuditChapter } from '../engine'
@@ -14,23 +15,6 @@ const metadata = {
   sourceName: 'Biology Department',
   rightsAuthority: 'own' as const,
   rightsAcknowledged: true,
-}
-
-/**
- * `commands.writeFile` (Vitest's browser-mode bridge back to the real Node
- * `fs` running the test server — see `@vitest/browser/dist/index.js`) only
- * accepts a string body, never bytes. Base64, chunked rather than spread in
- * one `String.fromCharCode(...bytes)` call: a cartridge with any real content
- * is well past the argument-count ceiling that blows the call stack on a
- * naive spread.
- */
-function toBase64(bytes: Uint8Array): string {
-  const CHUNK = 0x8000
-  let binary = ''
-  for (let offset = 0; offset < bytes.length; offset += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + CHUNK))
-  }
-  return btoa(binary)
 }
 
 /**
