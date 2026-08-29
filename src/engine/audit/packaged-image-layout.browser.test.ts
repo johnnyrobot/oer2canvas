@@ -74,8 +74,10 @@ async function decodablePng(width: number, height: number): Promise<Uint8Array> 
 /**
  * The fragment, mounted exactly as the audit mounts it: inside `#b2c-content`
  * in a document styled by `CANVAS_SHELL_CSS`. `wrapInCanvasShell` is that
- * document's single definition — `iframe-runner.ts` writes the byte-identical
- * shell around the same id, which is the invariant `canvas-shell.ts` documents.
+ * document's single definition — `iframe-runner.ts` writes a layout-identical
+ * shell around the same id (same `CANVAS_SHELL_CSS`, same `#b2c-content`; the
+ * `<title>` and DOM-construction method differ), which is the invariant
+ * `canvas-shell.ts` documents.
  */
 function shellFrame(fragment: string, frameWidth: number) {
   const frame = document.createElement('iframe')

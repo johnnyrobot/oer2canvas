@@ -89,7 +89,7 @@ function webp(bytes: Uint8Array): SniffedRaster | undefined {
  * because getting this set wrong is not a parse error, it is a silent
  * disagreement with the browser about where the frame header lives.
  */
-const PARAMETERLESS_JPEG_MARKER = (marker: number): boolean =>
+const isParameterlessJpegMarker = (marker: number): boolean =>
   marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9)
 
 /**
@@ -122,7 +122,7 @@ function jpeg(bytes: Uint8Array): SniffedRaster | undefined {
     // a decoder resynchronises past them. We would instead treat the bytes
     // behind them as a length.
     if (marker === 0xff || marker === 0x00) return undefined
-    if (PARAMETERLESS_JPEG_MARKER(marker)) return undefined
+    if (isParameterlessJpegMarker(marker)) return undefined
     // Everything outside 0xc0-0xfe is reserved or not a segment marker at all.
     if (marker < 0xc0 || marker > 0xfe) return undefined
     const length = u16be(bytes, offset + 2)

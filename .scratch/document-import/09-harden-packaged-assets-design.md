@@ -105,9 +105,10 @@ as settled: cartridge export is the route that carries images.
 
 ## Audit-parity: closing an asserted-but-unmeasured claim
 
-The token cannot be fetched in the audit frame. `width`/`height` are the entire reason the audited
-layout still matches the published layout — that is what makes the token-in-gated-bytes design
-defensible instead of a compromise.
+The token cannot be fetched in the audit frame. `width`/`height` are the reason the audited layout
+still matches the published layout while the token's request has not yet failed — that is what makes
+the token-in-gated-bytes design defensible instead of a compromise. That parity is conditional, not
+unconditional; see Non-goals for the measured limit.
 
 Nothing measures it. The compile golden proves the attributes are *emitted*; no test proves they *do
 the job*. A browser test must assert that an unresolved packaged image occupies the same layout box as
@@ -143,7 +144,8 @@ bytes simultaneously must report all three with correct counts in one finding. T
 origin path ends `.svg` still packages. Clearing the import revokes the object URLs, observed through
 a spy on `URL.revokeObjectURL`.
 
-**Audit parity.** An unresolved packaged image reserves its true box, matching a resolved one.
+**Audit parity.** An unresolved packaged image reserves its true box, matching a resolved one, for as
+long as its request has not yet failed. See Non-goals for what happens after it does.
 
 **Canvas acceptance.** One live import, unchanged from issue 08. Per-format coverage is asserted
 offline by building a cartridge from each of DOCX, EPUB, ODT and RTF and checking the manifest and
@@ -167,3 +169,17 @@ live import would re-measure Canvas, not this codebase.
   to blunt a hazard that already requires a crafted file and is bounded by the existing budgets to a
   tab-level denial of service against the importing user's own session. Revisit it with measurement,
   not with a guess.
+- Bounding the audit-frame layout race after an unresolved packaged image's request fails.
+  `packaged-image-layout.browser.test.ts` measured that the box-reservation claim above is conditional:
+  before the request fails the reserved box is exact (800x600 at a 1280px frame, 220x165 at 300px,
+  aspect ratio held both ways), but once it fails Chromium substitutes alt text and the box collapses to
+  roughly 73.8x24 — proven to be alt substitution rather than attribute loss via an `alt=""` control that
+  keeps the full box. Which state the audit reads depends on a race inside `settleLayout`
+  (`iframe-runner.ts:220-227`: one `requestAnimationFrame` in the frame realm against a 50ms `setTimeout`
+  in the parent) that a localhost 404 can land inside; both outcomes have been observed, and this is a
+  known, deliberate residual, not an oversight or a claim that the race is bounded. It costs nothing
+  today only because no audit output reads image geometry: `collectImages` (`iframe-runner.ts:166-175`)
+  reads only `alt`, `src` and role/aria-hidden attributes, `collectTextRuns` (`:80-106`) walks text nodes
+  and never visits alt text, and no rule in the axe tag set the audit runs (`wcag2a`, `wcag2aa`,
+  `wcag21a`, `wcag21aa`, `wcag22aa`) measures an `<img>` box — so the race changes no verdict the audit
+  produces. Bounding it properly is a question for `iframe-runner.ts`, left open here.

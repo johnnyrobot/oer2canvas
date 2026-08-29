@@ -93,6 +93,24 @@ and is bounded by the existing byte and count budgets to a tab-level denial of s
 importing user's own session. It is recorded in the design's Non-goals and should be revisited with
 measurement rather than a guess.
 
+### Known residual: the audit-frame layout race after an unresolved image's request fails
+
+`packaged-image-layout.browser.test.ts` measured the audit-parity claim for the first time and found it
+conditional, not unconditional: while a packaged image's token has not yet failed to load, the reserved
+box is exact (800x600 at a 1280px frame, 220x165 at 300px, aspect ratio held both ways), but once the
+request fails Chromium substitutes alt text and the box collapses to roughly 73.8x24 — proven to be alt
+substitution rather than attribute loss via an `alt=""` control that keeps the full box. Which state the
+audit reads depends on a race inside `settleLayout` (`iframe-runner.ts:220-227`: one
+`requestAnimationFrame` in the frame realm against a 50ms `setTimeout` in the parent) that a localhost
+404 can land inside; both outcomes have been observed, and this is recorded as a deliberate residual, not
+an oversight, and not a claim that the race is bounded. It is excluded from this branch because no audit
+output currently reads image geometry — `collectImages` (`iframe-runner.ts:166-175`) reads only `alt`,
+`src` and role/aria-hidden attributes, `collectTextRuns` (`:80-106`) walks text nodes and never visits
+alt text, and no rule in the axe tag set the audit runs (`wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`,
+`wcag22aa`) measures an `<img>` box — so the race changes no verdict the audit produces today. It is
+recorded in the design's Non-goals; bounding the race is a question for `iframe-runner.ts` and is
+deliberately out of scope here.
+
 Verification: both TypeScript projects and the full suite — 110 test files, 1060 tests — pass, including
 a new offline fixture proving docx, epub, odt and rtf all converge on the identical cartridge manifest
 shape issue 07 measured Canvas accepts.
