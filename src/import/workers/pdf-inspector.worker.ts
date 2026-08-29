@@ -4,6 +4,7 @@ import init, { detectPdf, processPdf, version } from '@firecrawl/pdf-inspector-w
 import type { PdfProcessResult } from '@firecrawl/pdf-inspector-wasm'
 import type {
   ParserDetection,
+  PdfUnmarkedPage,
   ParserProbeFailureCode,
   ParserProbeRequest,
   ParserProbeResponse,
@@ -48,6 +49,47 @@ function describe(result: PdfProcessResult): ParserDetection {
     layout: result.layout,
     ...(result.title ? { title: result.title } : {}),
   }
+}
+
+/** `<!-- Page 7 -->` on its own line, the exact form the module emits. */
+const PAGE_MARKER = /^<!-- Page (\d+) -->[ \t]*$/gm
+const IMAGE_PLACEHOLDER = /!\[[^\]]*\]\([^)]*\)/g
+
+/**
+ * Say what was actually on each page that emitted no marker.
+ *
+ * `pagesNeedingOcr` does not name every scanned page: measured 2026-08-29, the
+ * module only populates it once the scanned fraction is high enough for it to
+ * classify the document `Mixed`, so one scanned page among two text ones comes
+ * back as `TextBased` with an empty list. Without this, that page would be
+ * indistinguishable from blank paper and would publish with its content missing.
+ *
+ * Re-parsing each such page ALONE separates the cases exactly and invents no
+ * threshold: a blank page yields no image placeholder and a scanned one yields
+ * one. It runs here rather than on the main thread because this is where the
+ * bytes and the module already are.
+ *
+ * Bounded by a budget that has already been enforced: `maximumPdfPages` caps the
+ * document at 200, each re-parse covers ONE page, and a document with no gaps at
+ * all — the normal case — does no extra work.
+ */
+function attributeUnmarkedPages(bytes: ArrayBuffer, markdown: string, pageCount: number): PdfUnmarkedPage[] {
+  const marked = new Set([...markdown.matchAll(PAGE_MARKER)].map((match) => Number(match[1])))
+  const unmarked: PdfUnmarkedPage[] = []
+  for (let page = 1; page <= pageCount; page += 1) {
+    if (marked.has(page)) continue
+    try {
+      const only = processPdf(new Uint8Array(bytes), {
+        profile: 'compact',
+        includeImages: true,
+        pages: [page],
+      })
+      unmarked.push({ page, images: [...(only.markdown ?? '').matchAll(IMAGE_PLACEHOLDER)].length })
+    } catch {
+      unmarked.push({ page, images: 0, unattributed: true })
+    }
+  }
+  return unmarked
 }
 
 function failure(error: unknown): { code: ParserProbeFailureCode; message: string } {
@@ -136,6 +178,7 @@ function extract(request: Extract<ParserProbeRequest, { kind: 'extract' }>): voi
         layoutComplex: result.layout.isComplex,
         hasEncodingIssues: result.hasEncodingIssues,
         markdown,
+        unmarkedPages: attributeUnmarkedPages(bytes, markdown, result.pageCount),
         // The EXTRACTION's classification, not the detection phase's. Both
         // report the same shape, but this one was computed with every page's
         // text in hand, so it is the better-informed of the two. The detection

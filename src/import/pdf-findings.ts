@@ -13,6 +13,15 @@ export interface PdfPageSummary {
   textLength: number
   /** Module image placeholders found in this page's slice. */
   images: number
+  /**
+   * This page produced no marker and a page-restricted re-parse found an image
+   * on it, so it is a page that is an image of text. It BLOCKS, exactly as a
+   * page named in `pagesNeedingOcr` does.
+   *
+   * The module does not always name such a page itself — see `PdfUnmarkedPage`
+   * — so this is the second, independent route into the blocking set.
+   */
+  needsOcr?: boolean
 }
 
 /*
@@ -67,7 +76,14 @@ export function pdfFindings(
    * not evidence that the rest of the text came out.
    */
   const ocrPages = TEXT_BEARING_TYPES.has(detection.pdfType)
-    ? [...detection.pagesNeedingOcr].sort((first, second) => first - second)
+    // Two independent routes in, because one of them is not reliable: the module
+    // omits a scanned page from `pagesNeedingOcr` whenever the document still
+    // reads as `TextBased` overall, and `needsOcr` is what the caller measured
+    // for itself on a page that produced no marker.
+    ? [...new Set([
+        ...detection.pagesNeedingOcr,
+        ...pages.filter((page) => page.needsOcr).map((page) => page.page),
+      ])].sort((first, second) => first - second)
     : everyPage
   if (ocrPages.length > 0) {
     const count = ocrPages.length
@@ -75,7 +91,9 @@ export function pdfFindings(
       code: 'pdf-ocr-required',
       severity: 'blocker',
       message:
-        `${count} of ${detection.pageCount} ${count === 1 ? 'page' : 'pages'} in this PDF ` +
+        // "1 of 3 pages … is an image": the noun agrees with the TOTAL, the verb
+        // with the count.
+        `${count} of ${detection.pageCount} ${detection.pageCount === 1 ? 'page' : 'pages'} in this PDF ` +
         `${count === 1 ? 'is an image' : 'are images'} of text with no text layer (${namePages(ocrPages)}). ` +
         'This release does not run OCR in the browser, so their content cannot be imported. ' +
         'Remove those pages, or supply a PDF with a text layer.',
@@ -90,11 +108,10 @@ export function pdfFindings(
    * byte-bearing field at all, so a PDF figure can never become a Canvas image
    * and blocking would protect nobody while making PDF import useless.
    *
-   * The residual, stated: a figure on a page that produced NO text lands in the
-   * preceding page's slice, because a text-less page emits no marker. It is
-   * bounded — a page with an image and no text is exactly the `scanned` case, so
-   * such a document blocks anyway and the mis-attributed number never reaches a
-   * published page.
+   * A figure on a page that produced no text lands in the PRECEDING page's
+   * slice, because a text-less page emits no marker. The importer subtracts it
+   * back out using the per-page attribution, so the count here is figures that
+   * really are on the page it names.
    */
   const figurePages = pages.filter((page) => page.images > 0 && !blocked.has(page.page))
   if (figurePages.length > 0) {
@@ -113,10 +130,15 @@ export function pdfFindings(
   }
 
   /*
-   * Blank paper — a chapter divider, the back of a title page. Measured: a
-   * genuinely empty page leaves `pagesNeedingOcr` untouched while a scanned one
-   * does not, so this bucket is "nothing was there", not "content we lost".
-   * Refusing to import a book because it contains one would protect nobody.
+   * Blank paper — a chapter divider, the back of a title page. This bucket is
+   * "nothing was there", not "content we lost": a page that produced no marker
+   * only reaches it after a page-restricted re-parse found no image on it
+   * either, which is what `needsOcr` above records. Refusing to import a book
+   * because it contains a blank divider would protect nobody.
+   *
+   * `pagesNeedingOcr` alone could NOT carry this distinction — measured
+   * 2026-08-29, the module omits a scanned page from it whenever the document
+   * still reads as `TextBased` overall.
    */
   const summaryByPage = new Map(pages.map((page) => [page.page, page]))
   const emptyPages = everyPage.filter((page) => {

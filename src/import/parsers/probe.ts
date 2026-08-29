@@ -82,6 +82,32 @@ export interface ParserDetection {
   title?: string
 }
 
+/**
+ * What a page-restricted re-parse found on a page that emitted NO page marker.
+ *
+ * It exists because `pagesNeedingOcr` cannot be trusted to name every scanned
+ * page. Measured 2026-08-29: the module only populates it once the scanned
+ * fraction is high enough for it to classify the document `Mixed`. A single
+ * scanned page among two text ones is reported as `TextBased` with an EMPTY
+ * `pagesNeedingOcr` — so a page that is an image of text would have been treated
+ * as blank paper and published with its content missing.
+ *
+ * Re-parsing that one page with `pages: [n]` separates the two cases exactly,
+ * with no threshold to invent: a blank page yields no image placeholder, and a
+ * scanned page yields one.
+ */
+export interface PdfUnmarkedPage {
+  page: number
+  /** Image placeholders found on this page alone. */
+  images: number
+  /**
+   * The re-parse failed, so nothing could be attributed. The importer fails
+   * closed on it: absence of evidence that a page is blank is not evidence
+   * that it is.
+   */
+  unattributed?: boolean
+}
+
 export interface ParserProbeResult {
   parser: ParserKind
   parserVersion: string
@@ -107,6 +133,8 @@ export interface ParserProbeResult {
    * `sanitizeImportedHtml` needs `DOMParser`, which a Worker does not have.
    */
   markdown?: string
+  /** PDF only. One entry per page that emitted no marker. */
+  unmarkedPages?: PdfUnmarkedPage[]
 }
 
 export type ParserProbeFailureCode =

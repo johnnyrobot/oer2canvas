@@ -65,10 +65,11 @@ test('an unrecognised pdfType is treated as not text-based', () => {
 })
 
 test('a page that produced nothing and was not flagged for OCR warns rather than blocks', () => {
-  // Measured: a blank page leaves `pagesNeedingOcr` empty while a scanned page
-  // does not. This bucket is blank paper — a chapter divider, the back of a
-  // title page — and refusing to import a book because it has one would be a
-  // refusal that protects nobody.
+  // Blank paper — a chapter divider, the back of a title page — and refusing to
+  // import a book because it has one would protect nobody. A page only reaches
+  // this bucket when the caller has ALREADY established it carries no image;
+  // `pagesNeedingOcr` being empty is not on its own evidence of that, which is
+  // what the `needsOcr` case below covers.
   const findings = pdfFindings(detection({ pageCount: 3 }), [read(1), read(3)])
   const empty = findings.find((finding) => finding.code === 'pdf-page-empty')!
   expect(empty.severity).toBe('warning')
@@ -104,4 +105,32 @@ test('reported encoding problems warn for the whole document', () => {
   // than being faked onto the detection.
   const findings = pdfFindings(detection(), [read(1), read(2), read(3)], true)
   expect(findings.find((finding) => finding.code === 'pdf-encoding')!.severity).toBe('warning')
+})
+
+test('a page the caller attributed as an image of text blocks even when the module did not flag it', () => {
+  /*
+   * The second, independent route into the blocking set. Measured 2026-08-29:
+   * the module omits a scanned page from `pagesNeedingOcr` whenever the document
+   * still reads as `TextBased` overall, so a classification alone cannot be
+   * trusted to name every page that is an image of text.
+   */
+  const findings = pdfFindings(detection({ pageCount: 3 }), [
+    read(1), { page: 2, textLength: 0, images: 1, needsOcr: true }, read(3),
+  ])
+  const blocker = findings.find((finding) => finding.code === 'pdf-ocr-required')!
+  expect(blocker.severity).toBe('blocker')
+  expect(blocker.sourcePage).toBe(2)
+  // Blocked, so it is neither blank paper nor a figure to add in Canvas.
+  expect(findings.some((finding) => finding.code === 'pdf-page-empty')).toBe(false)
+  expect(findings.some((finding) => finding.code === 'pdf-figure-not-imported')).toBe(false)
+})
+
+test('the ocr message agrees with both its numbers', () => {
+  const one = pdfFindings(detection({ pdfType: 'Mixed', pageCount: 4, pagesNeedingOcr: [3] }), [read(1), read(2), read(4)])
+  expect(one.find((finding) => finding.code === 'pdf-ocr-required')!.message)
+    .toContain('1 of 4 pages in this PDF is an image of text')
+
+  const many = pdfFindings(detection({ pdfType: 'Mixed', pageCount: 4, pagesNeedingOcr: [2, 3] }), [read(1), read(4)])
+  expect(many.find((finding) => finding.code === 'pdf-ocr-required')!.message)
+    .toContain('2 of 4 pages in this PDF are images of text')
 })

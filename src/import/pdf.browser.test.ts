@@ -61,3 +61,52 @@ test('a scanned pdf never reaches a cartridge at all', async () => {
   const file = new File([pdfFixturePages(['scanned', 'scanned'])], 'scan.pdf', { type: 'application/pdf' })
   await expect(importPdfDocument(file, { metadata })).rejects.toThrow(/OCR/)
 })
+
+test('a scanned page the module does not flag still blocks', async () => {
+  /*
+   * The hole this closes. Measured 2026-08-29: at one scanned page in three the
+   * module reports `pdfType: TextBased` with an EMPTY `pagesNeedingOcr`, so
+   * nothing in its own classification distinguishes that page from blank paper —
+   * and it would have published as a silent gap in the chapter.
+   *
+   * The page-restricted re-parse settles it with no threshold to invent: page 2
+   * alone yields an image placeholder, so it is an image of text and blocks.
+   */
+  const file = new File([pdfFixturePages(['text', 'scanned', 'text'])], 'chapter.pdf', { type: 'application/pdf' })
+  const imported = await importPdfDocument(file, { metadata })
+
+  const blocker = imported.report.findings.find((finding) => finding.code === 'pdf-ocr-required')
+  expect(blocker?.severity).toBe('blocker')
+  expect(blocker?.message).toMatch(/page 2/)
+  expect(blocker?.sourcePage).toBe(2)
+  // And it is NOT also reported as blank paper.
+  expect(imported.report.findings.some((finding) => finding.code === 'pdf-page-empty')).toBe(false)
+  // The scanned page's placeholder lands in page 1's slice; it must not be
+  // counted as a figure that page actually has.
+  expect(imported.report.findings.some((finding) => finding.code === 'pdf-figure-not-imported')).toBe(false)
+})
+
+test('a genuinely blank page still only warns', async () => {
+  // The negative control, and the reason the re-parse is needed rather than a
+  // rule that blocks every page which produced no marker: a chapter divider must
+  // not refuse the whole book.
+  const file = new File([pdfFixturePages(['text', 'blank', 'text'])], 'chapter.pdf', { type: 'application/pdf' })
+  const imported = await importPdfDocument(file, { metadata })
+
+  expect(imported.report.findings.some((finding) => finding.code === 'pdf-ocr-required')).toBe(false)
+  const empty = imported.report.findings.find((finding) => finding.code === 'pdf-page-empty')
+  expect(empty?.severity).toBe('warning')
+  expect(empty?.sourcePage).toBe(2)
+})
+
+test('a figure on a readable page is still counted as a figure', async () => {
+  // Guards the subtraction: it must remove only images belonging to an un-marked
+  // page, never a figure that really is on the page it was found in.
+  const file = new File([pdfFixturePages(['text', 'text-and-figure'])], 'chapter.pdf', { type: 'application/pdf' })
+  const imported = await importPdfDocument(file, { metadata })
+
+  const figure = imported.report.findings.find((finding) => finding.code === 'pdf-figure-not-imported')
+  expect(figure?.severity).toBe('warning')
+  expect(figure?.message).toMatch(/1 figure/)
+  expect(figure?.sourcePage).toBe(2)
+})

@@ -124,6 +124,37 @@ export async function importPdfDocument(
   absorb(split.preamble)
   for (const slice of split.pages) absorb(slice.markdown, slice.page)
 
+  /*
+   * Pages that emitted no marker, and what a page-restricted re-parse found on
+   * each. A page carrying an image is a page that is an IMAGE OF TEXT and must
+   * block; a page carrying nothing is blank paper and warns. The module cannot
+   * be asked for this directly — it omits a scanned page from `pagesNeedingOcr`
+   * whenever the document still reads as `TextBased` overall (measured
+   * 2026-08-29) — so without this a scanned page would publish as a gap.
+   *
+   * `unattributed` means the re-parse failed. It fails CLOSED: not knowing
+   * whether a page is blank is not evidence that it is.
+   */
+  const marked = new Set(split.pages.map((slice) => slice.page))
+  for (const unmarked of parsed.unmarkedPages ?? []) {
+    if (marked.has(unmarked.page)) continue
+    summaries.push({
+      page: unmarked.page,
+      textLength: 0,
+      images: unmarked.images,
+      needsOcr: unmarked.unattributed === true || unmarked.images > 0,
+    })
+    /*
+     * The placeholder for an un-marked page's image sits in the PRECEDING
+     * slice's markdown, because the page itself emitted no marker to open a
+     * slice of its own. It was counted as a figure on that page; subtract it
+     * back out so the figure warning names pages that really have figures.
+     */
+    const preceding = summaries.find((summary) =>
+      summary.page === [...marked].filter((page) => page < unmarked.page).sort((a, b) => b - a)[0])
+    if (preceding) preceding.images = Math.max(0, preceding.images - unmarked.images)
+  }
+
   const html = sanitized.map((entry) => entry.html).join('')
   const detection = parsed.detection
   const findings = detection
