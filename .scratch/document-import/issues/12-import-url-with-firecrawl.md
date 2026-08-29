@@ -4,6 +4,8 @@
 
 **Blocked by:** 05 — Import Markdown and HTML safely; 10 — Let users approve and edit the proposed page plan.
 
+**Design:** [12-import-url-design.md](../12-import-url-design.md)
+
 **Status:** ready-for-agent
 
 - [ ] The interface explains that the URL and API key are sent directly from the browser to Firecrawl before the user proceeds.
