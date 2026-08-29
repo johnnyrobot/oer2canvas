@@ -272,3 +272,42 @@ test('measured result budgets stop oversized parser output and terminate its Wor
   })
   expect(worker.terminated).toBe(true)
 })
+
+test('a pdf result carries the module detection and the raw markdown', async () => {
+  const worker = new FakeWorker()
+  const run = createParserProbeRunner({
+    createWorker: () => worker,
+    requestId: () => 'pdf-detection',
+  })
+  const pending = run({ parser: 'pdf-inspector', bytes: new ArrayBuffer(16) })
+  const detection = {
+    pdfType: 'Mixed',
+    pageCount: 4,
+    confidence: 0.7,
+    pagesNeedingOcr: [3],
+    ocrReasonsByPage: [{ page: 3, reasons: ['scanned'] }],
+    layout: { isComplex: true, pagesWithTables: [2], pagesWithColumns: [1, 2] },
+  }
+
+  worker.emit({
+    kind: 'result',
+    requestId: 'pdf-detection',
+    result: {
+      parser: 'pdf-inspector',
+      parserVersion: '1.17.0',
+      detectedFormat: 'pdf',
+      inputBytes: 16,
+      outputBytes: 24,
+      parseMs: 4,
+      counts: { blocks: 1, headings: 0, tables: 0, images: 0, assets: 0 },
+      detection,
+      markdown: '<!-- Page 1 -->\n\nText.\n',
+    },
+  })
+
+  // Both fields survive the postMessage seam untouched. The main thread is the
+  // only place that may interpret them: it has `DOMParser`, and the Worker does not.
+  const result = await pending
+  expect(result.detection).toEqual(detection)
+  expect(result.markdown).toBe('<!-- Page 1 -->\n\nText.\n')
+})

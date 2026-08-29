@@ -2,6 +2,7 @@
 
 import init, { processPdf, version } from '@firecrawl/pdf-inspector-wasm'
 import type {
+  ParserDetection,
   ParserProbeFailureCode,
   ParserProbeRequest,
   ParserProbeResponse,
@@ -32,9 +33,19 @@ function failure(error: unknown): { code: ParserProbeFailureCode; message: strin
     ? 'encrypted'
     : /limit|too (?:large|many|deep)/i.test(message)
       ? 'resource-limit'
-      : /malformed|invalid|xref|trailer/i.test(message)
-        ? 'malformed'
-        : 'parse-failed'
+      /*
+       * Measured messages: "process PDF: Not a PDF: file appears to be plain
+       * text", "… HTML", "… a ZIP archive (possibly an Office document)". All
+       * three used to fall through to `parse-failed`, which `actionableFailure`
+       * treats as RETRYABLE — telling the user to try again with a file whose
+       * contents will never be a PDF. Ordered ahead of `malformed` because
+       * "Not a PDF: … invalid" would otherwise match that branch first.
+       */
+      : /not a pdf/i.test(message)
+        ? 'unsupported'
+        : /malformed|invalid|xref|trailer/i.test(message)
+          ? 'malformed'
+          : 'parse-failed'
   return { code, message: message || 'PDF Inspector could not read this file.' }
 }
 
@@ -76,6 +87,14 @@ workerScope.addEventListener('message', (event: MessageEvent<ParserProbeRequest>
       const result = processPdf(new Uint8Array(request.bytes), {
         profile: 'compact',
         includePageMarkers: true,
+        /*
+         * ON, so a figure leaves a `![Image: …](image)` placeholder in the
+         * Markdown instead of vanishing. It is the only trace of a figure this
+         * version produces — `PdfProcessResult` carries no image bytes — and it
+         * is what the importer turns into a visible `[Embedded image: …]` mark
+         * and a warning naming the page.
+         */
+        includeImages: true,
       })
       const markdown = result.markdown ?? ''
       send({
@@ -96,6 +115,19 @@ workerScope.addEventListener('message', (event: MessageEvent<ParserProbeRequest>
           pagesNeedingOcr: result.pagesNeedingOcr,
           layoutComplex: result.layout.isComplex,
           hasEncodingIssues: result.hasEncodingIssues,
+          markdown,
+          detection: {
+            pdfType: result.pdfType,
+            pageCount: result.pageCount,
+            confidence: result.confidence,
+            pagesNeedingOcr: result.pagesNeedingOcr,
+            ocrReasonsByPage: result.ocrReasonsByPage,
+            layout: result.layout,
+            // Carried, and deliberately never used to set the import title: the
+            // user typed one, and a PDF `/Title` is frequently the authoring
+            // tool's filename.
+            ...(result.title ? { title: result.title } : {}),
+          } satisfies ParserDetection,
         },
       })
     } catch (error) {

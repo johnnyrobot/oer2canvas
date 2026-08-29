@@ -54,6 +54,34 @@ export interface ParserProbeNormalizedContent {
   packagedAssets: PackagedAssetRecord[]
 }
 
+/**
+ * What `@firecrawl/pdf-inspector-wasm` concluded about a PDF, carried verbatim.
+ *
+ * Verbatim on purpose. Every field here is the module's own judgement, and the
+ * importer's job is to translate it into findings a person can act on — not to
+ * pre-digest it in a Worker where nothing can be tested against a real browser.
+ * `pdfType` is typed as `string` rather than a union because the union lives in
+ * the vendor `.d.ts`, which no non-Worker module imports; the importer treats
+ * an unrecognised value as "not text-based" and fails closed.
+ */
+export interface ParserDetection {
+  pdfType: string
+  pageCount: number
+  /**
+   * 0-1. Measured to track the fraction of pages that produced text for a
+   * `TextBased` document (3/3 = 1.00, 2/3 = 0.67, 3/4 = 0.75); `Scanned`
+   * reported 0.90 and `Mixed` 0.70. Nothing upstream documents what it means,
+   * so it is carried as DIAGNOSTICS and no decision is taken on it.
+   */
+  confidence: number
+  /** 1-indexed. */
+  pagesNeedingOcr: number[]
+  /** Reasons observed so far: `no_text`, `scanned`. Identifiers, not English. */
+  ocrReasonsByPage: { page: number; reasons: string[] }[]
+  layout: { isComplex: boolean; pagesWithTables: number[]; pagesWithColumns: number[] }
+  title?: string
+}
+
 export interface ParserProbeResult {
   parser: ParserKind
   parserVersion: string
@@ -72,6 +100,13 @@ export interface ParserProbeResult {
   layoutComplex?: boolean
   hasEncodingIssues?: boolean
   normalized?: ParserProbeNormalizedContent
+  /** PDF only. The module's classification, before any extraction happened. */
+  detection?: ParserDetection
+  /**
+   * PDF only, and UNSANITIZED. The main thread splits and sanitizes it, because
+   * `sanitizeImportedHtml` needs `DOMParser`, which a Worker does not have.
+   */
+  markdown?: string
 }
 
 export type ParserProbeFailureCode =
