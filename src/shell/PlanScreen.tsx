@@ -189,7 +189,23 @@ export function PlanScreen({
       <div className="mt-8 border-t border-neutral-200 pt-5 dark:border-neutral-800">
         <button
           type="button"
-          onClick={onCommit}
+          /*
+           * The gate's decision is enforced HERE, not by the browser. This is
+           * deliberately not a `disabled` button — see the comment below on why
+           * the reasons have to stay reachable — and `aria-disabled` is purely
+           * advisory: it changes what assistive technology announces and nothing
+           * else. Activation still fires. So the pattern that keeps the reasons
+           * readable also moves enforcement into the handler, and omitting it
+           * meant a chapter that FAILED the accessibility audit could be exported
+           * by clicking a button that only looked disabled.
+           *
+           * `ready` is the single authority (`plan.blockers.length === 0`) and it
+           * is derived here, which is why the guard lives here rather than in the
+           * caller's commit function. `commitPush` guards itself in `App.tsx`;
+           * the cartridge path had no equivalent, and a cartridge is exactly the
+           * destination that always supplies a live `onCommit`.
+           */
+          onClick={ready && onCommit ? onCommit : undefined}
           aria-disabled={!ready || !onCommit}
           className={`min-h-9 rounded-md px-4 text-sm font-medium ${
             ready && onCommit

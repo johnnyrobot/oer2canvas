@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import type { CompiledChapter, CompiledSection } from '../contracts/index'
 import { PlanScreen } from './PlanScreen'
 import type { Destination } from './phases'
@@ -140,4 +140,66 @@ test('browser-import warnings remain visible in the plan summary', () => {
 
   expect(screen.getByRole('heading', { name: 'Import findings' })).toBeInTheDocument()
   expect(screen.getByText(/relative link could not be preserved/i)).toBeInTheDocument()
+})
+
+/*
+  The gate decides what may be published. That decision is only real if the
+  control enforces it.
+
+  This button is deliberately NOT a `disabled` button — see the comment beside
+  it: a disabled control cannot be focused, so its reasons are unreachable by
+  keyboard and by touch, and `aria-disabled` plus adjacent visible text is the
+  accessible pattern instead. But that pattern moves the enforcement OUT of the
+  browser and into the handler, because `aria-disabled` is advisory: it changes
+  what assistive technology announces and nothing else. Activation still fires.
+
+  `commitPush` guards itself in App.tsx; the cartridge path did not, and a
+  cartridge is exactly the destination that always has a live `onCommit`. So a
+  chapter that FAILED the accessibility audit could be exported by clicking a
+  button that only looked disabled.
+*/
+const FAILED = {
+  html: '<p>x</p>',
+  conformance: { blockers: [{ id: 'image-alt', help: 'Images must have alternate text' }], issues: [] },
+  badgeWithheld: true,
+} as unknown as CompiledSection['gate']
+
+test('a chapter that failed the audit cannot be exported by clicking the commit button', () => {
+  const onCommit = vi.fn()
+  render(
+    <PlanScreen
+      destination={{ kind: 'cartridge' }}
+      chapters={[chapter('Chapter 1', [{
+        id: 'a', title: 'Introduction', html: '<p>a</p>', notes: [], queue: [], gate: FAILED,
+      }])]}
+      unansweredCount={0}
+      onCommit={onCommit}
+    />,
+  )
+
+  const button = screen.getByRole('button', { name: /Download cartridge/ })
+  // The plan must actually be blocked, or this test proves nothing about the gate.
+  expect(button).toHaveAttribute('aria-disabled', 'true')
+  expect(screen.getByText(/accessibility blockers that must be fixed first/)).toBeInTheDocument()
+
+  fireEvent.click(button)
+  expect(onCommit).not.toHaveBeenCalled()
+})
+
+test('a passing plan still commits, so the guard refuses only what the gate refused', () => {
+  const onCommit = vi.fn()
+  render(
+    <PlanScreen
+      destination={{ kind: 'cartridge' }}
+      chapters={CHAPTERS}
+      unansweredCount={0}
+      onCommit={onCommit}
+    />,
+  )
+
+  const button = screen.getByRole('button', { name: /Download cartridge/ })
+  expect(button).toHaveAttribute('aria-disabled', 'false')
+
+  fireEvent.click(button)
+  expect(onCommit).toHaveBeenCalledTimes(1)
 })
