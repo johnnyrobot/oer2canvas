@@ -30,7 +30,8 @@
     "verify:canvas-live": "node --env-file-if-exists=.env.local scripts/verify-canvas-release.mjs",
     "test:watch": "vitest",
     "probe:canvas-images:run": "node --env-file-if-exists=.env.local scripts/canvas-image-probe-run.mjs",
-    "verify:canvas-image-tracer": "node --env-file-if-exists=.env.local scripts/verify-canvas-image-tracer.mjs"
+    "verify:canvas-image-tracer": "node --env-file-if-exists=.env.local scripts/verify-canvas-image-tracer.mjs",
+    "verify:release": "node scripts/verify-release.mjs"
   },
   "keywords": [],
   "author": "",
