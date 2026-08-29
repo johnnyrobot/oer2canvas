@@ -1,0 +1,1622 @@
+{
+  "generatedAt": "2026-08-29T18:59:43.689Z",
+  "host": {
+    "platform": "darwin",
+    "release": "25.4.0",
+    "cpu": "Apple M1 Ultra",
+    "logicalCpus": 20,
+    "totalMemoryBytes": 137438953472,
+    "freeMemoryBytesAtStart": 34989785088
+  },
+  "fixturePolicy": {
+    "generated": true,
+    "networkUploads": false,
+    "sizes": [
+      {
+        "id": "docx-small",
+        "bytes": 1165
+      },
+      {
+        "id": "odt-small",
+        "bytes": 883
+      },
+      {
+        "id": "rtf-small-8k",
+        "bytes": 8187
+      },
+      {
+        "id": "rtf-medium-1m",
+        "bytes": 1048540
+      },
+      {
+        "id": "rtf-stress-16m",
+        "bytes": 16777205
+      },
+      {
+        "id": "epub-assets-64-8m",
+        "bytes": 8408724
+      },
+      {
+        "id": "pdf-small-1-page",
+        "bytes": 2026
+      },
+      {
+        "id": "pdf-medium-75-pages",
+        "bytes": 129771
+      },
+      {
+        "id": "pdf-stress-200-pages",
+        "bytes": 348167
+      }
+    ]
+  },
+  "supportPolicy": {
+    "supportedReleaseProfiles": [
+      "chrome-desktop",
+      "firefox-desktop"
+    ],
+    "unsupported": [
+      "safari",
+      "mobile"
+    ],
+    "note": "The initial document-import release supports desktop Chrome and Firefox only. WebKit remains diagnostic evidence and does not imply Safari support."
+  },
+  "profiles": [
+    {
+      "id": "chrome-desktop",
+      "support": "benchmarked-desktop",
+      "browserVersion": "151.0.7922.176",
+      "pageTargetCpuThrottle": 1,
+      "viewport": null,
+      "environment": {
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "hardwareConcurrency": 20,
+        "deviceMemoryGiB": 32,
+        "mainHeapMeasurement": "performance.memory.usedJSHeapSize after Worker termination"
+      },
+      "results": [
+        {
+          "id": "docx-small",
+          "inputBytes": 1165,
+          "inputMiB": 0,
+          "status": "passed",
+          "elapsedMs": 33.799999952316284,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0.39999985694885254
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 14.599999904632568,
+              "atMs": 19.699999809265137
+            },
+            {
+              "phase": "parsing",
+              "atMs": 19.699999809265137
+            },
+            {
+              "phase": "complete",
+              "atMs": 33.799999952316284
+            }
+          ],
+          "mainHeapBeforeBytes": 4063642,
+          "mainHeapAfterBytes": 4063642,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "docx",
+            "formatDetection": "content",
+            "inputBytes": 1165,
+            "outputBytes": 368,
+            "parseMs": 13.5,
+            "wasmMemoryBytes": 3407872,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 2,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "normalized": {
+              "htmlBytes": 97,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 0,
+              "packagedAssetBytes": 0
+            }
+          }
+        },
+        {
+          "id": "odt-small",
+          "inputBytes": 883,
+          "inputMiB": 0,
+          "status": "passed",
+          "elapsedMs": 31.799999952316284,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 13.900000095367432,
+              "atMs": 18.09999990463257
+            },
+            {
+              "phase": "parsing",
+              "atMs": 18.09999990463257
+            },
+            {
+              "phase": "complete",
+              "atMs": 31.699999809265137
+            }
+          ],
+          "mainHeapBeforeBytes": 4063642,
+          "mainHeapAfterBytes": 4004054,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "odt",
+            "formatDetection": "content",
+            "inputBytes": 883,
+            "outputBytes": 408,
+            "parseMs": 12.700000047683716,
+            "wasmMemoryBytes": 3407872,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 2,
+              "headings": 1,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "normalized": {
+              "htmlBytes": 125,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 0,
+              "packagedAssetBytes": 0
+            }
+          }
+        },
+        {
+          "id": "rtf-small-8k",
+          "inputBytes": 8187,
+          "inputMiB": 0.01,
+          "status": "passed",
+          "elapsedMs": 28.90000009536743,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0.10000014305114746
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 13.799999952316284,
+              "atMs": 17.600000143051147
+            },
+            {
+              "phase": "parsing",
+              "atMs": 17.600000143051147
+            },
+            {
+              "phase": "complete",
+              "atMs": 28.90000009536743
+            }
+          ],
+          "mainHeapBeforeBytes": 4004054,
+          "mainHeapAfterBytes": 4004054,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "rtf",
+            "formatDetection": "content",
+            "inputBytes": 8187,
+            "outputBytes": 21736,
+            "parseMs": 10.700000047683716,
+            "wasmMemoryBytes": 3342336,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 113,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "normalized": {
+              "htmlBytes": 8367,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 0,
+              "packagedAssetBytes": 0
+            }
+          }
+        },
+        {
+          "id": "rtf-medium-1m",
+          "inputBytes": 1048540,
+          "inputMiB": 1,
+          "status": "passed",
+          "elapsedMs": 106.90000009536743,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0.20000004768371582
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 15.599999904632568,
+              "atMs": 19.800000190734863
+            },
+            {
+              "phase": "parsing",
+              "atMs": 19.800000190734863
+            },
+            {
+              "phase": "complete",
+              "atMs": 106.90000009536743
+            }
+          ],
+          "mainHeapBeforeBytes": 4004054,
+          "mainHeapAfterBytes": 5198375,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "rtf",
+            "formatDetection": "content",
+            "inputBytes": 1048540,
+            "outputBytes": 2743889,
+            "parseMs": 80.29999995231628,
+            "wasmMemoryBytes": 9371648,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 14128,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "normalized": {
+              "htmlBytes": 1076750,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 0,
+              "packagedAssetBytes": 0
+            }
+          }
+        },
+        {
+          "id": "rtf-stress-16m",
+          "inputBytes": 16777205,
+          "inputMiB": 16,
+          "status": "passed",
+          "elapsedMs": 1157.0999999046326,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0.09999990463256836
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 15.899999856948853,
+              "atMs": 20.5
+            },
+            {
+              "phase": "parsing",
+              "atMs": 20.59999990463257
+            },
+            {
+              "phase": "complete",
+              "atMs": 1157.0999999046326
+            }
+          ],
+          "mainHeapBeforeBytes": 5198375,
+          "mainHeapAfterBytes": 23375559,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "rtf",
+            "formatDetection": "content",
+            "inputBytes": 16777205,
+            "outputBytes": 43442874,
+            "parseMs": 1063.4000000953674,
+            "wasmMemoryBytes": 97845248,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 222214,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "normalized": {
+              "htmlBytes": 17221587,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 0,
+              "packagedAssetBytes": 0
+            }
+          }
+        },
+        {
+          "id": "epub-assets-64-8m",
+          "inputBytes": 8408724,
+          "inputMiB": 8.02,
+          "status": "passed",
+          "elapsedMs": 50.700000047683716,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 13.799999952316284,
+              "atMs": 18.09999990463257
+            },
+            {
+              "phase": "parsing",
+              "atMs": 18.09999990463257
+            },
+            {
+              "phase": "complete",
+              "atMs": 50.59999990463257
+            }
+          ],
+          "mainHeapBeforeBytes": 23375559,
+          "mainHeapAfterBytes": 44919423,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "epub",
+            "formatDetection": "content",
+            "inputBytes": 8408724,
+            "outputBytes": 8408058,
+            "parseMs": 24,
+            "wasmMemoryBytes": 32374784,
+            "assetBytes": 8388592,
+            "largestAssetBytes": 4194304,
+            "counts": {
+              "blocks": 5,
+              "headings": 2,
+              "tables": 0,
+              "images": 64,
+              "assets": 64
+            },
+            "normalized": {
+              "htmlBytes": 8086,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 2,
+              "packagedAssetBytes": 4260880
+            }
+          }
+        },
+        {
+          "id": "pdf-small-1-page",
+          "inputBytes": 2026,
+          "inputMiB": 0,
+          "status": "passed",
+          "elapsedMs": 57.40000009536743,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0.10000014305114746
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 15.299999952316284,
+              "atMs": 19
+            },
+            {
+              "phase": "parsing",
+              "atMs": 19
+            },
+            {
+              "phase": "complete",
+              "atMs": 57.40000009536743
+            }
+          ],
+          "mainHeapBeforeBytes": 44919423,
+          "mainHeapAfterBytes": 44980625,
+          "result": {
+            "parser": "pdf-inspector",
+            "parserVersion": "1.17.0",
+            "detectedFormat": "pdf",
+            "inputBytes": 2026,
+            "outputBytes": 1308,
+            "parseMs": 37.90000033378601,
+            "wasmMemoryBytes": 6488064,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 2,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "pageCount": 1,
+            "pagesNeedingOcr": [],
+            "layoutComplex": false,
+            "hasEncodingIssues": false,
+            "detectMs": 4.800000190734863,
+            "attributionMs": 0.19999980926513672,
+            "unmarkedPageCount": 0
+          }
+        },
+        {
+          "id": "pdf-medium-75-pages",
+          "inputBytes": 129771,
+          "inputMiB": 0.12,
+          "status": "passed",
+          "elapsedMs": 116.20000004768372,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0.10000014305114746
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 14.900000095367432,
+              "atMs": 18.700000047683716
+            },
+            {
+              "phase": "parsing",
+              "atMs": 18.700000047683716
+            },
+            {
+              "phase": "complete",
+              "atMs": 116.20000004768372
+            }
+          ],
+          "mainHeapBeforeBytes": 44980625,
+          "mainHeapAfterBytes": 45177732,
+          "result": {
+            "parser": "pdf-inspector",
+            "parserVersion": "1.17.0",
+            "detectedFormat": "pdf",
+            "inputBytes": 129771,
+            "outputBytes": 99560,
+            "parseMs": 97,
+            "wasmMemoryBytes": 8192000,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 150,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "pageCount": 75,
+            "pagesNeedingOcr": [],
+            "layoutComplex": false,
+            "hasEncodingIssues": false,
+            "detectMs": 11,
+            "attributionMs": 0.40000009536743164,
+            "unmarkedPageCount": 0
+          }
+        },
+        {
+          "id": "pdf-stress-200-pages",
+          "inputBytes": 348167,
+          "inputMiB": 0.33,
+          "status": "passed",
+          "elapsedMs": 196.60000014305115,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0.10000014305114746
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 13.5,
+              "atMs": 17.200000047683716
+            },
+            {
+              "phase": "parsing",
+              "atMs": 17.200000047683716
+            },
+            {
+              "phase": "complete",
+              "atMs": 196.5
+            }
+          ],
+          "mainHeapBeforeBytes": 45177732,
+          "mainHeapAfterBytes": 45368540,
+          "result": {
+            "parser": "pdf-inspector",
+            "parserVersion": "1.17.0",
+            "detectedFormat": "pdf",
+            "inputBytes": 348167,
+            "outputBytes": 267931,
+            "parseMs": 178.09999990463257,
+            "wasmMemoryBytes": 10223616,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 400,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "pageCount": 200,
+            "pagesNeedingOcr": [],
+            "layoutComplex": false,
+            "hasEncodingIssues": false,
+            "detectMs": 19.59999990463257,
+            "attributionMs": 0.2999999523162842,
+            "unmarkedPageCount": 0
+          }
+        }
+      ],
+      "cancellation": {
+        "status": "passed",
+        "errorName": "AbortError",
+        "totalMs": 18.299999952316284,
+        "terminationMs": 0.19999980926513672
+      },
+      "retryAfterCancellation": "passed",
+      "status": "passed"
+    },
+    {
+      "id": "firefox-desktop",
+      "support": "benchmarked-desktop",
+      "browserVersion": "153.0",
+      "pageTargetCpuThrottle": 1,
+      "viewport": null,
+      "environment": {
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:153.0) Gecko/20100101 Firefox/153.0",
+        "hardwareConcurrency": 20,
+        "deviceMemoryGiB": null,
+        "mainHeapMeasurement": "unavailable"
+      },
+      "results": [
+        {
+          "id": "docx-small",
+          "inputBytes": 1165,
+          "inputMiB": 0,
+          "status": "passed",
+          "elapsedMs": 129,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 1
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 117,
+              "atMs": 127
+            },
+            {
+              "phase": "parsing",
+              "atMs": 127
+            },
+            {
+              "phase": "complete",
+              "atMs": 129
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "docx",
+            "formatDetection": "content",
+            "inputBytes": 1165,
+            "outputBytes": 368,
+            "parseMs": 1,
+            "wasmMemoryBytes": 3407872,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 2,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "normalized": {
+              "htmlBytes": 97,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 0,
+              "packagedAssetBytes": 0
+            }
+          }
+        },
+        {
+          "id": "odt-small",
+          "inputBytes": 883,
+          "inputMiB": 0,
+          "status": "passed",
+          "elapsedMs": 94,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 84,
+              "atMs": 92
+            },
+            {
+              "phase": "parsing",
+              "atMs": 92
+            },
+            {
+              "phase": "complete",
+              "atMs": 94
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "odt",
+            "formatDetection": "content",
+            "inputBytes": 883,
+            "outputBytes": 408,
+            "parseMs": 1,
+            "wasmMemoryBytes": 3407872,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 2,
+              "headings": 1,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "normalized": {
+              "htmlBytes": 125,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 0,
+              "packagedAssetBytes": 0
+            }
+          }
+        },
+        {
+          "id": "rtf-small-8k",
+          "inputBytes": 8187,
+          "inputMiB": 0.01,
+          "status": "passed",
+          "elapsedMs": 95,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 84,
+              "atMs": 91
+            },
+            {
+              "phase": "parsing",
+              "atMs": 91
+            },
+            {
+              "phase": "complete",
+              "atMs": 95
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "rtf",
+            "formatDetection": "content",
+            "inputBytes": 8187,
+            "outputBytes": 21736,
+            "parseMs": 3,
+            "wasmMemoryBytes": 3342336,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 113,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "normalized": {
+              "htmlBytes": 8367,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 0,
+              "packagedAssetBytes": 0
+            }
+          }
+        },
+        {
+          "id": "rtf-medium-1m",
+          "inputBytes": 1048540,
+          "inputMiB": 1,
+          "status": "passed",
+          "elapsedMs": 374,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 85,
+              "atMs": 93
+            },
+            {
+              "phase": "parsing",
+              "atMs": 93
+            },
+            {
+              "phase": "complete",
+              "atMs": 374
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "rtf",
+            "formatDetection": "content",
+            "inputBytes": 1048540,
+            "outputBytes": 2743889,
+            "parseMs": 271,
+            "wasmMemoryBytes": 9371648,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 14128,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "normalized": {
+              "htmlBytes": 1076750,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 0,
+              "packagedAssetBytes": 0
+            }
+          }
+        },
+        {
+          "id": "rtf-stress-16m",
+          "inputBytes": 16777205,
+          "inputMiB": 16,
+          "status": "passed",
+          "elapsedMs": 4471,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 1
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 86,
+              "atMs": 95
+            },
+            {
+              "phase": "parsing",
+              "atMs": 95
+            },
+            {
+              "phase": "complete",
+              "atMs": 4471
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "rtf",
+            "formatDetection": "content",
+            "inputBytes": 16777205,
+            "outputBytes": 43442874,
+            "parseMs": 4229,
+            "wasmMemoryBytes": 97845248,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 222214,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "normalized": {
+              "htmlBytes": 17221587,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 0,
+              "packagedAssetBytes": 0
+            }
+          }
+        },
+        {
+          "id": "epub-assets-64-8m",
+          "inputBytes": 8408724,
+          "inputMiB": 8.02,
+          "status": "passed",
+          "elapsedMs": 140,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 84,
+              "atMs": 91
+            },
+            {
+              "phase": "parsing",
+              "atMs": 91
+            },
+            {
+              "phase": "complete",
+              "atMs": 140
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "epub",
+            "formatDetection": "content",
+            "inputBytes": 8408724,
+            "outputBytes": 8408058,
+            "parseMs": 36,
+            "wasmMemoryBytes": 32374784,
+            "assetBytes": 8388592,
+            "largestAssetBytes": 4194304,
+            "counts": {
+              "blocks": 5,
+              "headings": 2,
+              "tables": 0,
+              "images": 64,
+              "assets": 64
+            },
+            "normalized": {
+              "htmlBytes": 8086,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 2,
+              "packagedAssetBytes": 4260880
+            }
+          }
+        },
+        {
+          "id": "pdf-small-1-page",
+          "inputBytes": 2026,
+          "inputMiB": 0,
+          "status": "passed",
+          "elapsedMs": 109,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 58,
+              "atMs": 65
+            },
+            {
+              "phase": "parsing",
+              "atMs": 65
+            },
+            {
+              "phase": "complete",
+              "atMs": 109
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "pdf-inspector",
+            "parserVersion": "1.17.0",
+            "detectedFormat": "pdf",
+            "inputBytes": 2026,
+            "outputBytes": 1308,
+            "parseMs": 45,
+            "wasmMemoryBytes": 6488064,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 2,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "pageCount": 1,
+            "pagesNeedingOcr": [],
+            "layoutComplex": false,
+            "hasEncodingIssues": false,
+            "detectMs": 2,
+            "attributionMs": 0,
+            "unmarkedPageCount": 0
+          }
+        },
+        {
+          "id": "pdf-medium-75-pages",
+          "inputBytes": 129771,
+          "inputMiB": 0.12,
+          "status": "passed",
+          "elapsedMs": 421,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 1
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 59,
+              "atMs": 65
+            },
+            {
+              "phase": "parsing",
+              "atMs": 65
+            },
+            {
+              "phase": "complete",
+              "atMs": 421
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "pdf-inspector",
+            "parserVersion": "1.17.0",
+            "detectedFormat": "pdf",
+            "inputBytes": 129771,
+            "outputBytes": 99560,
+            "parseMs": 355,
+            "wasmMemoryBytes": 8192000,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 150,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "pageCount": 75,
+            "pagesNeedingOcr": [],
+            "layoutComplex": false,
+            "hasEncodingIssues": false,
+            "detectMs": 26,
+            "attributionMs": 0,
+            "unmarkedPageCount": 0
+          }
+        },
+        {
+          "id": "pdf-stress-200-pages",
+          "inputBytes": 348167,
+          "inputMiB": 0.33,
+          "status": "passed",
+          "elapsedMs": 982,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 62,
+              "atMs": 69
+            },
+            {
+              "phase": "parsing",
+              "atMs": 69
+            },
+            {
+              "phase": "complete",
+              "atMs": 982
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "pdf-inspector",
+            "parserVersion": "1.17.0",
+            "detectedFormat": "pdf",
+            "inputBytes": 348167,
+            "outputBytes": 267931,
+            "parseMs": 912,
+            "wasmMemoryBytes": 10223616,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 400,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "pageCount": 200,
+            "pagesNeedingOcr": [],
+            "layoutComplex": false,
+            "hasEncodingIssues": false,
+            "detectMs": 73,
+            "attributionMs": 0,
+            "unmarkedPageCount": 0
+          }
+        }
+      ],
+      "cancellation": {
+        "status": "passed",
+        "errorName": "AbortError",
+        "totalMs": 92,
+        "terminationMs": 0
+      },
+      "retryAfterCancellation": "passed",
+      "status": "passed"
+    },
+    {
+      "id": "webkit-desktop-diagnostic",
+      "support": "diagnostic-only",
+      "limitation": "Playwright WebKit is useful cross-engine evidence but is not Safari and is outside the initial Chrome/Firefox release matrix.",
+      "browserVersion": "26.5",
+      "pageTargetCpuThrottle": 1,
+      "viewport": null,
+      "environment": {
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15",
+        "hardwareConcurrency": 8,
+        "deviceMemoryGiB": null,
+        "mainHeapMeasurement": "unavailable"
+      },
+      "results": [
+        {
+          "id": "docx-small",
+          "inputBytes": 1165,
+          "inputMiB": 0,
+          "status": "passed",
+          "elapsedMs": 54,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 42,
+              "atMs": 49
+            },
+            {
+              "phase": "parsing",
+              "atMs": 49
+            },
+            {
+              "phase": "complete",
+              "atMs": 54
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "docx",
+            "formatDetection": "content",
+            "inputBytes": 1165,
+            "outputBytes": 368,
+            "parseMs": 4,
+            "wasmMemoryBytes": 3407872,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 2,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "normalized": {
+              "htmlBytes": 97,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 0,
+              "packagedAssetBytes": 0
+            }
+          }
+        },
+        {
+          "id": "odt-small",
+          "inputBytes": 883,
+          "inputMiB": 0,
+          "status": "passed",
+          "elapsedMs": 51,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 43,
+              "atMs": 47
+            },
+            {
+              "phase": "parsing",
+              "atMs": 47
+            },
+            {
+              "phase": "complete",
+              "atMs": 51
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "odt",
+            "formatDetection": "content",
+            "inputBytes": 883,
+            "outputBytes": 408,
+            "parseMs": 3,
+            "wasmMemoryBytes": 3407872,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 2,
+              "headings": 1,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "normalized": {
+              "htmlBytes": 125,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 0,
+              "packagedAssetBytes": 0
+            }
+          }
+        },
+        {
+          "id": "rtf-small-8k",
+          "inputBytes": 8187,
+          "inputMiB": 0.01,
+          "status": "passed",
+          "elapsedMs": 57,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 47,
+              "atMs": 51
+            },
+            {
+              "phase": "parsing",
+              "atMs": 51
+            },
+            {
+              "phase": "complete",
+              "atMs": 57
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "rtf",
+            "formatDetection": "content",
+            "inputBytes": 8187,
+            "outputBytes": 21736,
+            "parseMs": 5,
+            "wasmMemoryBytes": 3342336,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 113,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "normalized": {
+              "htmlBytes": 8367,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 0,
+              "packagedAssetBytes": 0
+            }
+          }
+        },
+        {
+          "id": "rtf-medium-1m",
+          "inputBytes": 1048540,
+          "inputMiB": 1,
+          "status": "passed",
+          "elapsedMs": 124,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 42,
+              "atMs": 46
+            },
+            {
+              "phase": "parsing",
+              "atMs": 46
+            },
+            {
+              "phase": "complete",
+              "atMs": 124
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "rtf",
+            "formatDetection": "content",
+            "inputBytes": 1048540,
+            "outputBytes": 2743889,
+            "parseMs": 69,
+            "wasmMemoryBytes": 9371648,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 14128,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "normalized": {
+              "htmlBytes": 1076750,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 0,
+              "packagedAssetBytes": 0
+            }
+          }
+        },
+        {
+          "id": "rtf-stress-16m",
+          "inputBytes": 16777205,
+          "inputMiB": 16,
+          "status": "passed",
+          "elapsedMs": 971,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 46,
+              "atMs": 51
+            },
+            {
+              "phase": "parsing",
+              "atMs": 51
+            },
+            {
+              "phase": "complete",
+              "atMs": 971
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "rtf",
+            "formatDetection": "content",
+            "inputBytes": 16777205,
+            "outputBytes": 43442874,
+            "parseMs": 852,
+            "wasmMemoryBytes": 97845248,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 222214,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "normalized": {
+              "htmlBytes": 17221587,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 0,
+              "packagedAssetBytes": 0
+            }
+          }
+        },
+        {
+          "id": "epub-assets-64-8m",
+          "inputBytes": 8408724,
+          "inputMiB": 8.02,
+          "status": "passed",
+          "elapsedMs": 81,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 1
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 47,
+              "atMs": 53
+            },
+            {
+              "phase": "parsing",
+              "atMs": 53
+            },
+            {
+              "phase": "complete",
+              "atMs": 81
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "anydoc",
+            "parserVersion": "0.2.4",
+            "detectedFormat": "epub",
+            "formatDetection": "content",
+            "inputBytes": 8408724,
+            "outputBytes": 8408058,
+            "parseMs": 18,
+            "wasmMemoryBytes": 32374784,
+            "assetBytes": 8388592,
+            "largestAssetBytes": 4194304,
+            "counts": {
+              "blocks": 5,
+              "headings": 2,
+              "tables": 0,
+              "images": 64,
+              "assets": 64
+            },
+            "normalized": {
+              "htmlBytes": 8086,
+              "findings": 0,
+              "equations": 0,
+              "notes": 0,
+              "unavailableAssets": 0,
+              "packagedAssetCount": 2,
+              "packagedAssetBytes": 4260880
+            }
+          }
+        },
+        {
+          "id": "pdf-small-1-page",
+          "inputBytes": 2026,
+          "inputMiB": 0,
+          "status": "passed",
+          "elapsedMs": 135,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 88,
+              "atMs": 93
+            },
+            {
+              "phase": "parsing",
+              "atMs": 93
+            },
+            {
+              "phase": "complete",
+              "atMs": 135
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "pdf-inspector",
+            "parserVersion": "1.17.0",
+            "detectedFormat": "pdf",
+            "inputBytes": 2026,
+            "outputBytes": 1308,
+            "parseMs": 41,
+            "wasmMemoryBytes": 6488064,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 2,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "pageCount": 1,
+            "pagesNeedingOcr": [],
+            "layoutComplex": false,
+            "hasEncodingIssues": false,
+            "detectMs": 5,
+            "attributionMs": 0,
+            "unmarkedPageCount": 0
+          }
+        },
+        {
+          "id": "pdf-medium-75-pages",
+          "inputBytes": 129771,
+          "inputMiB": 0.12,
+          "status": "passed",
+          "elapsedMs": 213,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 90,
+              "atMs": 94
+            },
+            {
+              "phase": "parsing",
+              "atMs": 94
+            },
+            {
+              "phase": "complete",
+              "atMs": 213
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "pdf-inspector",
+            "parserVersion": "1.17.0",
+            "detectedFormat": "pdf",
+            "inputBytes": 129771,
+            "outputBytes": 99560,
+            "parseMs": 119,
+            "wasmMemoryBytes": 8192000,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 150,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "pageCount": 75,
+            "pagesNeedingOcr": [],
+            "layoutComplex": false,
+            "hasEncodingIssues": false,
+            "detectMs": 17,
+            "attributionMs": 0,
+            "unmarkedPageCount": 0
+          }
+        },
+        {
+          "id": "pdf-stress-200-pages",
+          "inputBytes": 348167,
+          "inputMiB": 0.33,
+          "status": "passed",
+          "elapsedMs": 289,
+          "progress": [
+            {
+              "phase": "loading-parser",
+              "atMs": 0
+            },
+            {
+              "phase": "parser-ready",
+              "initializationMs": 88,
+              "atMs": 93
+            },
+            {
+              "phase": "parsing",
+              "atMs": 93
+            },
+            {
+              "phase": "complete",
+              "atMs": 289
+            }
+          ],
+          "mainHeapBeforeBytes": null,
+          "mainHeapAfterBytes": null,
+          "result": {
+            "parser": "pdf-inspector",
+            "parserVersion": "1.17.0",
+            "detectedFormat": "pdf",
+            "inputBytes": 348167,
+            "outputBytes": 267931,
+            "parseMs": 194,
+            "wasmMemoryBytes": 10223616,
+            "assetBytes": 0,
+            "largestAssetBytes": 0,
+            "counts": {
+              "blocks": 400,
+              "headings": 0,
+              "tables": 0,
+              "images": 0,
+              "assets": 0
+            },
+            "pageCount": 200,
+            "pagesNeedingOcr": [],
+            "layoutComplex": false,
+            "hasEncodingIssues": false,
+            "detectMs": 24,
+            "attributionMs": 0,
+            "unmarkedPageCount": 0
+          }
+        }
+      ],
+      "cancellation": {
+        "status": "passed",
+        "errorName": "AbortError",
+        "totalMs": 48,
+        "terminationMs": 0
+      },
+      "retryAfterCancellation": "passed",
+      "status": "passed"
+    }
+  ],
+  "status": "passed"
+}

@@ -1,5 +1,3 @@
-import { RASTER_FIXTURES } from './raster-fixtures'
-
 /** A deterministic text PDF used at Worker, built-artifact, and benchmark seams. */
 export function pdfFixture(pageCount: number, label = 'Benchmark'): Uint8Array<ArrayBuffer> {
   const encoder = new TextEncoder()
@@ -50,6 +48,28 @@ export function pdfFixture(pageCount: number, label = 'Benchmark'): Uint8Array<A
  * measured fact that lets a blank page warn while a scanned page blocks.
  */
 export type PdfFixturePage = 'text' | 'text-and-figure' | 'scanned' | 'blank'
+
+/**
+ * The same 16x16 JPEG as `RASTER_FIXTURES.jpeg`, inlined rather than imported.
+ *
+ * This module is loaded DIRECTLY BY NODE — `scripts/document-parser-fixtures.mjs`
+ * and `scripts/smoke-dist.mjs` import it as `pdf-fixture.ts` — and Node's ESM
+ * resolver requires an explicit extension on a relative specifier, which
+ * TypeScript rejects here without turning on `allowImportingTsExtensions` for
+ * the whole project. `raster-fixtures.test.ts` pins these bytes to
+ * `RASTER_FIXTURES.jpeg`, so the two cannot drift apart.
+ *
+ * It must be a real, decodable JPEG: an uncompressed `/DeviceRGB` XObject is not
+ * recognised as an image at all, and a fixture built with one classifies as
+ * `TextBased` with an empty `pagesNeedingOcr` — silently measuring nothing.
+ */
+const FIXTURE_JPEG_BASE64 =
+  '/9j/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAAQABADAREAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAcI/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AiJozUAAA/9k='
+
+export const PDF_FIXTURE_JPEG: Uint8Array =
+  Uint8Array.from(atob(FIXTURE_JPEG_BASE64), (character) => character.charCodeAt(0))
+
+const FIXTURE_JPEG_SIZE = 16
 
 function concatBytes(parts: readonly Uint8Array[]): Uint8Array<ArrayBuffer> {
   const total = parts.reduce((sum, part) => sum + part.byteLength, 0)
@@ -151,14 +171,13 @@ export function pdfFixturePages(
     objects.push(encoder.encode(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`))
   })
 
-  const jpeg = RASTER_FIXTURES.jpeg.bytes
   objects.push(concatBytes([
     encoder.encode(
-      `<< /Type /XObject /Subtype /Image /Width ${RASTER_FIXTURES.jpeg.width} ` +
-      `/Height ${RASTER_FIXTURES.jpeg.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 ` +
-      `/Filter /DCTDecode /Length ${jpeg.byteLength} >>\nstream\n`,
+      `<< /Type /XObject /Subtype /Image /Width ${FIXTURE_JPEG_SIZE} ` +
+      `/Height ${FIXTURE_JPEG_SIZE} /ColorSpace /DeviceRGB /BitsPerComponent 8 ` +
+      `/Filter /DCTDecode /Length ${PDF_FIXTURE_JPEG.byteLength} >>\nstream\n`,
     ),
-    jpeg,
+    PDF_FIXTURE_JPEG,
     encoder.encode('\nendstream'),
   ]))
 

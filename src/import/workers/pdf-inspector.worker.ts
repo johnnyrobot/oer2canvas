@@ -156,6 +156,9 @@ function extract(request: Extract<ParserProbeRequest, { kind: 'extract' }>): voi
       includeImages: true,
     })
     const markdown = result.markdown ?? ''
+    const attributionStarted = performance.now()
+    const unmarkedPages = attributeUnmarkedPages(bytes, markdown, result.pageCount)
+    const attributionMs = performance.now() - attributionStarted
     send({
       kind: 'result',
       requestId: request.requestId,
@@ -178,7 +181,9 @@ function extract(request: Extract<ParserProbeRequest, { kind: 'extract' }>): voi
         layoutComplex: result.layout.isComplex,
         hasEncodingIssues: result.hasEncodingIssues,
         markdown,
-        unmarkedPages: attributeUnmarkedPages(bytes, markdown, result.pageCount),
+        unmarkedPages,
+        detectMs,
+        attributionMs,
         // The EXTRACTION's classification, not the detection phase's. Both
         // report the same shape, but this one was computed with every page's
         // text in hand, so it is the better-informed of the two. The detection

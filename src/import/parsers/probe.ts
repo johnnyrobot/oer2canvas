@@ -135,6 +135,18 @@ export interface ParserProbeResult {
   markdown?: string
   /** PDF only. One entry per page that emitted no marker. */
   unmarkedPages?: PdfUnmarkedPage[]
+  /**
+   * PDF only. The classification phase alone, which is what justifies parsing
+   * the PDF structure twice to put the page budget ahead of extraction.
+   * `parseMs` includes this.
+   */
+  detectMs?: number
+  /**
+   * PDF only. The page-restricted re-parses that attribute un-marked pages.
+   * Zero for a document with no gaps, which is the normal case. `parseMs`
+   * includes this.
+   */
+  attributionMs?: number
 }
 
 export type ParserProbeFailureCode =

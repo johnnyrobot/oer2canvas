@@ -12,14 +12,23 @@
 export const DOCUMENT_IMPORT_LIMITS = PARSER_PROBE_LIMITS
 
 export const DOCUMENT_IMPORT_LIMIT_EVIDENCE = {
-  report: 'docs/evidence/document-parser-benchmark-2026-08-27.json',
-  slowestSuccessfulParseMs: 4287,
+  report: 'docs/evidence/document-parser-benchmark-2026-08-29.json',
+  slowestSuccessfulParseMs: 4229,
   largestMeasuredWasmMemoryBytes: 97_845_248,
   measuredInputBytes: 16_777_205,
   measuredPdfPages: 200,
   measuredAssetCount: 64,
   measuredAssetBytes: 8_388_592,
   measuredLargestAssetBytes: 4_194_304,
+  /*
+   * The PDF parse is TWO module passes — classify, then extract — so the page
+   * budget can refuse a document before its text is built. This is what that
+   * costs, on the 200-page fixture, as a share of the whole parse:
+   * Chrome 19.6 of 178.1 ms, Firefox 73 of 912 ms, WebKit 24 of 194 ms.
+   * Roughly a tenth, which is what the design predicted from Node.
+   */
+  measuredPdfDetectMs: { chrome: 19.6, firefox: 73, webkit: 24 },
+  measuredPdfParseMs: { chrome: 178.1, firefox: 912, webkit: 194 },
 } as const
 
 /**

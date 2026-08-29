@@ -129,7 +129,53 @@ async function probeFixture(page, probeUrl, origin, fixture) {
         progress,
         mainHeapBeforeBytes: beforeHeap,
         mainHeapAfterBytes: afterHeap,
-        result,
+        /*
+         * A MEASUREMENT SUMMARY, not the parse result. This report is committed
+         * evidence, and `ParserProbeResult` now carries content as well as
+         * measurements: `normalized.packagedAssets[].bytes` and the PDF
+         * `markdown` are the document itself. Recording them verbatim produced a
+         * 486 MB file — 58 MB for the 64-asset EPUB fixture alone — of which
+         * none is a measurement. Sizes and counts are kept; bytes are not.
+         */
+        result: {
+          parser: result.parser,
+          parserVersion: result.parserVersion,
+          detectedFormat: result.detectedFormat,
+          ...(result.formatDetection ? { formatDetection: result.formatDetection } : {}),
+          inputBytes: result.inputBytes,
+          outputBytes: result.outputBytes,
+          parseMs: result.parseMs,
+          wasmMemoryBytes: result.wasmMemoryBytes,
+          assetBytes: result.assetBytes,
+          largestAssetBytes: result.largestAssetBytes,
+          counts: result.counts,
+          ...(result.pageCount === undefined ? {} : { pageCount: result.pageCount }),
+          ...(result.pagesNeedingOcr === undefined ? {} : { pagesNeedingOcr: result.pagesNeedingOcr }),
+          ...(result.layoutComplex === undefined ? {} : { layoutComplex: result.layoutComplex }),
+          ...(result.hasEncodingIssues === undefined ? {} : { hasEncodingIssues: result.hasEncodingIssues }),
+          /*
+           * The two-phase split, measured rather than asserted. `detectMs` is
+           * the classification that lets the page budget refuse a document
+           * before its text is built; `attributionMs` is the page-restricted
+           * re-parse of pages that emitted no marker, and is 0 when there are
+           * none. Both are inside `parseMs`.
+           */
+          ...(result.detectMs === undefined ? {} : { detectMs: result.detectMs }),
+          ...(result.attributionMs === undefined ? {} : { attributionMs: result.attributionMs }),
+          ...(result.unmarkedPages === undefined ? {} : { unmarkedPageCount: result.unmarkedPages.length }),
+          ...(result.normalized === undefined ? {} : {
+            normalized: {
+              htmlBytes: new TextEncoder().encode(result.normalized.html).byteLength,
+              findings: result.normalized.findings.length,
+              equations: result.normalized.equations,
+              notes: result.normalized.notes,
+              unavailableAssets: result.normalized.unavailableAssets,
+              packagedAssetCount: result.normalized.packagedAssets.length,
+              packagedAssetBytes: result.normalized.packagedAssets
+                .reduce((total, asset) => total + asset.bytes.byteLength, 0),
+            },
+          }),
+        },
       }
     } catch (error) {
       return {
