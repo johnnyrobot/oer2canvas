@@ -138,7 +138,19 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     format: 'epub',
     standsInFor: 'A chapter exported from an OER platform, where styling is carried in CSS this importer discards and structure must survive without it.',
     bytes: () => semanticEpubFixture(),
-    expectInHtml: ['<h1>', 'Cell Biology'],
+    // Verified empirically against anydoc 0.2.4: the default fixture also
+    // emits a `<table>`, which the DOCX semantic case already checks and
+    // this one did not. `'<h1>'` (WITH the closing bracket, unlike the RTF
+    // and ODT cases) is intentional, not an inconsistency left behind by
+    // accident: the real output is two `<h1>` elements — a bare
+    // `<h1>Biology Reader</h1>` from the EPUB's own book-title heading,
+    // then `<h1 id="EPUB-chapter.xhtml-cell-biology">Cell Biology</h1>` for
+    // the actual chapter heading. The exact `'<h1>'` substring is
+    // genuinely present (matching the bare title heading), so it is left
+    // as-is; the separate `'Cell Biology'` fragment is what proves the
+    // chapter heading's text survived, regardless of which `<h1>` carries
+    // an id.
+    expectInHtml: ['<h1>', 'Cell Biology', '<table'],
   },
   {
     id: 'odt-semantic',
@@ -147,12 +159,15 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     bytes: () => semanticOdtFixture(),
     // `<h1`, not `<h1>`: verified empirically against anydoc 0.2.4 that ODT's
     // `<text:h>` heading gets an `id` attribute in the output (e.g.
-    // `<h1 id="Cell-Biology">`), unlike the DOCX/EPUB semantic cases, whose
-    // headings carry no id. Other tests in this suite (`structured-formats.
-    // browser.test.ts`, `document.browser.test.ts`) confirm an id is not part
-    // of what "a heading survived" means: they select on the `h1` tag name
-    // and ignore attributes entirely. An exact `<h1>` match here would assert
-    // something this corpus case never claimed to prove.
+    // `<h1 id="Cell-Biology">`), unlike the DOCX-semantic case's heading,
+    // which carries no id. (EPUB's own "Cell Biology" heading also gets an
+    // id — see the epub-semantic case above — so this is not unique to
+    // ODT; it just happens not to be true of DOCX.) Other tests in this
+    // suite (`structured-formats.browser.test.ts`, `document.browser.test.ts`)
+    // confirm an id is not part of what "a heading survived" means: they
+    // select on the `h1` tag name and ignore attributes entirely. An exact
+    // `<h1>` match here would assert something this corpus case never
+    // claimed to prove.
     expectInHtml: ['<h1', 'Cell Biology'],
   },
   {
@@ -163,7 +178,20 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     // builders — because RTF has no zip container to await; wrapped in an
     // async thunk so its shape matches `CorpusCase.bytes` regardless.
     bytes: async () => semanticRtfFixture(),
-    expectInHtml: ['Cell Biology'],
+    // A bare-text check alone would let a regression that flattened every
+    // RTF structural element into plain paragraphs — dropping the
+    // style-to-heading mapping, the list, and the table — pass silently,
+    // which matters most for exactly this case: RTF is the format this
+    // corpus case calls out as "most likely to arrive with flattened
+    // drawings and no reliable structure." Verified empirically against
+    // anydoc 0.2.4: the real output is
+    // `<h1>Cell Biology</h1>...<ul><li><p>Membrane</p></li>...</ul>...
+    // <table><thead>...<th scope="col">...`. RTF's own `<h1>` carries no
+    // id attribute (unlike ODT's and EPUB's), but `'<h1'` (no closing
+    // bracket) is used anyway for consistency with the odt-semantic case
+    // and the sibling browser tests, which select on tag name and ignore
+    // attributes.
+    expectInHtml: ['<h1', 'Cell Biology', '<ul', '<table'],
   },
   {
     id: 'pdf-text-multipage',
