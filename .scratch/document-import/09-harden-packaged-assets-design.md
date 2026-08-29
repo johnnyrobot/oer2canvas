@@ -77,10 +77,16 @@ job.
 
 `ImportReport.counts` gains `packagedAssetBytes`. `PlanScreen`'s existing disclosure becomes:
 
-> Packaged assets: 3 (1.2 MB of 8 MB budget).
+> Packaged assets: 3 (1.2 MiB packaged; the per-document budget is 8 MiB).
 
-The budget figure is read from `PARSER_PROBE_LIMITS`, never written as a literal, so the number shown
-cannot drift from the number enforced.
+Two facts side by side, not one fraction. The budget figure is read from `PARSER_PROBE_LIMITS`, never
+written as a literal, so the number shown cannot drift from the number enforced; the first number is
+the MEASURED `counts.packagedAssetBytes`. They are different measures and the wording must not imply
+otherwise: `packagedAssetBytes` is the cartridge's weight, deduped by content hash and counting only
+assets that packaged, while `maximumAssetBytes` is enforced in `prepareAssets` against a running total
+of every occurrence that cleared the per-image cap — duplicates included, and images later refused by
+the sniff or the pixel check included. An "X of Y budget" phrasing would assert a progress relationship
+between them that does not hold.
 
 ## Direct push is permanently blocked
 
@@ -151,3 +157,13 @@ live import would re-measure Canvas, not this codebase.
 - Downscaling, recompressing or otherwise transforming image bytes. Assets are packaged as extracted.
 - SVG or any active-content format, in any form.
 - Per-image finding detail. The disclosure decision was counts per cause.
+- An AGGREGATE decoded-pixel cap across a document. `maximumAssetPixels` is per image, and nothing
+  bounds the document total: 64 flat-colour 6300x6300 PNGs fit inside both the 8 MiB byte budget and
+  the 64-asset count limit while declaring roughly 2.5 Gpx between them. This is a known, deliberate
+  residual, not an oversight, and it is not a claim that the situation is safe. It is excluded because
+  any aggregate value picked now would be unmeasured, and the plausible legitimate worst case — 64
+  full-page 300-dpi scans at about 8.4 MP each, roughly 540 MP — sits ABOVE any cap that would
+  meaningfully bound the attack. A cap chosen today would therefore refuse real textbook scans in order
+  to blunt a hazard that already requires a crafted file and is bounded by the existing budgets to a
+  tab-level denial of service against the importing user's own session. Revisit it with measurement,
+  not with a guess.
