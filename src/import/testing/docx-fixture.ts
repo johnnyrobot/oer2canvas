@@ -74,6 +74,7 @@ export async function semanticDocxFixture(
     unsupportedImage = false,
     unresolvedLink = false,
     noAltCarrier = false,
+    activeContent = false,
   }: {
     embeddedImage?: boolean
     unsupportedImage?: boolean
@@ -86,6 +87,14 @@ export async function semanticDocxFixture(
     // formats. See `structured-document-fixtures.ts`'s matching comment on
     // the RTF fixture, which has no carrier at all.
     noAltCarrier?: boolean
+    // A hyperlink whose relationship target is a `javascript:` URI — the
+    // hostile construct OOXML can actually carry. DOCX has no way to embed a
+    // live `<script>` element at all (a run's `<w:t>` is always plain text,
+    // rendered through `escapeHtml` in `anydoc-html.ts`), so a `javascript:`
+    // hyperlink target is the closest analogue: the one place a DOCX author
+    // can smuggle an executable-looking URL past a reader who trusts link
+    // text over the target it points to.
+    activeContent?: boolean
   } = {},
 ): Promise<Uint8Array<ArrayBuffer>> {
   const hasImage = embeddedImage || unsupportedImage
@@ -101,6 +110,12 @@ export async function semanticDocxFixture(
     : ''
   const unresolvedLinkParagraph = unresolvedLink
     ? '<w:p><w:hyperlink w:anchor="missing-section"><w:r><w:t>Missing section</w:t></w:r></w:hyperlink></w:p>'
+    : ''
+  const activeContentRelationship = activeContent
+    ? '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="javascript:alert(document.cookie)" TargetMode="External"/>'
+    : ''
+  const activeContentParagraph = activeContent
+    ? '<w:p><w:hyperlink r:id="rId3"><w:r><w:t>Click for extra credit</w:t></w:r></w:hyperlink></w:p>'
     : ''
 
   const entries = [
@@ -130,6 +145,7 @@ export async function semanticDocxFixture(
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.edu/cells" TargetMode="External"/>
   ${imageRelationship}
+  ${activeContentRelationship}
 </Relationships>`),
     },
     {
@@ -158,6 +174,7 @@ export async function semanticDocxFixture(
   <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Cells</w:t></w:r><w:r><w:t xml:space="preserve"> are </w:t></w:r><w:r><w:rPr><w:i/></w:rPr><w:t>organized</w:t></w:r><w:r><w:t xml:space="preserve"> &lt;unsafe &amp; literal&gt;. </w:t></w:r><w:hyperlink r:id="rId1"><w:r><w:t>Read the cell guide</w:t></w:r></w:hyperlink></w:p>
   <w:p><w:hyperlink w:anchor="cell-biology"><w:r><w:t>Return to Cell Biology</w:t></w:r></w:hyperlink></w:p>
   ${unresolvedLinkParagraph}
+  ${activeContentParagraph}
   <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>Membrane</w:t></w:r></w:p>
   <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>Cytoplasm</w:t></w:r></w:p>
   <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr></w:pPr><w:r><w:t>Observe</w:t></w:r></w:p>
