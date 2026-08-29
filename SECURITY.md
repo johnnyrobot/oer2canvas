@@ -20,6 +20,20 @@ credential, revoke it in Canvas immediately and mention only that it was revoked
 - In that optional mode, Canvas tokens are session-only and never written to browser storage. A
   one-time migration removes token keys left by earlier releases from both current and legacy
   IndexedDB names; `Forget this token` clears the live field, session copy, and both database keys.
+- The Firecrawl API key is entered by the user, sent only to `api.firecrawl.dev` in an
+  `Authorization` header, never placed in a URL or a request body, and held in memory for the
+  current tab only. It is never written to browser storage and needs no migration, because no
+  release ever wrote one. `Forget key` clears the held key and the live field.
+- The relay is not involved in web-page import and its allowlist is unchanged. A CORS or network
+  failure is reported as such and never offers a relay route.
+- A target URL is validated as public HTTPS before the request leaves the browser — the extraction
+  service is itself an SSRF vector, and was measured accepting and proxying `http://127.0.0.1:8080/`
+  on 2026-08-29 — and the post-redirect URL is re-validated.
+- The origin's status is checked: a 404 delivered inside a successful extraction is refused.
+- A PDF URL is refused rather than remotely text-extracted, because the remote path produces none
+  of the scanned-page signals the local PDF path uses to decide whether a page may publish.
+- Fetched Markdown is untrusted and passes through the same sanitizer, the same 2 MiB limit, and
+  the same accessibility gate as pasted Markdown.
 - The relay accepts only HTTPS targets, blocks private/loopback/reserved hosts, forwards an
   explicit request-header allowlist, drops cookies, re-validates GET redirects, refuses DELETE,
   rate-limits direct clients, and forces relayed responses to be sandboxed,

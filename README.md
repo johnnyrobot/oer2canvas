@@ -2,13 +2,17 @@
 
 oer2canvas turns an open-textbook chapter into accessible Canvas-ready pages. It runs the
 fetch, repair, audit, and compliance queue in the browser. The server component is a
-stateless Cloudflare Worker used only where browser CORS prevents a direct request.
+stateless Cloudflare Worker used only where browser CORS prevents a direct request — which is
+why web page import does not use it. Firecrawl's API answers cross-origin browser requests
+directly, so that call is made from the browser and the user's key never reaches this project's
+infrastructure.
 
 ## Release scope
 
 The public web app supports OpenStax, LibreTexts, Pressbooks, pasted text/Markdown/HTML, local
-UTF-8 `.txt`, `.md`, `.markdown`, `.html`, and `.htm` files, and text-oriented `.docx`, `.epub`,
-`.odt`, and `.rtf` files through one output path:
+UTF-8 `.txt`, `.md`, `.markdown`, `.html`, and `.htm` files, text-oriented `.docx`, `.epub`,
+`.odt`, and `.rtf` files, text-based `.pdf` files, and one web page at a time, through one output
+path:
 
 - a Common Cartridge 1.1 download, with no Canvas address, account, or token access.
 
@@ -20,6 +24,17 @@ with visible findings before preview. A validated public HTTPS source URL can re
 private-network, IP-literal, and credential-bearing targets are rejected. Without a base, relative
 links become non-link text with a warning. Markup images never issue network requests: their
 alternative text is retained and they block preparation until packaged markup assets ship.
+Web page import fetches one address at a time and requires the user's own Firecrawl account and
+API key. The address and the key go from the browser directly to `api.firecrawl.dev` and never
+through the relay, which is unchanged and never sees the key; the key is held in the tab's memory
+only and is erased on Forget key or when the tab closes. One URL becomes one page and no links are
+followed. The interface says all of this above the button, before anything is sent. Images in a
+fetched article are not packaged: each is marked in place with a visible placeholder and blocks
+preparation, exactly as a Markdown import's images do. A PDF address is refused and pointed at the
+Document tab, where a page that is an image of text can be recognised and refused. A 404 delivered
+inside a successful extraction, a redirect into a private network, and an address that is not
+public HTTPS are all refused rather than published.
+
 Text-oriented structured-document imports are limited to 16 MiB and parsed locally in a
 disposable AnyDoc WebAssembly Worker. Headings, paragraphs, lists, links, code blocks, and simple
 tables are converted to controlled semantic HTML. Embedded images and other unsupported
@@ -48,9 +63,11 @@ verified networks and 6,639 books. The optional local VLM alt-text draft runs in
 with WebGPU; the first use downloads and caches the selected Florence-2 base model (about
 318 MiB) and no image or draft is sent to an inference service.
 
-The repository also contains a probe-only PDF Inspector module Worker for PDF feasibility testing.
-Parser code and WASM are fetched only after the user starts a matching import or probe, and source
-bytes stay in the browser. PDF is not yet exposed in the release UI. The document-import release
+PDF import runs the PDF Inspector module Worker locally. Parser code and WASM are fetched only
+after the user starts a matching import, and source bytes stay in the browser. The Worker
+classifies the document before extracting it, so an over-budget file is refused before its text is
+built; a page that is an image of text blocks preparation, because this release runs no OCR in the
+browser; and a figure is marked in place rather than imported. The document-import release
 matrix is desktop Chrome and Firefox.
 Playwright WebKit remains diagnostic cross-engine evidence; Safari and mobile browsers are not
 supported for document import.
