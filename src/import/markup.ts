@@ -85,6 +85,22 @@ interface RepairSummary {
 
 export interface MarkupSanitizationOptions {
   publicBaseUrl?: URL
+  /**
+   * Suppress the `import-image-unavailable` finding — and ONLY that finding —
+   * because the caller will raise its own.
+   *
+   * For a caller that sanitizes a whole document in one call, the default is
+   * right: one document, one finding, blocking, because a Markdown or HTML
+   * import CAN carry image bytes one day and refusing is a real decision about
+   * real content. The PDF importer sanitizes one PDF PAGE per call, so the
+   * default would give it one blocker per page — colliding React keys, and a
+   * refusal where this release deliberately warns, since `PdfProcessResult`
+   * exposes no image bytes and refusing a figure protects nobody.
+   *
+   * The placeholder, `counts.images` and `counts.unavailableAssets` are
+   * unaffected. Nothing here can make an image disappear quietly.
+   */
+  deferImageFindings?: boolean
 }
 
 export interface SanitizedMarkup {
@@ -194,7 +210,7 @@ function describe(values: ReadonlySet<string>): string {
   return [...values].sort().join(', ')
 }
 
-function findingsFrom(summary: RepairSummary): ImportFinding[] {
+function findingsFrom(summary: RepairSummary, deferImageFindings: boolean): ImportFinding[] {
   const findings: ImportFinding[] = []
   if (summary.active.size > 0) {
     findings.push({
@@ -218,7 +234,7 @@ function findingsFrom(summary: RepairSummary): ImportFinding[] {
       message: `Removed ${count} unresolved relative URL ${count === 1 ? 'reference' : 'references'}. Link text and surrounding content were preserved. Add a public source URL to resolve relative links.`,
     })
   }
-  if (summary.unavailableImages > 0) {
+  if (summary.unavailableImages > 0 && !deferImageFindings) {
     const count = summary.unavailableImages
     findings.push({
       code: 'import-image-unavailable',
@@ -376,7 +392,7 @@ export function sanitizeImportedHtml(
   for (const comment of comments) comment.remove()
 
   const html = document.body.innerHTML.trim()
-  const findings = findingsFrom(summary)
+  const findings = findingsFrom(summary, options.deferImageFindings === true)
   const retained = new DOMParser().parseFromString(html, 'text/html')
   if (!retained.body.textContent?.trim() && !retained.querySelector('img, hr')) {
     findings.push({
