@@ -214,7 +214,9 @@ test('markup images retain alternative text and block network loading until asse
     code: 'import-image-unavailable',
     severity: 'blocker',
   }))
-  expect(local.work.sections[0]!.html).toBe('<p>Diagram:</p>A cell')
+  // Was bare `A cell`, which read as prose and hid the gap it marks. The alt is
+  // still retained, now inside the placeholder that says an image was here.
+  expect(local.work.sections[0]!.html).toBe('<p>Diagram:</p><span>[Embedded image: A cell]</span>')
   expect(local.report.counts).toMatchObject({ images: 1, unavailableAssets: 1 })
 
   const withBase = await importText(
@@ -226,7 +228,7 @@ test('markup images retain alternative text and block network loading until asse
     severity: 'blocker',
   }))
   expect(withBase.report.counts).toMatchObject({ images: 1, unavailableAssets: 1 })
-  expect(withBase.work.sections[0]!.html).toBe('<p>Diagram:</p>A cell')
+  expect(withBase.work.sections[0]!.html).toBe('<p>Diagram:</p><span>[Embedded image: A cell]</span>')
 
   const absolute = await importText(
     {
@@ -236,7 +238,7 @@ test('markup images retain alternative text and block network loading until asse
     },
     { metadata },
   )
-  expect(absolute.work.sections[0]!.html).toBe('External cell')
+  expect(absolute.work.sections[0]!.html).toBe('<span>[Embedded image: External cell]</span>')
   expect(absolute.report.counts).toMatchObject({ images: 1, unavailableAssets: 1 })
 })
 
@@ -555,4 +557,35 @@ test('cancelling a file read stops before hashing or creating derived content', 
 
   await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
   expect(digest).not.toHaveBeenCalled()
+})
+
+/*
+  The markup path used to replace an image with its bare alt text, or — when the
+  image carried no alt — with an EMPTY text node. "Diagram:" followed by "A cell"
+  reads as ordinary prose, and the alt-less case left nothing at all, so a person
+  told "1 image is unavailable" had no way to find WHERE in the page it was.
+
+  The blocking finding was never the missing half; the visible marker was. The
+  anydoc path has emitted `[Embedded image: alt]` all along — this is the same
+  placeholder, so the two import paths now say the same thing in the same words.
+*/
+test('an unavailable markup image leaves a visible placeholder, not bare prose', async () => {
+  const metadata = { title: 'Image lesson', rightsAuthority: 'own' as const, rightsAcknowledged: true }
+
+  const withAlt = await importText(
+    { kind: 'file', file: new File(['<p>Diagram:</p><img src="images/cell.png" alt="A cell">'], 'l.html') },
+    { metadata },
+  )
+  expect(withAlt.work.sections[0]!.html).toBe('<p>Diagram:</p><span>[Embedded image: A cell]</span>')
+
+  // The alt-less case is the one that used to vanish completely.
+  const noAlt = await importText(
+    { kind: 'file', file: new File(['<p>Diagram:</p><img src="images/cell.png">'], 'l.html') },
+    { metadata },
+  )
+  expect(noAlt.work.sections[0]!.html).toBe('<p>Diagram:</p><span>[Embedded image]</span>')
+  expect(noAlt.report.findings).toContainEqual(expect.objectContaining({
+    code: 'import-image-unavailable',
+    severity: 'blocker',
+  }))
 })

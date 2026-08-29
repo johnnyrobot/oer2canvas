@@ -350,7 +350,21 @@ export function sanitizeImportedHtml(
       summary.images += 1
       summary.unavailableImages += 1
       const alt = element.getAttribute('alt')?.trim()
-      element.replaceWith(alt ? document.createTextNode(alt) : document.createTextNode(''))
+      /*
+       * A VISIBLE placeholder, in `anydoc-html.ts`'s exact wording so the two
+       * import paths describe the same loss in the same words. The blocking
+       * finding says an image is unavailable; this says WHERE it was.
+       *
+       * Bare alt text could not do that — it reads as ordinary prose, so
+       * "Diagram:" followed by "A cell" hides the gap it is supposed to mark —
+       * and an image with no alt was replaced by an EMPTY node, which meant the
+       * one image a reader most needs pointed out was the one that vanished
+       * completely. Built as a DOM node rather than an html string so the alt
+       * text is escaped by construction.
+       */
+      const placeholder = document.createElement('span')
+      placeholder.textContent = `[Embedded image${alt ? `: ${alt}` : ''}]`
+      element.replaceWith(placeholder)
       continue
     }
     if (unwrapRelativeLink) unwrap(element)
