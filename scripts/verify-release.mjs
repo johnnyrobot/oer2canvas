@@ -20,6 +20,20 @@ const RUN = {
   // runs all of them. That is what makes criteria 1, 2, 3, 5 and 6 below true:
   // their tests are split across `.test.ts` (unit) and `.browser.test.ts(x)`
   // (browser) files, and this one command reaches both.
+  //
+  // This is also why the criterion → check mapping below is COARSE: `tests` is
+  // ONE invocation covering the whole suite, not one per criterion. A single
+  // failing test anywhere makes every criterion that lists `tests` in its
+  // `checks` report FAIL together, even though only one of them actually
+  // regressed. That is a deliberate trade, not an oversight — separating it
+  // would mean either running vitest once per criterion (missing tests outside
+  // the mapped files, since criteria and test files are not 1:1) or running the
+  // whole suite once per criterion on top of this run (paying full suite wall
+  // time six more times for attribution the printed check name already gives
+  // for free). The gate's stated purpose is to reveal a criterion with NO CHECK
+  // AT ALL — a coarse but present mapping still does that; only the per-row
+  // check name below (and the "Failed checks" summary) makes the coarseness
+  // legible instead of silently reading as six independent breakages.
   tests: ['npx', ['vitest', 'run']],
   // Deliberately NOT part of `tests` above. `vitest.config.ts`'s `unit` project
   // excludes `src/import/cartridge-artifact.test.ts` — see the comment on that
@@ -88,12 +102,20 @@ function main() {
   }
 
   const recorded = lastRecordedRun()
+  // The set of check NAMES that actually failed, in `RUN` order. Distinct
+  // failed checks, not failed criteria — this is what tells a reader "one
+  // thing broke" instead of letting six FAIL rows read as six breakages.
+  const failedChecks = Object.keys(RUN).filter((name) => results.get(name) === false)
   let failed = false
   console.log('\nRelease criteria\n')
   for (const criterion of CRITERIA) {
-    const enforcedOk = criterion.checks.every((check) => results.get(check))
+    // Which of THIS criterion's checks failed, so a FAIL row names its cause
+    // instead of leaving a reader to guess whether it shares a cause with the
+    // other FAIL rows below it.
+    const failingChecks = criterion.checks.filter((check) => results.get(check) === false)
+    const enforcedOk = failingChecks.length === 0
     if (!enforcedOk) failed = true
-    const enforced = enforcedOk ? 'PASS' : 'FAIL'
+    const enforced = enforcedOk ? 'PASS' : `FAIL: ${failingChecks.join(', ')}`
     const manual = criterion.manual
       ? `  MANUAL: ${criterion.manual} — ${recorded ? `last recorded ${recorded}` : 'NEVER RUN'}`
       : ''
@@ -107,6 +129,17 @@ function main() {
    * `--force` within a week, and then it would be blocking on nothing.
    */
   if (failed) {
+    // Named once, plainly, so "six FAIL rows" reads as "one broken check shared
+    // by six criteria" rather than six independent breakages. `tests` in
+    // particular is a single suite-wide run (see the comment on `RUN.tests`),
+    // so seeing it listed once here — however many criteria cite it above —
+    // is the correct count of things that actually broke.
+    console.log(`\nFailed checks: ${failedChecks.join(', ')}`)
+    console.log(
+      'Several criteria share one test run: a single failing test marks every criterion whose ' +
+        'checks include it, not just the one it actually belongs to. The check name on each row ' +
+        "and the list above are the count of things that actually broke.",
+    )
     console.log('\nNOT RELEASABLE: an enforced check failed.')
     process.exitCode = 1
   } else {
