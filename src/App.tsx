@@ -742,6 +742,7 @@ export default function App() {
           onPick={(book) => { void pickBook(book) }}
           onImportText={stageImportedContent}
           onImportDocument={stageImportedContent}
+          onImportWeb={stageImportedContent}
         />
       )}
       {phase === 'chapters' && imported && (

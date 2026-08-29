@@ -3,6 +3,8 @@ import { render, screen } from '@testing-library/react'
 import { ImportPlanEditor, createImportDraft, type ImportDraft } from './ImportPlanEditor'
 import { importPdfDocument } from '../import/pdf'
 import { pdfFixturePages } from '../import/testing/pdf-fixture'
+import { importWebArticle } from '../import/web'
+import { FIXTURE_URL, fixtureFetcher } from '../import/testing/firecrawl-fixture'
 import type { ImportResult } from '../import/types'
 
 const metadata = {
@@ -55,4 +57,38 @@ test('a pdf with a figure stays publishable, and says where the figure was', asy
   expect(screen.getByRole('button', { name: /^Prepare / })).toBeEnabled()
   expect(screen.getByText(/could not be imported/)).toBeInTheDocument()
   expect(imported.work.sections[0]!.html).toContain('[Embedded image: Figure on page 2]')
+})
+
+test('a fetched article with images cannot be prepared', async () => {
+  /*
+   * The finding is not the enforcement. `ImportPlanEditor` disables the confirm
+   * control on `blockers.length > 0`, and that one `disabled` attribute is the
+   * whole enforcement point — `confirmImport` never inspects severity — so this
+   * asserts the control rather than the finding.
+   *
+   * A fetched article's images cannot be packaged: Firecrawl returns no image
+   * bytes, and fetching them from the browser is host-by-host CORS luck. So
+   * they are refused consistently, exactly as a pasted Markdown import's are.
+   */
+  const imported = await importWebArticle(FIXTURE_URL, {
+    metadata: { ...metadata, rightsAuthority: 'permission' },
+    fetcher: fixtureFetcher('article'),
+  })
+  render(<Harness initial={createImportDraft(imported)} />)
+
+  expect(screen.getByRole('button', { name: /^Prepare / })).toBeDisabled()
+  // The blocking finding is what the editor surfaces; the visible
+  // `[Embedded image: …]` placeholder lives in the page html and is asserted in
+  // `web.browser.test.ts`, where it can be read without opening a preview.
+  expect(screen.getByText(/images are unavailable/i)).toBeInTheDocument()
+})
+
+test('a fetched article with no images prepares normally', async () => {
+  const imported = await importWebArticle(FIXTURE_URL, {
+    metadata: { ...metadata, rightsAuthority: 'permission' },
+    fetcher: fixtureFetcher('article-no-images'),
+  })
+  render(<Harness initial={createImportDraft(imported)} />)
+
+  expect(screen.getByRole('button', { name: /^Prepare / })).toBeEnabled()
 })

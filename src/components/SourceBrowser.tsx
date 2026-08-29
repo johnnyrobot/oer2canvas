@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { OpenStaxBrowser } from './OpenStaxBrowser'
 import { TextContentImporter } from './TextContentImporter'
 import { DocumentImporter } from './DocumentImporter'
+import { WebArticleImporter } from './WebArticleImporter'
 import {
   loadLibreTextsCatalog,
   loadPressbooksCatalog,
@@ -12,7 +13,7 @@ import type { BookRef } from '../sources/types'
 import type { ImportResult } from '../import/types'
 import { messageOf } from '../errors'
 
-type SourceTab = 'openstax' | 'libretexts' | 'pressbooks' | 'document' | 'text'
+type SourceTab = 'openstax' | 'libretexts' | 'pressbooks' | 'document' | 'text' | 'web'
 type CatalogTab = Extract<SourceTab, 'libretexts' | 'pressbooks'>
 
 const BASE_TABS = ['openstax', 'libretexts', 'pressbooks'] as const
@@ -22,6 +23,7 @@ const TAB_LABELS: Readonly<Record<SourceTab, string>> = {
   pressbooks: 'Pressbooks',
   document: 'Document',
   text: 'Text / Markdown / HTML',
+  web: 'Web page',
 }
 
 const CATALOG_TABS: Readonly<Record<CatalogTab, {
@@ -55,10 +57,12 @@ export function SourceBrowser({
   onPick,
   onImportText,
   onImportDocument,
+  onImportWeb,
 }: {
   onPick: (book: BookRef) => void
   onImportText?: (result: ImportResult) => void
   onImportDocument?: (result: ImportResult) => void
+  onImportWeb?: (result: ImportResult) => void
 }) {
   const [tab, setTab] = useState<SourceTab>('openstax')
   const [libreUrl, setLibreUrl] = useState('')
@@ -114,13 +118,16 @@ export function SourceBrowser({
     <section aria-labelledby="source-heading">
       <h2 id="source-heading" className="text-xl font-semibold">Choose content</h2>
       <p className="mt-1 text-sm text-neutral-700 dark:text-neutral-300">
-        Search an OER publisher, upload a document, or import text, Markdown, or HTML in this browser.
+        Search an OER publisher, upload a document, or import text, Markdown, or HTML in this
+        browser. One web page at a time can also be imported, which is the only source here that
+        is fetched by a third party rather than by this browser alone.
       </p>
       <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Content source">
         {[
           ...BASE_TABS,
           ...(onImportDocument ? ['document' as const] : []),
           ...(onImportText ? ['text' as const] : []),
+          ...(onImportWeb ? ['web' as const] : []),
         ].map((source) => (
           <button
             key={source}
@@ -143,6 +150,9 @@ export function SourceBrowser({
         {tab === 'openstax' && <OpenStaxBrowser onPick={onPick} />}
         {tab === 'document' && onImportDocument && <DocumentImporter onImported={onImportDocument} />}
         {tab === 'text' && onImportText && <TextContentImporter onImported={onImportText} />}
+        {tab === 'web' && onImportWeb && (
+          <WebArticleImporter onImported={onImportWeb} onOpenLibreTexts={() => setTab('libretexts')} />
+        )}
         {catalog && (
           <section aria-labelledby={`${tab}-catalog-heading`}>
             <h3 id={`${tab}-catalog-heading`} className="text-lg font-semibold">

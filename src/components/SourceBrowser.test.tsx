@@ -104,3 +104,45 @@ test('tested structured formats are one document choice beside text-like content
   fireEvent.click(screen.getByRole('tab', { name: 'OpenStax' }))
   expect(screen.getByRole('button', { name: 'Algebra and Trigonometry' })).toBeVisible()
 })
+
+test('the Web page tab appears only when the app supplies a handler', () => {
+  // Same shape as `onImportText`/`onImportDocument`: the tab list is built from
+  // which handlers were passed, so a build that does not wire it has no tab
+  // rather than a tab that throws.
+  const { rerender } = render(<SourceBrowser onPick={() => {}} />)
+  expect(screen.queryByRole('tab', { name: 'Web page' })).toBeNull()
+  rerender(<SourceBrowser onPick={() => {}} onImportWeb={() => {}} />)
+  expect(screen.getByRole('tab', { name: 'Web page' })).toBeInTheDocument()
+})
+
+test('the Web page tab and the LibreTexts box remain different verbs', () => {
+  /*
+   * The LibreTexts box validates a host, derives a title and calls `onPick`
+   * with a `BookRef` — no fetch, no key, no credit, many pages, a known-open
+   * license. The Web page tab fetches once and produces one `ImportResult`.
+   * This asserts they do not become each other: opening a LibreTexts URL still
+   * calls `onPick` and never `onImportWeb`.
+   */
+  const onPick = vi.fn()
+  const onImportWeb = vi.fn()
+  render(<SourceBrowser onPick={onPick} onImportWeb={onImportWeb} />)
+  fireEvent.click(screen.getByRole('tab', { name: 'LibreTexts' }))
+  fireEvent.change(screen.getByLabelText('LibreTexts book or chapter URL'), {
+    target: { value: 'https://chem.libretexts.org/Bookshelves/Organic' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Open LibreTexts book' }))
+  expect(onPick).toHaveBeenCalledTimes(1)
+  expect(onImportWeb).not.toHaveBeenCalled()
+})
+
+test('the nudge switches tabs only when its button is pressed', () => {
+  render(<SourceBrowser onPick={() => {}} onImportWeb={() => {}} />)
+  fireEvent.click(screen.getByRole('tab', { name: 'Web page' }))
+  fireEvent.change(screen.getByLabelText(/Web page address/i), {
+    target: { value: 'https://chem.libretexts.org/Bookshelves/Organic' },
+  })
+  // Still on the Web page tab: the nudge is advice, not navigation.
+  expect(screen.getByRole('tab', { name: 'Web page' })).toHaveAttribute('aria-selected', 'true')
+  fireEvent.click(screen.getByRole('button', { name: /LibreTexts tab/i }))
+  expect(screen.getByRole('tab', { name: 'LibreTexts' })).toHaveAttribute('aria-selected', 'true')
+})
