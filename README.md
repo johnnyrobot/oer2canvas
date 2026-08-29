@@ -72,6 +72,10 @@ matrix is desktop Chrome and Firefox.
 Playwright WebKit remains diagnostic cross-engine evidence; Safari and mobile browsers are not
 supported for document import.
 
+A cancelled import always says so and invites you to try again with the source unchanged, and
+nothing is preserved from the interrupted attempt. A refusal is retryable unless the source
+itself can never work — an encrypted PDF, for instance, is refused without inviting a retry.
+
 ## Local development
 
 ```sh
