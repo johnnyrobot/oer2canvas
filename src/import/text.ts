@@ -1,4 +1,4 @@
-import type { ImportMetadata, ImportResult } from './types'
+import type { ImportMetadata, ImportReport, ImportResult } from './types'
 import { capabilityForFilename } from './capability'
 import { documentIds, importProvenance, parsePublicSourceUrl, sha256Hex, validateImportMetadata } from './common'
 import { escapeHtml } from './html'
@@ -14,6 +14,17 @@ export type TextLikeFormat = Extract<ImportedFormat, 'text' | 'markdown' | 'html
 export type TextImportInput =
   | { kind: 'paste'; text: string; format?: TextLikeFormat }
   | { kind: 'file'; file: File }
+  /*
+   * A web article, already extracted to Markdown by a `WebArticleFetcher`.
+   *
+   * `parser` is supplied by the fetcher rather than hardcoded here, because
+   * `importText` must not name a vendor: the public build's fetcher is
+   * Firecrawl, and a self-hosted build's would be something else (see
+   * `web.ts`'s seam note). `sourceUrl` is the POST-REDIRECT url that was
+   * actually extracted — the same one provenance is built from, passed
+   * explicitly so relative-link resolution and provenance cannot drift apart.
+   */
+  | { kind: 'web'; text: string; parser: ImportReport['parser']; sourceUrl: URL }
 
 export interface TextImportOptions {
   metadata: ImportMetadata
@@ -25,9 +36,14 @@ export interface TextImportOptions {
 // independently conservative limit.
 export const MAX_TEXT_IMPORT_BYTES = 2 * 1024 * 1024
 
-function assertWithinLimit(bytes: number, format: TextLikeFormat): void {
+/** Name the thing the user actually did, not the format it normalizes as. */
+function limitLabel(input: TextImportInput, format: TextLikeFormat): string {
+  if (input.kind === 'web') return 'Imported web article'
+  return format === 'text' ? 'Plain-text' : format === 'markdown' ? 'Markdown' : 'HTML'
+}
+
+function assertWithinLimit(bytes: number, label: string): void {
   if (bytes > MAX_TEXT_IMPORT_BYTES) {
-    const label = format === 'text' ? 'Plain-text' : format === 'markdown' ? 'Markdown' : 'HTML'
     throw new Error(`${label} imports must be 2 MiB or smaller.`)
   }
 }
@@ -42,6 +58,10 @@ function semanticHtml(text: string): string {
 
 function formatOf(input: TextImportInput): TextLikeFormat {
   if (input.kind === 'paste') return input.format ?? 'text'
+  // A fetched article IS Markdown, and reaches `sanitizeImportedMarkdown` for
+  // that reason. What it is recorded AS is a separate question — see
+  // `recordedFormat` below.
+  if (input.kind === 'web') return 'markdown'
   const format = capabilityForFilename(input.file.name)?.format
   if (format === 'text' || format === 'markdown' || format === 'html') return format
   throw new Error(
@@ -66,24 +86,42 @@ export async function importText(
   validateImportMetadata(options.metadata)
   const title = options.metadata.title.trim()
   const format = formatOf(input)
+  /*
+   * What it IS, versus how it is normalized. A web import is normalized as
+   * Markdown and recorded as `web`; conflating the two would lose the fact that
+   * the bytes came off the network in `report.format`, which is the field the
+   * plan editor and the cartridge attribute the import from.
+   */
+  const recordedFormat: ImportedFormat = input.kind === 'web' ? 'web' : format
+  const label = limitLabel(input, format)
   if (input.kind === 'file') {
-    assertWithinLimit(input.file.size, format)
+    assertWithinLimit(input.file.size, label)
   }
-  const text = input.kind === 'paste'
-    ? input.text
-    : await readUtf8(input.file)
+  const text = input.kind === 'file' ? await readUtf8(input.file) : input.text
   options.signal?.throwIfAborted()
   if (!text.trim()) throw new Error('Add some content before creating the preview.')
   const bytes = new TextEncoder().encode(text)
-  assertWithinLimit(bytes.byteLength, format)
+  assertWithinLimit(bytes.byteLength, label)
   const sourceSha256 = await sha256Hex(bytes)
   options.signal?.throwIfAborted()
 
   const { id, sectionId } = documentIds(sourceSha256)
-  const provenance = importProvenance(options.metadata, input.kind === 'paste'
-    ? { kind: 'paste' }
-    : { kind: 'local-file', originalName: input.file.name })
+  const provenance = importProvenance(options.metadata,
+    input.kind === 'paste' ? { kind: 'paste' }
+      : input.kind === 'web' ? { kind: 'web' }
+        : { kind: 'local-file', originalName: input.file.name })
   const baseUrl = parsePublicSourceUrl(options.metadata.sourceUrl)
+  if (input.kind === 'web' && baseUrl?.href !== input.sourceUrl.href) {
+    /*
+     * A programmer error, not a user error, and worth failing on. The whole
+     * point of passing the URL twice is that provenance (built from
+     * `metadata.sourceUrl`) and relative-link resolution (built from
+     * `publicBaseUrl`) describe the SAME page. `importWebArticle` sets both from
+     * one `URL` object; this is what makes "cannot drift" a checked claim rather
+     * than a comment.
+     */
+    throw new Error('A web import must record the source URL it was extracted from.')
+  }
   const normalized = format === 'text'
     ? {
         html: semanticHtml(text),
@@ -105,15 +143,16 @@ export async function importText(
     work: {
       id,
       title,
-      format,
+      format: recordedFormat,
       sections: [{ id: sectionId, title, order: 0, html: normalized.html }],
       assets: [],
       provenance,
     },
     report: {
-      parser: 'native',
-      format,
+      parser: input.kind === 'web' ? input.parser : 'native',
+      format: recordedFormat,
       ...(input.kind === 'file' ? { originalName: input.file.name } : {}),
+      ...(input.kind === 'web' ? { sourceUrl: input.sourceUrl.href } : {}),
       originalBytes: bytes.byteLength,
       sourceSha256,
       findings: normalized.findings,

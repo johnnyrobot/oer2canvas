@@ -589,3 +589,95 @@ test('an unavailable markup image leaves a visible placeholder, not bare prose',
     severity: 'blocker',
   }))
 })
+
+const webMetadata = {
+  title: 'Photosynthesis',
+  sourceUrl: 'https://en.wikipedia.org/wiki/Photosynthesis',
+  rightsAuthority: 'open-license' as const,
+  rightsAcknowledged: true,
+}
+
+test('a web import is recorded as web, names its extractor, and stays one section', async () => {
+  const result = await importText(
+    {
+      kind: 'web',
+      text: '# Photosynthesis\n\nPlants convert light.',
+      parser: 'firecrawl',
+      sourceUrl: new URL('https://en.wikipedia.org/wiki/Photosynthesis'),
+    },
+    { metadata: webMetadata },
+  )
+  expect(result.work.format).toBe('web')
+  expect(result.work.provenance.kind).toBe('web')
+  expect(result.work.provenance.sourceUrl).toBe('https://en.wikipedia.org/wiki/Photosynthesis')
+  expect(result.report.parser).toBe('firecrawl')
+  expect(result.report.format).toBe('web')
+  expect(result.work.sections).toHaveLength(1)
+  // Markdown, through the same sanitizer a pasted Markdown import uses.
+  expect(result.work.sections[0]!.html).toContain('<h1')
+})
+
+test('a web import resolves relative links against the URL that was extracted', async () => {
+  const result = await importText(
+    {
+      kind: 'web',
+      text: '[next](/wiki/Chlorophyll)',
+      parser: 'firecrawl',
+      sourceUrl: new URL('https://en.wikipedia.org/wiki/Photosynthesis'),
+    },
+    { metadata: webMetadata },
+  )
+  expect(result.work.sections[0]!.html).toContain('href="https://en.wikipedia.org/wiki/Chlorophyll"')
+})
+
+test('a web import inherits the image refusal and its visible placeholder', async () => {
+  /*
+   * Not new behaviour and deliberately not new code: this is `markup.ts`'s
+   * image branch, reached because the web path enters `sanitizeImportedMarkdown`
+   * like every other Markdown import. Asserted HERE so that a future change to
+   * that branch cannot silently change what a fetched article publishes.
+   * See this plan's `## Open questions` — the divergence with `anydoc-html.ts`
+   * is known and pinned rather than resolved by rewriting either one.
+   */
+  const result = await importText(
+    {
+      kind: 'web',
+      text: '![A leaf cross-section](https://upload.wikimedia.org/leaf.png)',
+      parser: 'firecrawl',
+      sourceUrl: new URL('https://en.wikipedia.org/wiki/Photosynthesis'),
+    },
+    { metadata: webMetadata },
+  )
+  expect(result.work.sections[0]!.html).toContain('[Embedded image: A leaf cross-section]')
+  expect(result.report.findings).toContainEqual(
+    expect.objectContaining({ code: 'import-image-unavailable', severity: 'blocker' }),
+  )
+})
+
+test('a web import inherits the private-network fence on links', async () => {
+  // `markup.ts` runs `isPublicNetworkUrl` over every href/src/cite. The fence is
+  // INHERITED, not missing — and this is where that claim is checkable.
+  const result = await importText(
+    {
+      kind: 'web',
+      text: '[metadata](http://169.254.169.254/latest/meta-data/)',
+      parser: 'firecrawl',
+      sourceUrl: new URL('https://en.wikipedia.org/wiki/Photosynthesis'),
+    },
+    { metadata: webMetadata },
+  )
+  expect(result.work.sections[0]!.html).not.toContain('169.254.169.254')
+  expect(result.report.findings.map((f) => f.code)).toContain('import-dangerous-url-removed')
+})
+
+test('a web import refuses to disagree with itself about the source URL', async () => {
+  await expect(importText(
+    {
+      kind: 'web',
+      text: 'text',
+      parser: 'firecrawl',
+      sourceUrl: new URL('https://example.com/a'),
+    },
+    { metadata: { ...webMetadata, sourceUrl: 'https://example.com/b' } },
+  )).rejects.toThrow(/source URL/i)
+})
