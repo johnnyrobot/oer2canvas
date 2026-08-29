@@ -22,6 +22,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
     "build": "npm run typecheck && vite build",
     "test": "vitest run",
+    "test:artifacts": "vitest run --project browser src/import/cartridge-artifact.browser.test.ts && vitest run -c vitest.artifact-reader.config.ts",
     "test:dist": "node scripts/smoke-dist.mjs",
     "verify:production": "node scripts/verify-production.mjs",
     "verify:edge-rate-limit": "node scripts/verify-edge-rate-limit.mjs",
@@ -29,7 +30,8 @@
     "verify:canvas-live": "node --env-file-if-exists=.env.local scripts/verify-canvas-release.mjs",
     "test:watch": "vitest",
     "probe:canvas-images:run": "node --env-file-if-exists=.env.local scripts/canvas-image-probe-run.mjs",
-    "verify:canvas-image-tracer": "node --env-file-if-exists=.env.local scripts/verify-canvas-image-tracer.mjs"
+    "verify:canvas-image-tracer": "node --env-file-if-exists=.env.local scripts/verify-canvas-image-tracer.mjs",
+    "verify:release": "node scripts/verify-release.mjs"
   },
   "keywords": [],
   "author": "",

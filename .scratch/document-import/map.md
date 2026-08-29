@@ -1,6 +1,6 @@
 # Document import map
 
-**Frontier:** 13 — Release core document importer.
+**Frontier:** 14 — Graduate presentations.
 
 | Issue | Status | Blocked by |
 | --- | --- | --- |
@@ -16,7 +16,7 @@
 | [10 — Edit proposed page plan](issues/10-edit-proposed-page-plan.md) | resolved | 01, 04, 05 |
 | [11 — Import text-based PDFs](issues/11-import-text-based-pdfs.md) | resolved | 02, 05, 10 |
 | [12 — Import URL with Firecrawl](issues/12-import-url-with-firecrawl.md) | resolved | 05, 10 |
-| [13 — Release core document importer](issues/13-release-core-document-importer.md) | ready-for-agent | 09, 10, 11, 12 |
+| [13 — Release core document importer](issues/13-release-core-document-importer.md) | resolved | 09, 10, 11, 12 |
 | [14 — Graduate presentations](issues/14-graduate-presentations.md) | ready-for-agent | 04, 09, 10 |
 | [15 — Evaluate legacy DOC/PPT](issues/15-evaluate-legacy-doc-ppt.md) | ready-for-agent | 13, 14 |
 | [16 — Decide spreadsheet imports](issues/16-decide-spreadsheet-imports.md) | ready-for-agent | 13 |

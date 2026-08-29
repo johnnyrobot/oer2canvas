@@ -55,8 +55,10 @@ credential, revoke it in Canvas immediately and mention only that it was revoked
   budgets. Content signatures must identify the selected format regardless of its filename or reported MIME type.
   Parser text is escaped into a fixed semantic HTML vocabulary; unsupported or embedded content
   blocks preparation instead of disappearing. Source files and derived document data remain local.
-- The probe-only PDF parser uses the same disposable-Worker boundary. Parser output remains
-  untrusted, and a cancelled or failed Worker is terminated.
+- Release-enabled text-based PDF import uses the same disposable-Worker boundary: the PDF
+  Inspector module Worker classifies a document before extracting it, so an over-budget file is
+  refused before its text is built. Parser output remains untrusted, and a cancelled or failed
+  Worker is terminated.
 
 ## Operational requirements before launch
 

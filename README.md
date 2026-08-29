@@ -72,6 +72,9 @@ matrix is desktop Chrome and Firefox.
 Playwright WebKit remains diagnostic cross-engine evidence; Safari and mobile browsers are not
 supported for document import.
 
+A failed or cancelled import says what went wrong, the form stays usable, and nothing from
+the interrupted attempt is kept, so you can correct the input and try again.
+
 ## Local development
 
 ```sh

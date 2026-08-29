@@ -20,8 +20,21 @@
   "include": [
     "vite.config.ts",
     "vitest.config.ts",
+    // The dedicated config `npm run test:artifacts` (`package.json`) uses to
+    // reach `cartridge-artifact.test.ts` despite it being excluded from the
+    // `unit` project's default `include` in `vitest.config.ts` — see that
+    // config file's own header comment for why it exists at all.
+    "vitest.artifact-reader.config.ts",
     "src/engine/compile/golden.test.ts",
-    "src/engine/export/zip.test.ts"
+    "src/engine/export/zip.test.ts",
+    // Verifies a whole cartridge with a real `unzip`, for the reason
+    // `zip.test.ts` gives: a zip verified only by its own writer is marking
+    // its own homework. Needs `node:child_process` to shell out to `unzip` —
+    // nothing else about it wants node. Reads artifacts a sibling browser
+    // test writes; `npm run test:artifacts` (`package.json`) sequences the
+    // two rather than this file waiting on the other project, which is why
+    // it is excluded from `unit`'s default `include` in `vitest.config.ts`.
+    "src/import/cartridge-artifact.test.ts"
   ],
   "exclude": []
 }

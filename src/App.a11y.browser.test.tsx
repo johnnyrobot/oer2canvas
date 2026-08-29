@@ -6,6 +6,7 @@ import { ChapterPicker } from './components/ChapterPicker'
 import { ChapterView } from './components/ChapterView'
 import { TextContentImporter } from './components/TextContentImporter'
 import { DocumentImporter } from './components/DocumentImporter'
+import { WebArticleImporter } from './components/WebArticleImporter'
 import { ImportPlanEditor, createImportDraft, type ImportDraft } from './components/ImportPlanEditor'
 import { QueueView } from './components/queue/QueueView'
 import { newSession, reduce, type QueueSession } from './components/queue/session'
@@ -266,6 +267,58 @@ test('screen 1c — the document form and its page plan have no accessibility vi
   await screen.findByRole('heading', { name: 'Page plan: accessible' })
   fireEvent.click(screen.getByText('Preview accessible'))
   await screen.findByText('Stores DNA')
+
+  expect(await violationsIn(container)).toEqual([])
+  expect(duplicateIds(container)).toEqual([])
+})
+
+/**
+ * Issue 12 added the Web page tab and no accessibility screen for it — this
+ * closes that gap. Shaped exactly like screen 1c: the same `ImportFlow`
+ * harness, the same two assertions, audited on the bare form and again after
+ * driving through to the page plan, because the findings list and the plan
+ * editor are part of the screen a user actually reads.
+ *
+ * `fetch` is injected so this test, like every other screen in this file,
+ * never reaches the network. The envelope below satisfies
+ * `import/firecrawl.ts`'s validation — `success: true`, a string
+ * `data.markdown`, and a numeric `data.metadata.statusCode` — and its
+ * `metadata.url`/`sourceURL` match the address typed into the form, which is
+ * what `WebArticleImporter` records as the page's source.
+ */
+test('screen 1d — the web page form and its page plan have no accessibility violations', async () => {
+  const okEnvelope = {
+    success: true,
+    data: {
+      markdown: '# Photosynthesis\n\nPlants convert light.\n\n## Products\n\nSugars and oxygen.',
+      metadata: {
+        url: 'https://en.wikipedia.org/wiki/Photosynthesis',
+        sourceURL: 'https://en.wikipedia.org/wiki/Photosynthesis',
+        statusCode: 200,
+        contentType: 'text/html; charset=utf-8',
+      },
+    },
+  }
+  const { container } = render(
+    <ImportFlow form={(onImported) => (
+      <WebArticleImporter
+        onImported={onImported}
+        fetch={async () => new Response(JSON.stringify(okEnvelope))}
+      />
+    )} />,
+  )
+  expect(await violationsIn(container)).toEqual([])
+  expect(duplicateIds(container)).toEqual([])
+
+  fireEvent.change(screen.getByLabelText(/Web page address/i), {
+    target: { value: 'https://en.wikipedia.org/wiki/Photosynthesis' },
+  })
+  fireEvent.change(screen.getByLabelText(/Firecrawl API key/i), { target: { value: 'fc-test' } })
+  fireEvent.change(screen.getByLabelText(/Document title/i), { target: { value: 'Photosynthesis' } })
+  fireEvent.click(screen.getByRole('radio', { name: 'I have permission to republish or adapt it' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: /I am responsible for rights/i }))
+  fireEvent.click(screen.getByRole('button', { name: /Import this page/i }))
+  await screen.findByRole('heading', { name: 'Page plan: Photosynthesis' })
 
   expect(await violationsIn(container)).toEqual([])
   expect(duplicateIds(container)).toEqual([])

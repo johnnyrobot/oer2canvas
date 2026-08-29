@@ -5,14 +5,14 @@ are in `package-lock.json`; this summary identifies the direct runtime and build
 
 | Package | License | Use |
 | --- | --- | --- |
-| React / React DOM | MIT | UI runtime |
+| React / React-DOM | MIT | UI runtime |
 | axe-core | MPL-2.0 | Accessibility audit engine |
 | lucide-react | ISC | Interface icons |
 | Temml | MIT | Converts publisher-carried TeX equations to MathML |
 | Marked 18.0.11 | MIT | Parses local Markdown with a controlled GFM configuration before sanitization |
 | @huggingface/transformers | Apache-2.0 | Browser/WebGPU runtime for the optional local VLM draft |
-| @firecrawl/anydoc-wasm 0.2.4 | MIT | Probe-only browser Worker parsing for DOCX, ODT, RTF, and EPUB |
-| @firecrawl/pdf-inspector-wasm 1.17.0 | MIT | Probe-only browser Worker inspection for PDF |
+| @firecrawl/anydoc-wasm 0.2.4 | MIT | Browser Worker parsing for released DOCX, ODT, RTF, and EPUB import |
+| @firecrawl/pdf-inspector-wasm 1.17.0 | MIT | Browser Worker classification and text extraction for released PDF import |
 | Vite / Vitest / Playwright | MIT | Build and test tooling |
 | vite-plugin-pwa / Workbox | MIT | Service worker and PWA assets |
 | Tailwind CSS | MIT | Styles |

@@ -28,9 +28,15 @@
   "include": ["src", "worker"],
   /*
    * The files that legitimately need node, checked by `tsconfig.node.json`
-   * instead: one reads and writes the golden files from disk, the other shells
+   * instead: one reads and writes the golden files from disk, another shells
    * out to a real `unzip` — which is the entire point of it, since a zip
-   * verified only by its own writer is marking its own homework.
+   * verified only by its own writer is marking its own homework — and a third
+   * extends that same real-`unzip` stance from the zip writer to a whole
+   * cartridge, reading artifacts a sibling browser test wrote to disk.
    */
-  "exclude": ["src/engine/compile/golden.test.ts", "src/engine/export/zip.test.ts"]
+  "exclude": [
+    "src/engine/compile/golden.test.ts",
+    "src/engine/export/zip.test.ts",
+    "src/import/cartridge-artifact.test.ts"
+  ]
 }
