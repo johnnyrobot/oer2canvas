@@ -69,11 +69,21 @@ test('saving credentials writes the address to disk and the token nowhere', asyn
 })
 
 test('forget clears the token from memory as well as from disk', async () => {
-  const { disk } = recordingDisk()
+  const { disk, writes } = recordingDisk()
   const store = createCredentialStore(disk)
   await store.save({ baseUrl: 'https://canvas.example.edu', token: SENTINEL })
+  // `save()` itself issues its own `disk.remove(TOKEN_KEY)` as cleanup for a
+  // pre-release copy (see credentials.ts), which would otherwise satisfy the
+  // assertion below before `forget()` ever runs. Clearing the log here means
+  // the only `remove canvas.token` left to find is the one `forget()` issues.
+  writes.length = 0
   await store.forget()
   expect((await store.load())?.token).toBeUndefined()
+  // The memory assertion above is satisfied by `held = undefined` alone and
+  // cannot see the disk half of `forget()`. `load()` never reads TOKEN_KEY —
+  // it only ever returns `held` — so this line is the only assertion in the
+  // file that can catch `forget()` losing its `disk.remove(TOKEN_KEY)` call.
+  expect(writes).toContain('remove canvas.token')
 })
 
 test('a token left on disk by an earlier release is never loaded, and is removed', async () => {
