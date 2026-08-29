@@ -47,6 +47,19 @@ test('a private, non-https, or credential-bearing target never reaches the fetch
     'http://example.com/page',
     'https://user:pass@example.com/page',
     'https://intranet.local/page',
+    /*
+     * IPv6 literals, including the IPv4-MAPPED form. Added 2026-08-29 after a
+     * review argued `[::ffff:127.0.0.1]` would slip through, on the grounds that
+     * `IP_LITERAL`'s hex branch has no `.` in its character class. It does not
+     * slip through, and the reason is worth pinning rather than re-deriving: the
+     * URL parser normalises that host to `[::ffff:7f00:1]` before the fence ever
+     * sees it, so there is no dotted quad left to miss. Nothing else in the
+     * suite covered an IPv6 literal at all.
+     */
+    'https://[::1]/',
+    'https://[fe80::1]/',
+    'https://[::ffff:127.0.0.1]/',
+    'https://[::ffff:169.254.169.254]/',
   ]) {
     await expect(importWebArticle(bad, { metadata, fetcher: counting }))
       .rejects.toThrow(/valid HTTPS public/i)

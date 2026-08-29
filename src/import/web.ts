@@ -93,6 +93,12 @@ export async function importWebArticle(
    * Re-validated, because a redirect can land somewhere the first check would
    * have refused. A fetcher reports where it ENDED UP, and that is the page
    * whose bytes are about to be imported.
+   *
+   * The REFUSAL is the throw inside `parsePublicSourceUrl`, not the guard below.
+   * A `URL`'s `href` is never blank, and blank is the only input that returns
+   * `undefined`, so that branch is unreachable today — it is kept as a
+   * belt-and-braces check against a future change to that contract, and this
+   * comment exists so nobody reads it as the mechanism.
    */
   const finalUrl = parsePublicSourceUrl(article.finalUrl.href)
   if (!finalUrl) throw new Error('Enter a valid HTTPS public source URL.')
