@@ -264,6 +264,22 @@ function assertXmlWellFormed(name, text) {
   try {
     execFileSync('xmllint', ['--noout', '-'], { input: text, stdio: ['pipe', 'pipe', 'pipe'] })
   } catch (error) {
+    /*
+     * A MISSING xmllint is an environment failure, not malformed XML. Reporting
+     * it as malformed sends a reader hunting a bug in bytes that are fine —
+     * which is exactly what happened on 2026-08-29, when a runner without
+     * `libxml2-utils` failed CI with "is not well-formed XML".
+     *
+     * It still FAILS rather than skipping. A validator that silently stops
+     * validating when it cannot find its tool is worse than no validator,
+     * because the green tick still appears.
+     */
+    if (error.code === 'ENOENT') {
+      throw new Error(
+        `probe: cannot validate ${name} because xmllint is not installed. `
+        + 'Install libxml2-utils; CI does this in .github/workflows/ci.yml.',
+      )
+    }
     const detail = error.stderr?.toString().trim() || error.message
     throw new Error(`probe: ${name} is not well-formed XML: ${detail}`)
   }

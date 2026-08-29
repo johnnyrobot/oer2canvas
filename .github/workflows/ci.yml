@@ -61,6 +61,15 @@ jobs:
       - name: Install Chromium for Playwright
         run: npx playwright install --with-deps chromium
 
+      # `scripts/canvas-image-probes.mjs` validates the generated cartridge XML
+      # with a REAL parser rather than a regex, for the same reason
+      # `zip.test.ts` shells out to a real `unzip`: our own idea of well-formed
+      # is not evidence. The runner image does not ship `xmllint`, and without
+      # this the failure reads "imsmanifest.xml is not well-formed XML", which
+      # sends a reader hunting a bug in bytes that are perfectly fine.
+      - name: Install xmllint
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+
       # Run separately from `npm run build`, which also type-checks, so that a
       # type error is reported by a step named "typecheck" rather than one named
       # "build". It costs about half a second to say the true thing.
