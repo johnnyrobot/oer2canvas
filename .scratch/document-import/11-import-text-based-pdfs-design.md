@@ -566,6 +566,12 @@ this design previously made from the type surface alone.
    and `confidence: 0.70`. A genuinely empty page in the same shape of document produced no marker,
    an EMPTY `pagesNeedingOcr`, and left `pdfType` at `"TextBased"`. A blank page therefore does not
    block, and a scanned page does.
+
+   > **Superseded 2026-08-29 by the second amendment below.** The conclusion holds, but the reason
+   > given for it does not: `pagesNeedingOcr` distinguishes the two only in the two-page document
+   > measured here. At one scanned page in three the module reports `TextBased` with an EMPTY
+   > `pagesNeedingOcr`, and a page that is an image of text becomes indistinguishable from blank
+   > paper. A second signal was needed, and was found.
 5. **`confidence` is 0–1 and, for a `TextBased` document, tracked the fraction of pages that produced
    text in every measurement**: 3 of 3 → 1.00, 2 of 3 → 0.67, 3 of 4 → 0.75, 1 of 2 → 0.50. `Scanned`
    reported 0.90 and `Mixed` 0.70. It is not a per-page extraction-quality score, and for the
@@ -592,6 +598,54 @@ this design previously made from the type surface alone.
 10. **The module strips running headers.** A fixture whose every line began `Page N line k`
     extracted to nothing at all. Fixture prose must not look like a running header, or the fixture
     silently measures the wrong thing.
+
+## Amendment — 2026-08-29 (second): `pagesNeedingOcr` does not name every scanned page
+
+Found while implementing, against the real module in Chromium. The first amendment's fact 4
+generalised from a two-page document, and the generalisation is false.
+
+| Fixture | `pdfType` | `pagesNeedingOcr` | Page markers |
+| --- | --- | --- | --- |
+| text + blank + text | `TextBased` | `[]` | 1, 3 |
+| **text + scanned + text** | **`TextBased`** | **`[]`** | 1, 3 |
+| text + text + scanned + text | `TextBased` | `[]` | 1, 2, 4 |
+| text + scanned + scanned + text | `Mixed` | `[2, 3]` | 1, 4 |
+| text + scanned | `Mixed` | `[2]` | 1 |
+
+The module only populates `pagesNeedingOcr` once the scanned fraction is high enough for it to
+classify the document `Mixed`. Below that, a scanned page is reported neither in `pagesNeedingOcr`
+nor as a marker — exactly like a blank page.
+
+**Why this mattered.** The OCR boundary sends a page with no extractable text to `warning` when the
+module did not list it for OCR, on the stated grounds that such a page is blank paper. For
+`text + scanned + text` that page is an image of text, so a page of content would have published as
+a silent gap in the chapter. That is the failure criterion 4 exists to prevent.
+
+**The signal that does distinguish them, with no threshold to invent.** Re-parse the un-marked page
+ALONE, with `processPdf(bytes, { pages: [n] })`. Measured:
+
+| Page re-parsed alone | Image placeholders | Extracted text |
+| --- | --- | --- |
+| a blank page | 0 | 0 chars |
+| a scanned page | 1 | 20 chars (the placeholder itself) |
+
+So the rule becomes: a page that emitted no marker blocks when a page-restricted re-parse finds an
+image on it, and warns when it does not. `pdfType` and `pagesNeedingOcr` from a restricted parse are
+NOT usable — the restricted parse reports every page of the document in `pagesNeedingOcr` regardless
+— but the image placeholder is decisive.
+
+**Where it runs.** In the Worker, which already holds the bytes and the module, computing the gaps
+from the markers it just emitted. It needs no new protocol message. A re-parse that throws fails
+CLOSED: not knowing whether a page is blank is not evidence that it is.
+
+**What it costs.** Measured in the 2026-08-29 browser matrix: 0.0–0.4 ms, and zero un-marked pages
+for all three PDF fixtures, because a wholly text-bearing document has no gaps to attribute. Bounded
+by a budget enforced before extraction — 200 pages maximum, one page per re-parse.
+
+**Consequence for the figure count.** An un-marked page's image placeholder lands in the PRECEDING
+page's slice, because the page emitted no marker to open a slice of its own. The attribution makes
+that subtractable, so the figure warning now names pages that really have figures rather than
+inheriting a neighbour's scan.
 
 ## Open questions
 

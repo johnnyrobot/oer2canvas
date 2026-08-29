@@ -1,6 +1,6 @@
 # Document import map
 
-**Frontier:** 11 — Import text-based PDFs.
+**Frontier:** 12 — Import URL with Firecrawl.
 
 | Issue | Status | Blocked by |
 | --- | --- | --- |
@@ -14,7 +14,7 @@
 | [08 — Ship embedded-image tracer](issues/08-ship-embedded-image-tracer.md) | resolved | 04, 07 |
 | [09 — Harden packaged assets](issues/09-harden-packaged-assets.md) | resolved | 08 |
 | [10 — Edit proposed page plan](issues/10-edit-proposed-page-plan.md) | resolved | 01, 04, 05 |
-| [11 — Import text-based PDFs](issues/11-import-text-based-pdfs.md) | ready-for-agent | 02, 05, 10 |
+| [11 — Import text-based PDFs](issues/11-import-text-based-pdfs.md) | resolved | 02, 05, 10 |
 | [12 — Import URL with Firecrawl](issues/12-import-url-with-firecrawl.md) | ready-for-agent | 05, 10 |
 | [13 — Release core document importer](issues/13-release-core-document-importer.md) | ready-for-agent | 09, 10, 11, 12 |
 | [14 — Graduate presentations](issues/14-graduate-presentations.md) | ready-for-agent | 04, 09, 10 |

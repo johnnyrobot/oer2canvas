@@ -129,7 +129,7 @@ real WASM in a real Worker, so a version bump breaks a test instead of quietly b
   `scripts/benchmark-document-parsers.mjs` and the committed benchmark evidence depend on the bytes
   it produces. Do not change what it emits.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `src/import/parsers/probe.browser.test.ts`:
 
@@ -183,14 +183,14 @@ test('encrypted and malformed pdfs keep their distinct, correctly retryable fail
 })
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project browser src/import/parsers/probe.browser.test.ts`
 Expected: FAIL — `pdfFixturePages` does not exist, and `ParserProbeResult` carries neither
 `detection` nor `markdown`. (`detection` and `markdown` arrive in Task 3; this test stays red until
 then. That is deliberate: it is the specification Task 3 implements.)
 
-- [ ] **Step 3: Build the fixtures**
+- [x] **Step 3: Build the fixtures**
 
 In `src/import/testing/pdf-fixture.ts`, keep `pdfFixture` exactly as it is and add beside it. The
 recipes below were run against the real module and produced the classifications the test above
@@ -269,7 +269,7 @@ export function malformedPdfFixture(): Uint8Array<ArrayBuffer> {
 }
 ```
 
-- [ ] **Step 4: Run to verify only the expected half passes**
+- [x] **Step 4: Run to verify only the expected half passes**
 
 Run: `npx vitest run --project browser src/import/parsers/probe.browser.test.ts`
 Expected: the encrypted/malformed test PASSES; the shape test still FAILS on `detection` and
@@ -277,7 +277,7 @@ Expected: the encrypted/malformed test PASSES; the shape test still FAILS on `de
 actual message rather than loosening the assertion, because the retryability of the failure hangs
 off it.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -305,7 +305,7 @@ posts no Markdown at all. Nothing else in this plan can work until it does.
 **Interfaces:**
 - Produces: `ParserDetection`; `ParserProbeResult.detection?`, `ParserProbeResult.markdown?`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `src/import/parsers/probe.test.ts`, beside the existing fake-worker cases:
 
@@ -328,12 +328,12 @@ test('a pdf result carries the module detection and the raw markdown', async () 
 Match the file's existing fake-worker helper rather than inventing `runFakeProbe`; the point is that
 both fields survive the postMessage seam untouched.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project unit src/import/parsers/probe.test.ts`
 Expected: FAIL — `ParserProbeResult` declares neither field, so this does not typecheck.
 
-- [ ] **Step 3: Widen the wire type**
+- [x] **Step 3: Widen the wire type**
 
 In `src/import/parsers/probe.ts`, above `ParserProbeResult`:
 
@@ -379,7 +379,7 @@ and inside `ParserProbeResult`:
   markdown?: string
 ```
 
-- [ ] **Step 4: Send them**
+- [x] **Step 4: Send them**
 
 In `src/import/workers/pdf-inspector.worker.ts`, pass `includeImages: true` and put the fields on the
 result:
@@ -417,7 +417,7 @@ and, inside the posted `result` object:
 `title` is carried and deliberately never used to set the import title: the user typed one, and a
 PDF `/Title` is frequently the authoring tool's filename.
 
-- [ ] **Step 5: Classify "not a PDF" as unsupported rather than retryable**
+- [x] **Step 5: Classify "not a PDF" as unsupported rather than retryable**
 
 Still in the Worker's `failure()`, before the `malformed` branch:
 
@@ -431,12 +431,12 @@ archive (possibly an Office document)"`. All three currently fall through to `'p
 `actionableFailure` treats as RETRYABLE — telling the user to try again with a file whose contents
 will never be a PDF. `'unsupported'` is already in the non-retryable set.
 
-- [ ] **Step 6: Run to verify it passes**
+- [x] **Step 6: Run to verify it passes**
 
 Run: `npx vitest run --project unit src/import/parsers/probe.test.ts && npx vitest run --project browser src/import/parsers/probe.browser.test.ts && npm run typecheck`
 Expected: PASS, including Task 2's shape test, which was written against exactly this.
 
-- [ ] **Step 7: Run the whole suite and commit**
+- [x] **Step 7: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -464,7 +464,7 @@ and it measured 9.8 ms against `processPdf`'s 106.6 ms on the 200-page fixture.
 - The budget stays in the shared runner, where every other budget is enforced. The Worker does not
   decide; it reports and waits.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 test('an over-budget pdf is refused before any text is extracted', async () => {
@@ -500,12 +500,12 @@ test('a pdf inside the budget is asked to extract, and the detection reaches the
 Build `fakeWorker` from the file's existing fake — the new part is that it must RECORD every request
 it receives and react to `extract`.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project unit src/import/parsers/probe.test.ts`
 Expected: FAIL — `'detected'` is not in the response union and the runner never sends `'extract'`.
 
-- [ ] **Step 3: Widen the protocol**
+- [x] **Step 3: Widen the protocol**
 
 In `src/import/parsers/probe.ts`:
 
@@ -532,7 +532,7 @@ and in the response union:
 `anydoc.worker.ts` already ignores anything that is not `kind: 'parse'`, and never sends `detected`,
 so it never receives an `extract`. No change there.
 
-- [ ] **Step 4: Enforce it in the runner**
+- [x] **Step 4: Enforce it in the runner**
 
 Beside `resultBudgetFailure`:
 
@@ -573,7 +573,7 @@ and in `onMessage`, before the `failure` branch:
 The timeout spans both phases unchanged: it is one budget on the whole parse, and splitting it would
 introduce a second number nobody measured.
 
-- [ ] **Step 5: Split the Worker into two phases**
+- [x] **Step 5: Split the Worker into two phases**
 
 In `src/import/workers/pdf-inspector.worker.ts`, import `detectPdf`, and after `ready`:
 
@@ -603,12 +603,12 @@ adding a second listener, so cancellation still has exactly one thing to tear do
 Note the byte ownership: `bytes` is transferred INTO the Worker once, on `parse`, and stays there.
 The `extract` message carries nothing.
 
-- [ ] **Step 6: Run to verify it passes**
+- [x] **Step 6: Run to verify it passes**
 
 Run: `npx vitest run --project unit src/import/parsers/probe.test.ts && npx vitest run --project browser src/import/parsers/probe.browser.test.ts`
 Expected: PASS. The browser test exercises both phases against the real module.
 
-- [ ] **Step 7: Run the whole suite and commit**
+- [x] **Step 7: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -634,7 +634,7 @@ decided should publish.
 - Produces: `MarkupSanitizationOptions.deferImageFindings?: boolean` (default `false`).
 - Does NOT change the placeholder, the counts, or any default behaviour. `importText` is untouched.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 test('a caller can take ownership of the unavailable-image finding', () => {
@@ -657,12 +657,12 @@ test('a caller can take ownership of the unavailable-image finding', () => {
 })
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project unit src/import/markup.test.ts`
 Expected: FAIL — the option does not exist, so the deferred call still raises the finding.
 
-- [ ] **Step 3: Add the option**
+- [x] **Step 3: Add the option**
 
 In `MarkupSanitizationOptions`:
 
@@ -688,12 +688,12 @@ In `MarkupSanitizationOptions`:
 Thread it into `findingsFrom(summary, options.deferImageFindings === true)` and guard only the
 `summary.unavailableImages > 0` branch with it.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run --project unit src/import/markup.test.ts && npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Run the whole suite and commit**
+- [x] **Step 5: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -716,7 +716,7 @@ labels — is a function of this split being right.
 - Produces: `splitPdfMarkdown(markdown)`, `withPageCaptions(markdown, page)`,
   `formatPageRanges(pages)`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 import { formatPageRanges, splitPdfMarkdown, withPageCaptions } from './pdf-pages'
@@ -778,12 +778,12 @@ test('page numbers print as ranges, and every named page survives the round trip
 })
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project unit src/import/pdf-pages.test.ts`
 Expected: FAIL — the module does not exist.
 
-- [ ] **Step 3: Write the split**
+- [x] **Step 3: Write the split**
 
 `src/import/pdf-pages.ts`:
 
@@ -879,14 +879,14 @@ export function formatPageRanges(pages: readonly number[]): string {
 }
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run --project unit src/import/pdf-pages.test.ts && npm run typecheck`
 Expected: PASS. **If the block-count test fails, stop.** It means the page → block map cannot be
 exact, every `sourcePage` would be a guess, and the split design needs revisiting rather than the
 test needs loosening.
 
-- [ ] **Step 5: Run the whole suite and commit**
+- [x] **Step 5: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -910,7 +910,7 @@ without a Worker, a file, or a browser.
 - Consumes: `ParserDetection` (Task 3), `formatPageRanges` (Task 6).
 - Produces: `pdfFindings(detection, pages): ImportFinding[]`, `PdfPageSummary`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 const detection = (over: Partial<ParserDetection> = {}): ParserDetection => ({
@@ -1020,12 +1020,12 @@ test('reported encoding problems warn for the whole document', () => {
 report it. Pass it as a third argument to `pdfFindings` rather than faking it onto the detection, and
 adjust the last test to match the signature you settle on.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project unit src/import/pdf-findings.test.ts`
 Expected: FAIL — the module does not exist.
 
-- [ ] **Step 3: Write it**
+- [x] **Step 3: Write it**
 
 ```ts
 export interface PdfPageSummary {
@@ -1096,12 +1096,12 @@ Rules, in the order the findings should appear:
 5. **`pdf-encoding`, `warning`,** when `hasEncodingIssues`. Document-wide; the module reports no page
    numbers for it, so the message must not pretend to have any.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run --project unit src/import/pdf-findings.test.ts && npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Run the whole suite and commit**
+- [x] **Step 5: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -1128,7 +1128,7 @@ concatenate, and report.
 - Consumes: `probeParser`, `splitPdfMarkdown`, `withPageCaptions`, `sanitizeImportedMarkdown`,
   `pdfFindings`, `MAX_TEXT_IMPORT_BYTES`, `DOCUMENT_IMPORT_LIMITS`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Stub the probe by injecting it (`options.probe ?? probeParser`, or a module-level dependency object
 matching whatever pattern the neighbouring importers use) so this suite runs in `unit` without a
@@ -1183,12 +1183,12 @@ test('a pdf with no readable text at all fails the import outright', async () =>
 })
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project unit src/import/pdf.test.ts`
 Expected: FAIL — the module does not exist.
 
-- [ ] **Step 3: Write the importer**
+- [x] **Step 3: Write the importer**
 
 Order matters, and each step's position is the point:
 
@@ -1236,12 +1236,12 @@ const PDF_SIGNATURE = '%PDF-'
     `parser: 'pdf-inspector'`, `parserVersion: parsed.parserVersion`, `pageCount:
     parsed.detection?.pageCount`, `counts` summed across slices with `packagedAssetBytes: 0`.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run --project unit src/import/pdf.test.ts && npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Run the whole suite and commit**
+- [x] **Step 5: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -1267,7 +1267,7 @@ flipping the capability status alone surfaces nothing.
   `document.ts` uses the anydoc list to say which formats IT accepts, and that sentence must not
   start claiming PDF.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 test('pdf is offered, and the accept string is not filtered to anydoc parsers', () => {
@@ -1289,12 +1289,12 @@ test('the pdf limitation states the block/warn boundary a user is about to meet'
 
 and in the browser test, selecting a PDF file and inspecting it reaches the plan editor.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run --project unit src/import/capability.test.ts`
 Expected: FAIL — `pdf` is `probe-only` and the constants do not exist.
 
-- [ ] **Step 3: Enable and widen**
+- [x] **Step 3: Enable and widen**
 
 ```ts
     status: 'enabled',
@@ -1319,7 +1319,7 @@ export const DOCUMENT_FILE_ACCEPT = /* extensions + media types, joined */
 export const DOCUMENT_FORMAT_SUMMARY = /* the same shape as STRUCTURED_DOCUMENT_FORMAT_SUMMARY */
 ```
 
-- [ ] **Step 4: Route the file**
+- [x] **Step 4: Route the file**
 
 In `DocumentImporter.inspect`, choose the importer from the capability rather than the extension:
 
@@ -1338,13 +1338,13 @@ In `DocumentImporter.inspect`, choose the importer from the capability rather th
 
 and swap the `accept` and the help text over to the new constants.
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 Run: `npx vitest run --project unit src/import/capability.test.ts && npx vitest run --project browser src/components/DocumentImporter.browser.test.tsx`
 Expected: PASS. `DocumentImporter.browser.test.tsx` carries one of the two known intermittent
 flakes — if a failure is in an unrelated existing case, rerun and say so.
 
-- [ ] **Step 6: Run the whole suite and commit**
+- [x] **Step 6: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -1364,7 +1364,7 @@ not.
 - Modify: `src/components/ImportPlanEditor.browser.test.tsx` (or the existing plan-editor browser
   suite, whichever holds the confirm-control assertions)
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 ```ts
 test('a scanned pdf leaves nothing publishable, not merely a finding', async () => {
@@ -1416,13 +1416,13 @@ test('a text-based pdf exports the exact bytes the gate audited', async () => {
 Follow `src/import/packaged-cartridge.browser.test.ts` for the pipeline calls and the entry lookup
 rather than inventing a second way to build a cartridge.
 
-- [ ] **Step 2: Run them**
+- [x] **Step 2: Run them**
 
 Run: `npx vitest run --project browser src/import/pdf.browser.test.ts`
 Expected: PASS. A parity failure means something rewrote html after the gate — stop and find it; do
 not relax the assertion.
 
-- [ ] **Step 3: Run the whole suite and commit**
+- [x] **Step 3: Run the whole suite and commit**
 
 ```bash
 npm run typecheck && npx vitest run
@@ -1499,7 +1499,7 @@ git commit -m "feat: label split points with the pdf page they start"
 - Modify: `.scratch/document-import/issues/11-import-text-based-pdfs.md`,
   `.scratch/document-import/map.md`
 
-- [ ] **Step 1: Record the detect phase in the benchmark**
+- [x] **Step 1: Record the detect phase in the benchmark**
 
 The two-phase design was justified on a Node measurement (9.8 ms against 106.6 ms on the 200-page
 fixture). The committed evidence is a browser measurement, and that is what
@@ -1507,7 +1507,7 @@ fixture). The committed evidence is a browser measurement, and that is what
 regenerate the report, so the claim in the design's amendment is backed by the same kind of evidence
 every other budget is.
 
-- [ ] **Step 2: Resolve the issue**
+- [x] **Step 2: Resolve the issue**
 
 Tick all six criteria in `.scratch/document-import/issues/11-import-text-based-pdfs.md`, each with
 the file and test that closes it. Add an `## Answer` recording: the block/warn boundary and why
@@ -1515,7 +1515,7 @@ figures warn; that page provenance comes from reading marker numbers because a t
 none; that `detectPdf` moved the page budget ahead of the parse; and the residuals listed under
 *Open questions* below. Set `Status: resolved` and move the frontier in `.scratch/document-import/map.md`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 npm run typecheck && npx vitest run
