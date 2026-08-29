@@ -4,6 +4,8 @@
 
 **Blocked by:** 08 — Ship one embedded-image import tracer.
 
+**Design:** [09-harden-packaged-assets-design.md](../09-harden-packaged-assets-design.md)
+
 **Status:** ready-for-agent
 
 **Rescoped 2026-08-28.** Issue 08's design absorbed five of the seven criteria below, because
