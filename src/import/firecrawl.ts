@@ -3,10 +3,11 @@ import type { FetchedArticle, WebArticleFetcher } from './web'
 /**
  * The one endpoint this app calls. Used exactly once, below.
  *
- * `/v2/crawl`, `/v2/map`, `/v2/search`, `/v2/batch` and `/v2/agent` appear
- * nowhere in this file, and `web-endpoints.test.ts` asserts that mechanically
- * against both this source and the built bundle. One URL in, one page out is a
- * structural property here, not an intention.
+ * The vendor's crawl, map, search, batch and agent endpoints appear nowhere in
+ * this file — deliberately not spelled out here, because `web-endpoints.test.ts`
+ * greps this source for those exact strings and does not care whether a match is
+ * code or a comment. It asserts the same against the built bundle. One URL in,
+ * one page out is a structural property, not an intention.
  */
 export const FIRECRAWL_ENDPOINT = 'https://api.firecrawl.dev/v2/scrape'
 

@@ -132,6 +132,30 @@ async function main() {
   if (parserAssets.length !== 4 || !probeAsset) {
     throw new Error(`dist parser assets are incomplete: ${parserAssets.join(', ') || 'none'}`)
   }
+  /*
+   * One URL, one page — asserted against the SHIPPED bundle, not just the
+   * source. Criterion 3 of issue 12 is a claim about what does not exist, so it
+   * is checked the way this file already checks absence.
+   *
+   * Both halves matter. The forbidden list catches a crawler arriving later;
+   * requiring `/v2/scrape` to be present catches the opposite failure — a check
+   * that passes because the whole feature was tree-shaken out is not a check.
+   */
+  const forbiddenFirecrawlPaths = ['/v2/crawl', '/v2/map', '/v2/search', '/v2/batch', '/v2/agent']
+  let sawScrapeEndpoint = false
+  for (const asset of builtAssets.filter((name) => name.endsWith('.js'))) {
+    const chunk = await readFile(join(DIST, 'assets', asset), 'utf8')
+    if (chunk.includes('/v2/scrape')) sawScrapeEndpoint = true
+    for (const path of forbiddenFirecrawlPaths) {
+      if (chunk.includes(path)) {
+        throw new Error(`dist chunk ${asset} names the forbidden Firecrawl endpoint ${path}`)
+      }
+    }
+  }
+  if (!sawScrapeEndpoint) {
+    throw new Error('no dist chunk names https://api.firecrawl.dev/v2/scrape; web import was dropped from the build')
+  }
+
   if (!serviceWorker.includes('oer2canvas-document-parsers-v1')) {
     throw new Error('service worker has no bounded runtime cache for document parsers')
   }
