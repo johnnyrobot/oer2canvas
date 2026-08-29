@@ -4,6 +4,10 @@
 
 **Blocked by:** 02 — Prove browser parser workers and establish import budgets; 05 — Import Markdown and HTML safely; 10 — Let users approve and edit the proposed page plan.
 
+**Design:** [11-import-text-based-pdfs-design.md](../11-import-text-based-pdfs-design.md)
+
+**Plan:** [11-import-text-based-pdfs-plan.md](../11-import-text-based-pdfs-plan.md)
+
 **Status:** ready-for-agent
 
 - [ ] PDF parsing runs in the browser worker, honors budgets and cancellation, and never uploads the source file.

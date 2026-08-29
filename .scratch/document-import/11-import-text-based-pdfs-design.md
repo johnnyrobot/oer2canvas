@@ -99,6 +99,7 @@ terminationMs: 0.2 }`.
 | Extraction-poor threshold | The zero boundary — a page yielding no non-whitespace text. No invented cutoff |
 | Reading-order signal | `layout.pagesWithColumns` / `pagesWithTables`, named per page |
 | Scanned pages | One blocker naming the pages; `includeImages: true` so no figure vanishes silently |
+| Figures on pages that extracted text | One **warning** naming the pages, plus a visible `[Embedded image: …]` placeholder. The page stays publishable — see *Amendment*, 2026-08-29 |
 | PDF page → Canvas page | **Not** one-to-one. PDF pages become split-point labels, not proposed pages |
 | Cancellation | Unchanged — `worker.terminate()` in `finish()`. No chunked re-entry |
 | PDF-embedded images | Out of scope. v1.17.0 exposes no bytes to give `prepareAssets` |
@@ -398,10 +399,12 @@ exact failure mode `anydoc-html.ts:186-194` already worries about aloud for exte
 as the PDF one, and is the smallest change that makes criterion 4's "no silent content loss" true on
 this path.
 
-The cost is stated plainly: **every PDF containing any figure will block.** That is the correct
-answer for a release with no OCR and no PDF image extraction — a textbook page whose figure silently
-vanished is worse than one that refuses — but it is a significant scope fact, not a footnote. See
-*Open questions*.
+**Superseded on 2026-08-29.** This section originally concluded that *every PDF containing any
+figure will block*, because `markup.ts` raises `import-image-unavailable` at `blocker` severity. That
+is no longer the decision: a figure on a page that extracted text produces a **warning** plus the
+visible placeholder, and the page remains publishable. A scanned or OCR-dependent PAGE still blocks,
+unchanged. The reasoning, the boundary between the two, and the mechanism are in the *Amendment*
+below.
 
 When PDF images do become extractable, they go through `prepareAssets` and nothing else. There is
 one asset path, it sniffs bytes, it enforces `maximumAssetPixels`, and it returns per-cause
@@ -510,6 +513,86 @@ record it in `DOCUMENT_IMPORT_LIMIT_EVIDENCE` alongside the existing `measuredPd
 - **Reconstructing reading order.** The design reports uncertainty; it does not reorder text.
 - **A second asset, sanitizer, or export path.** Every one of those exists once already.
 
+## Amendment — 2026-08-29: figures warn, scanned pages block, and what the module actually does
+
+Two things changed after this design was first written. A product decision was taken about figures,
+and the module was run directly rather than read from its `.d.ts`. Both are recorded here rather than
+by rewriting the sections above, so the reasoning that was superseded stays visible.
+
+### The decision: a figure warns, a scanned page blocks
+
+A figure inside a PDF produces a **`warning`** and a visible `[Embedded image: …]` placeholder, and
+the page remains publishable. It does not block.
+
+The reason is that the three importers are not in the same position. For DOCX and EPUB the image
+BYTES EXIST — `prepareAssets` can see them, sniff them, and refuse them — so refusing one is a real
+safety decision about a real payload. `PdfProcessResult` exposes no byte-bearing field at all, so a
+figure in a PDF can never become a Canvas image no matter what anyone decides here. Blocking would
+therefore protect nobody. It would only make PDF import useless, because most real textbook PDFs are
+full of figures and a blocker stops the entire commit rather than one page.
+
+What keeps the loss honest is the placeholder, not the refusal. The reader sees exactly where each
+figure was, and one warning lists every affected page so the instructor can add them in Canvas
+afterwards. That is the no-silent-holes rule satisfied by disclosure instead of by refusal, which is
+the correct trade when refusal cannot recover anything.
+
+**The boundary against criterion 4 is sharp and does not move.** A scanned or OCR-dependent PAGE
+still BLOCKS. A page with a figure is a page with a gap in it; a page that is entirely an image of
+text is a page with no content at all, and publishing it would ship a blank Canvas page where a
+chapter section should be. The two cases are distinguishable from the module's own output, measured
+below, and a document containing both must block on the second while only warning about the first.
+
+### What running the module showed
+
+Run directly against `@firecrawl/pdf-inspector-wasm` 1.17.0 under Node 22, with synthetic PDFs built
+the way `pdf-fixture.ts` builds them. Every claim below is a measurement, and several correct claims
+this design previously made from the type surface alone.
+
+1. **`pdfType` is emitted as declared** — `"TextBased"`, `"Scanned"`, `"Mixed"` — not snake_case.
+   The `.d.ts` can be trusted on this.
+2. **The page marker is exactly `<!-- Page N -->` followed by a blank line, and a page that yields
+   no text emits NO MARKER AT ALL.** A four-page document whose third page was blank emitted markers
+   for 1, 2 and 4. Page provenance therefore comes from READING the number out of each marker, never
+   from counting markers, and a number absent from the sequence is itself the signal that the page
+   produced nothing.
+3. **`includeImages: true` emits `![Image: Im1](image)`** — the alt text is the PDF XObject's
+   RESOURCE NAME, not a caption, and the "url" is the literal word `image`. It has no effect on an
+   image the module cannot decode: an uncompressed `/DeviceRGB` XObject produced nothing at all,
+   while a `/DCTDecode` (JPEG) XObject produced the placeholder. Fixtures that need a figure must
+   embed a real JPEG.
+4. **Blank and scanned are distinguishable, which is what makes the boundary above implementable.**
+   A page carrying only a decodable JPEG, in a document whose other page was text, produced
+   `pdfType: "Mixed"`, `pagesNeedingOcr: [2]`, `ocrReasonsByPage: [{ page: 2, reasons: ["scanned"] }]`
+   and `confidence: 0.70`. A genuinely empty page in the same shape of document produced no marker,
+   an EMPTY `pagesNeedingOcr`, and left `pdfType` at `"TextBased"`. A blank page therefore does not
+   block, and a scanned page does.
+5. **`confidence` is 0–1 and, for a `TextBased` document, tracked the fraction of pages that produced
+   text in every measurement**: 3 of 3 → 1.00, 2 of 3 → 0.67, 3 of 4 → 0.75, 1 of 2 → 0.50. `Scanned`
+   reported 0.90 and `Mixed` 0.70. It is not a per-page extraction-quality score, and for the
+   `TextBased` case it is redundant with the marker gaps this design already computes. Carry it as
+   diagnostics; build no threshold on it.
+6. **Thrown values are plain `Error`s with no `code`.** `Object.keys(error)` is `[]`. Measured
+   messages: `"process PDF: PDF is encrypted"`, `"process PDF: Invalid PDF structure"` (a truncated
+   file), and `"process PDF: Not a PDF: file appears to be plain text"` / `"… HTML"` / `"… a ZIP
+   archive (possibly an Office document)"`. `detectPdf` throws the same messages under a `detect PDF:`
+   prefix. So the Worker's regexes stay, and the latent downgrade they carry — an upstream wording
+   change turning the non-retryable `encrypted` into the retryable `parse-failed` — stays with them.
+   One improvement is available and cheap: `"Not a PDF: …"` currently falls through to
+   `'parse-failed'`, which invites the user to retry a file that will never parse; it should map to
+   `'unsupported'`.
+7. **`detectPdf` costs about a tenth of `processPdf`**: 9.8 ms against 106.6 ms for the 200-page
+   fixture, 4.2 against 41.7 at 75 pages, 0.3 against 1.3 at one page (mean of five, after a warm-up).
+   The two-phase order is affordable.
+8. **`profile` accepts only `"compact"` and `"fidelity"`.** Anything else throws
+   `invalid options: Error: unknown variant …`.
+9. **The module itself refuses a file that does not begin with `%PDF-`.** Thirteen bytes of junk
+   before an otherwise valid header produced `"Not a PDF: file appears to be plain text"`. A strict
+   offset-0 signature check on the main thread is therefore PARITY with the parser, not a stricter
+   rule invented here.
+10. **The module strips running headers.** A fixture whose every line began `Page N line k`
+    extracted to nothing at all. Fixture prose must not look like a running header, or the fixture
+    silently measures the wrong thing.
+
 ## Open questions
 
 1. **What is `confidence`?** The type is `number` with no documented range or subject. If it is a
@@ -523,25 +606,26 @@ record it in `DOCUMENT_IMPORT_LIMIT_EVIDENCE` alongside the existing `measuredPd
 3. **How many page numbers may a finding name before it truncates?** "Pages 3–9, 41, 55–58" is
    readable; a worst-case alternating pattern over 200 pages produces 100 ranges. A truncation
    threshold is needed and no existing constant justifies one. `MAX_PROPOSED_PAGES` is unrelated.
-4. **Is "any figure blocks the whole PDF" acceptable for this release?** It follows from the
-   no-silent-holes rule plus the module's inability to export image bytes, and it may make a large
-   share of real textbook PDFs unpublishable. The alternative is a `warning` plus a visible
-   placeholder, which trades the rule for reach. This is a scope call, not a technical one.
-5. **Does `pdf-inspector-wasm` throw structured errors?** The `.d.ts` declares no error type. If
-   thrown values carry a `code`, the Worker should read it the way `anydoc.worker.ts` does and the
-   regexes should go. Needs one experiment against real encrypted and malformed files.
-6. **Does `detectPdf` cost materially less than `processPdf`?** Assumed, unmeasured. If it costs
-   nearly the same, the two-phase design should be reconsidered in favour of a single `processPdf`
-   with the page budget accepted as post-hoc.
+4. ~~**Is "any figure blocks the whole PDF" acceptable for this release?**~~ **Answered
+   2026-08-29: no.** A figure produces a warning plus a visible placeholder and the page publishes.
+   See the *Amendment* below for the reasoning and for the boundary against scanned pages, which
+   still block.
+5. ~~**Does `pdf-inspector-wasm` throw structured errors?**~~ **Answered 2026-08-29: no.** The
+   experiment was run (see *Amendment*): thrown values are plain `Error`s whose own enumerable keys
+   are `[]`. The regexes stay, and the latent downgrade they carry stays with them; fixtures pin the
+   measured messages against the pinned `parserVersion`.
+6. ~~**Does `detectPdf` cost materially less than `processPdf`?**~~ **Answered 2026-08-29:
+   yes, about a tenth.** 9.8 ms against 106.6 ms for the 200-page fixture; see *Amendment*. The
+   browser benchmark should still record it, but the two-phase order no longer rests on an
+   assumption.
 7. **Can `layout.isComplex` be true while both page arrays are empty?** The type ties them to
    nothing. It decides whether the fallback branch in the reading-order finding is reachable or dead
    code.
-8. **Are `ocrReasonsByPage[].reasons` stable, English, and safe to surface?** Currently kept out of
-   user-facing text on the assumption that they are none of those. Worth confirming, since they are
-   the richest page-specific evidence the module produces.
-9. **Adjacent, not this issue's to fix, but it touches criterion 6.** `PlanScreen.tsx`'s commit
-   button uses `aria-disabled` rather than `disabled` and wires `onClick` unconditionally, while
-   `App.tsx`'s `commitCartridge` performs no publishability check of its own. On a code reading —
-   not a reproduction — a cartridge carrying accessibility blockers appears exportable by activating
-   a visually-disabled control. If that is real it is a hole in the export gate that no PDF fixture
-   would surface, and it should be filed separately rather than absorbed here.
+8. **Are `ocrReasonsByPage[].reasons` stable, English, and safe to surface?** Partly answered
+   2026-08-29: the two observed values are `no_text` and `scanned` — snake_case identifiers, not
+   English sentences, so they are unfit to show an instructor as written. Whether the SET of
+   identifiers is stable across versions is still unknown, so they stay out of user-facing text.
+9. ~~**Adjacent, not this issue's to fix, but it touches criterion 6.**~~ **Fixed before this
+   plan was written**, in commit `0b77d74` — `PlanScreen`'s commit button now enforces the gate's
+   decision in its handler rather than only announcing it through `aria-disabled`. Nothing is left
+   here for issue 11 to carry.
