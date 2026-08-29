@@ -61,7 +61,11 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
     mediaTypes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
     parser: 'anydoc',
     status: 'enabled',
-    limitations: ['Text boxes, complex pagination, and embedded content may require manual remediation.'],
+    limitations: [
+      'A footnote blocks import: its body is never rendered, and the file must be resolved before the document can proceed.',
+      'An equation blocks import; equation rendering is not supported yet.',
+      'Text boxes, complex pagination, and other embedded content may require manual remediation.',
+    ],
     probe: parserProbe('anydoc', 'docx'),
   },
   {
@@ -91,7 +95,11 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
     mediaTypes: ['application/epub+zip'],
     parser: 'anydoc',
     status: 'enabled',
-    limitations: ['Source styling is discarded; embedded images block this text-oriented workflow.'],
+    limitations: [
+      'Source styling is discarded; embedded images block this text-oriented workflow.',
+      'An equation blocks import; equation rendering is not supported yet.',
+      "A footnote (EPUB3's `epub:type=\"footnote\"` convention) is not recognised as a note: its body flows through as ordinary text instead of being set apart, and the reference is not linked to it.",
+    ],
     probe: parserProbe('anydoc', 'epub'),
   },
   {

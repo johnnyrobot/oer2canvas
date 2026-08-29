@@ -113,7 +113,10 @@ The suite is organised by the criterion's own list, and each case must state wha
   established the shape: the refusal must stay correctly *retryable* or not, because
   `actionableFailure` decides that from a code derived from an English message.
 - **Active content** — already covered by `markup.ts`'s tests; the suite asserts the same
-  guarantees through the *document* paths, which reach a different sanitizer entry point.
+  guarantees through the *document* paths, which reach a different sanitizer, not just a
+  different entry point into the same one: `document.ts` never calls `markup.ts` at all. It
+  sanitizes `parsed.normalized.html` from the anydoc worker using `anydoc-html.ts`'s own
+  `safeHref`.
 - **Hostile URLs** — private network, IP literal, credential-bearing, non-HTTPS, and
   post-redirect variants. Largely proved by issue 12; gathered here so criterion 3 is
   checkable in one place.
