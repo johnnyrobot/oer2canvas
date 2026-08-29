@@ -39,11 +39,12 @@ const utf8 = (value: string) => new TextEncoder().encode(value)
  * depends on, and duplicating that coverage here would just be two places
  * that could drift apart.
  *
- * NOT IMPORTED HERE. This module and its test only check the corpus's own
+ * NOT IMPORTED HERE. This module and its own test only check the corpus's
  * shape — every released format is covered, every case names what it stands
  * for, every id is unique. Actually running each case through its parser and
- * asserting `expectInHtml` survived is a later task's job, once the corpus
- * itself is trustworthy.
+ * asserting `expectInHtml` (and `expectBlockers`) survived is
+ * `../corpus.browser.test.ts`'s job, which imports `CORPUS_CASES` from this
+ * file and drives every one of them through the real parser dispatch.
  */
 export interface CorpusCase {
   id: string

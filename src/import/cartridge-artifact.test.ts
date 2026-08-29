@@ -56,9 +56,13 @@ test.each(releaseEnabledFormats())(
   (format) => {
     const path = cartridgeArtifactPath(format)
     // Fails FAST and names the fix, rather than the opaque ENOENT `unzip`
-    // itself would throw, or — worse — silently passing on a stale artifact
-    // left over from a previous run. This file is only ever meant to run via
-    // `test:artifacts`, immediately after the writer that produces this path.
+    // itself would throw. This does not (and cannot) catch a STALE artifact
+    // left over from a previous run — the file exists either way, so this
+    // guard never fires on one. Staleness risk is low regardless: `npm run
+    // test:artifacts` chains the writer and this reader with `&&`, so this
+    // file only runs once the writer has already succeeded on the current
+    // tree. This file is only ever meant to run via `test:artifacts`,
+    // immediately after the writer that produces this path.
     if (!existsSync(path)) {
       throw new Error(`${path} does not exist. Run '${PRODUCE_ARTIFACTS_COMMAND}' to build it, then re-run.`)
     }

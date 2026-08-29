@@ -101,6 +101,13 @@ not to cover yet.
   benefited from the distinction it draws. Either it should be surfaced somewhere a user can see
   it, or the project should stop computing it as if it mattered. Out of scope here — issue 13's
   non-goals exclude adding capability — so it is recorded here for whichever future issue decides.
+- PDF's byte limit is recorded single-sided. `src/import/released-sources.ts` gives PDF a
+  `maximumBytes` of 16 MiB (`DOCUMENT_IMPORT_LIMITS.maximumInputBytes`) with a doc comment calling
+  it "the ceiling a user actually meets" — but `src/import/pdf.ts:82` separately refuses EXTRACTED
+  TEXT above `MAX_TEXT_IMPORT_BYTES` (2 MiB), a second ceiling a PDF can hit well before the input
+  ceiling does, and neither `capability.ts`'s PDF limitations nor the README mention it. Deferred
+  from Task 1 to Task 12 and never landed there either, so this is UNDECIDED, not decided: an open
+  question for whichever future issue picks it up, not something this issue resolves.
 
 **What closes each criterion**, for anyone auditing the ticks above:
 
@@ -113,8 +120,9 @@ not to cover yet.
 2. `src/App.a11y.browser.test.tsx`, `src/components/DocumentImporter.browser.test.tsx` (automated
    half); `docs/RELEASE-ACCEPTANCE.md` §2–3 (manual half, never run).
 3. `src/import/security.browser.test.ts`, built across Tasks 2–4 (archive expansion, malformed
-   binaries, active content via the document-path sanitizer, hostile URLs, credential leakage for
-   both the Firecrawl key and the Canvas token).
+   binaries, active content via the document-path sanitizer, hostile URLs); credential leakage for
+   both the Firecrawl key and the Canvas token is proved separately, adversarially, by
+   `src/import/web-key-containment.test.ts` and `src/canvas/token-containment.test.ts`.
 4. `src/import/cartridge-artifact.browser.test.ts` + `src/import/cartridge-artifact.test.ts`,
    sequenced through `npm run test:artifacts` (Task 7).
 5. The docs-truthfulness suite from Task 9 (`src/docs-claims.test.ts`).

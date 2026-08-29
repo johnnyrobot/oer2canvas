@@ -27,7 +27,8 @@ import { DOCUMENT_IMPORT_LIMITS } from './limits'
 
 test('a compression bomb is refused by the memory ceiling, not by luck', async () => {
   /*
-   * Measured 2026-08-29 (Task 2, `docs/evidence/...`): a DOCX expanding to
+   * Measured 2026-08-29 (Task 2, `.scratch/document-import/13-release-core-document-importer-design.md`,
+   * "Amendment — archive-expansion boundary"): a DOCX expanding to
    * roughly 33.2 MB was refused in about 1.6 s. The refusal comes from
    * `resultBudgetFailure`'s WASM-memory check in `probe.ts` — OUR 128 MiB
    * ceiling (`DOCUMENT_IMPORT_LIMITS.maximumWasmMemoryBytes`), not the

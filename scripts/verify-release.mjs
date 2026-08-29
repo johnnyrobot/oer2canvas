@@ -60,6 +60,9 @@ const CRITERIA = [
     name: 'Keyboard, focus, progress, cancellation, error recovery',
     checks: ['tests'],
     manual: 'Firefox and screen reader',
+    // Two independent record sections (see `recordedDatesBySection` below) —
+    // this criterion's manual half is not recorded until BOTH have a row.
+    manualSections: ['2. Firefox', '3. Screen reader'],
   },
   { n: 3, name: 'Hostile documents, URLs, archives, credentials', checks: ['tests'] },
   {
@@ -78,15 +81,57 @@ const CRITERIA = [
     name: 'Production build and artifact',
     checks: ['build', 'dist'],
     manual: 'Live Canvas acceptance',
+    manualSections: ['1. Live Canvas push'],
   },
 ]
 
-/** The most recent recorded run, or undefined when nobody has run it. */
-function lastRecordedRun() {
+/**
+ * `docs/RELEASE-ACCEPTANCE.md` has THREE independent record tables, one `## `
+ * section per manual check (live Canvas, Firefox, screen reader), each run by
+ * a different person at a different time. A single "newest date anywhere in
+ * the file" figure — this function's previous implementation — conflates
+ * them: recording a Firefox pass would make that date print next to
+ * criterion 7's "Live Canvas acceptance" too, asserting a live-Canvas push
+ * happened when nobody has ever run one. So this parses each section
+ * separately; `manualStatus` below only reports a criterion as recorded once
+ * every section it depends on has a row.
+ *
+ * Returns a Map from section heading (e.g. `'2. Firefox'`) to that section's
+ * newest recorded date, or `undefined` if the section's table has no rows.
+ */
+function recordedDatesBySection() {
   const record = readFileSync(new URL('../docs/RELEASE-ACCEPTANCE.md', import.meta.url), 'utf8')
-  // Rows look like `| 2026-08-29 | operator | pass |`. The newest date wins.
-  const dates = [...record.matchAll(/^\|\s*(\d{4}-\d{2}-\d{2})\s*\|/gm)].map((m) => m[1])
-  return dates.sort().at(-1)
+  // Split right before each `## ` heading so every chunk after the first is
+  // exactly one section, heading included.
+  const sections = record.split(/\n(?=## )/)
+  const dates = new Map()
+  for (const section of sections) {
+    const heading = section.match(/^## (.+)$/m)
+    if (!heading) continue // preamble before the first `## ` heading
+    // Rows look like `| 2026-08-29 | operator | pass |`. The newest date in
+    // THIS section wins — dates outside this section's table never count.
+    const rowDates = [...section.matchAll(/^\|\s*(\d{4}-\d{2}-\d{2})\s*\|/gm)].map((m) => m[1])
+    dates.set(heading[1].trim(), rowDates.sort().at(-1))
+  }
+  return dates
+}
+
+/**
+ * The manual-half status line for one criterion. Conservative by design: a
+ * criterion needing more than one section (criterion 2 needs Firefox AND
+ * screen reader) is only "recorded" once every one of them has a row — a
+ * criterion whose manual half is partly unrun must not read as recorded.
+ * Names the specific gap rather than collapsing straight to NEVER RUN, so an
+ * operator can see which half is still missing.
+ */
+function manualStatus(sectionHeadings, sectionDates) {
+  const entries = sectionHeadings.map((heading) => [heading, sectionDates.get(heading)])
+  const missing = entries.filter(([, date]) => !date).map(([heading]) => heading)
+  if (missing.length === 0) {
+    return `last recorded ${entries.map(([, date]) => date).sort().at(-1)}`
+  }
+  if (missing.length === entries.length) return 'NEVER RUN'
+  return `NEVER RUN (no recorded row for: ${missing.join(', ')})`
 }
 
 function main() {
@@ -101,12 +146,16 @@ function main() {
     }
   }
 
-  const recorded = lastRecordedRun()
+  const sectionDates = recordedDatesBySection()
   // The set of check NAMES that actually failed, in `RUN` order. Distinct
   // failed checks, not failed criteria — this is what tells a reader "one
   // thing broke" instead of letting six FAIL rows read as six breakages.
   const failedChecks = Object.keys(RUN).filter((name) => results.get(name) === false)
   let failed = false
+  // Criterion numbers whose manual half is not (fully) recorded — named
+  // individually in the summary rather than collapsed into one blanket "never
+  // recorded" claim, since one criterion can be recorded while another isn't.
+  const unrecordedManualCriteria = []
   console.log('\nRelease criteria\n')
   for (const criterion of CRITERIA) {
     // Which of THIS criterion's checks failed, so a FAIL row names its cause
@@ -116,9 +165,12 @@ function main() {
     const enforcedOk = failingChecks.length === 0
     if (!enforcedOk) failed = true
     const enforced = enforcedOk ? 'PASS' : `FAIL: ${failingChecks.join(', ')}`
-    const manual = criterion.manual
-      ? `  MANUAL: ${criterion.manual} — ${recorded ? `last recorded ${recorded}` : 'NEVER RUN'}`
-      : ''
+    let manual = ''
+    if (criterion.manual) {
+      const status = manualStatus(criterion.manualSections, sectionDates)
+      if (status.startsWith('NEVER RUN')) unrecordedManualCriteria.push(criterion.n)
+      manual = `  MANUAL: ${criterion.manual} — ${status}`
+    }
     console.log(`  ${criterion.n}. [${enforced}] ${criterion.name}${manual}`)
   }
 
@@ -143,7 +195,13 @@ function main() {
     console.log('\nNOT RELEASABLE: an enforced check failed.')
     process.exitCode = 1
   } else {
-    console.log(`\nEnforced checks pass.${recorded ? '' : ' Manual acceptance has NEVER been recorded.'}`)
+    const manualNote =
+      unrecordedManualCriteria.length > 0
+        ? ` Manual acceptance has NEVER been recorded for criteri${
+            unrecordedManualCriteria.length === 1 ? 'on' : 'a'
+          } ${unrecordedManualCriteria.join(', ')}.`
+        : ''
+    console.log(`\nEnforced checks pass.${manualNote}`)
   }
 }
 
