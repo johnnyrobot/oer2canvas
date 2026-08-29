@@ -456,7 +456,8 @@ must choose from the option table again.
    and one blocker, which is honest but heavy. Changing it would also change the **shipped**
    HTML/Markdown paste path, and would require moving the `isPublicNetworkUrl` fence to the gate as
    `publisher-url-import-not-pursued.md` proposed. Not this design's call.
-2. **Should this use Firecrawl Keyless instead of a per-user key?** `POST /v2/scrape` with **no
+2. **Should this use Firecrawl Keyless instead of a per-user key?** **ANSWERED — rejected; see the
+   amendment.** `POST /v2/scrape` with **no
    `Authorization` header at all** returned `200` with `creditsUsed: 1` (**verified**, 2026-08-29).
    That would delete the entire key-handling problem. It also raises questions this design cannot
    answer: whose quota is charged, whether unauthenticated use from a public web application is
@@ -482,9 +483,100 @@ must choose from the option table again.
 8. **Whose responsibility is the target site's terms?** The user fetches an arbitrary site through a
    third party. Whether this app should say anything about robots.txt, terms of service, or paywall
    circumvention is a human's call. It is not legal advice this design can give.
-9. **And the one that outranks all of the above: (a), (b), or (c)?** The human chose "each user brings
+9. **And the one that outranks all of the above: (a), (b), or (c)?** **ANSWERED — (a); see the
+   amendment.** The human chose "each user brings
    their own key" believing Firecrawl was the option. It is not. (a) is fully designed here and is
    buildable today. But (b)/(c) need no vendor, no key, no signup and no credits, at the price of
    either reversing the relay's documented posture or shipping a browser extension. The seam in
    `src/import/web.ts` makes the answer cheap to change later, which is why this design does not need
    the answer to proceed — but the human should give it before this becomes load-bearing.
+
+---
+
+## Amendment — 2026-08-29: the fetch route is settled
+
+Open questions **9** and **2** are answered. Nothing measured above changes; what changes is that the
+option table is no longer open, and one option on it is closed permanently.
+
+### Question 9 — (a): Firecrawl, browser-direct, with the user's OWN key
+
+**Chosen.** The design assumed the deciding factor was who pays for the key. It is not. The deciding
+factor is **who bears the abuse liability for fetching arbitrary URLs.**
+
+Every option on the table ends with something fetching a URL that a stranger typed. The question is
+whose name is on that request:
+
+- With **bring-your-own-key**, the fetch is made by the instructor's own Firecrawl account, under
+  Firecrawl's terms, against the instructor's own quota. If someone uses this app to fetch something
+  they should not have, it is their account that did it.
+- With **(b)**, the relay's allowlist removed, every such fetch is made by *this project's Cloudflare
+  account*, from this project's IPs, with this project's name in the abuse report. That is an
+  anonymous public-web proxy with a nice front end, and it does not stop being one because the
+  operator did not intend it.
+
+**SSRF fences do not address this and it is important not to let them look as if they do.** The
+relay's fences (`https` only, no userinfo, `isPrivateHostname`, IP-literal refusal, per-hop
+revalidation across at most `MAX_REDIRECT_HOPS` = 5) are good, and they stop a request reaching an
+*internal* network. They are silent about a request reaching an entirely public host that the
+operator would rather not be seen fetching on a stranger's behalf. Those are different problems, and
+only one of them has fences in this repository.
+
+Option (c3) — a separate `/fetch` Worker route — is the same decision in different packaging, as the
+table above already says, and is closed with (b).
+
+This does not retire the seam. See *The seam has a second consumer* below.
+
+### Question 2 — Firecrawl Keyless is REJECTED
+
+It was **verified to work**: `POST /v2/scrape` with no `Authorization` header at all returned `200`
+with `creditsUsed: 1` on 2026-08-29. It is rejected anyway, for three reasons that are not about
+whether it works:
+
+1. **Unauthenticated use of a commercial API in a shipped product is an unresolved terms question.**
+   Firecrawl publishes no statement that anonymous use from a deployed third-party web application is
+   permitted, and this project is not in a position to assume it.
+2. **The quota is shared and outside this project's control.** Nobody here can see how much of it is
+   left, who else is drawing on it, or what happens to an instructor mid-import when it runs out.
+3. **It can be withdrawn without notice.** An unauthenticated path that is not a documented product
+   is not a promise, and a feature built on one breaks for every user at once, silently, on a day
+   nobody chose.
+
+Consequently: **no keyless fallback is designed, and no "try keyless, then prompt for a key" path is
+designed.** A missing key is a refusal with an instruction, not a degraded mode.
+
+### The seam has a second consumer
+
+`WebArticleFetcher` stays, and is now shaped for **two** implementations rather than kept as an
+escape hatch for a decision that might be revisited:
+
+- the **public Cloudflare deployment** uses `firecrawlFetcher`, browser-direct, with the user's own
+  key — everything designed above;
+- a **self-hosted deployment** would instead point at a local extraction service the operator runs on
+  their own machine (crawl4ai or similar), and those users would need no Firecrawl key at all.
+
+That is not a new concept in this codebase. It is exactly the shape of the Canvas push capability:
+`src/vite-env.d.ts:3-4` declares `__OER2CANVAS_SELF_HOSTED_CANVAS_ORIGIN__` as *"Empty in the public
+build; an exact HTTPS origin in an opted-in self-host build"*, `worker/relay.ts:236` reads
+`env.SELF_HOSTED_CANVAS_ORIGIN`, and `src/App.tsx:84-86,617,701-728` gates the entire push feature on
+it. A default-off capability that an operator enables by pinning an exact origin is the established
+house pattern, and the second fetcher must be able to slot into it without a redesign.
+
+The consequence for the design above is a constraint on where code goes, not a new component:
+**everything downstream of the fetch — the origin-status check, the PDF refusal, the redirect and
+cache disclosures, sanitization, image refusal, findings and provenance — lives below the seam and is
+shared.** The same URL must produce the same Canvas page in both deployments, or the two builds
+disagree about what a page *is*. Firecrawl-specific handling (`parsers: []`, `metadata.statusCode`,
+the 401/403/429 taxonomy) stays inside `firecrawlFetcher`, and each piece of it names the general
+concept a second implementation must supply.
+
+No second implementation is built, no configuration flag for one is added, and nothing about
+crawl4ai's API shape is assumed here.
+
+### Effect on the open questions above
+
+- **2 — answered: rejected.** Do not build on Keyless.
+- **9 — answered: (a).** Browser-direct Firecrawl, user's own key, no relay involvement, ever.
+
+The remaining seven are worked through in
+[`12-import-url-plan.md`](12-import-url-plan.md), which settles the ones repo evidence can settle and
+escalates the rest rather than inventing answers for them.

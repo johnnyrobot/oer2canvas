@@ -6,6 +6,8 @@
 
 **Design:** [12-import-url-design.md](../12-import-url-design.md)
 
+**Plan:** [12-import-url-plan.md](../12-import-url-plan.md)
+
 **Status:** ready-for-agent
 
 - [ ] The interface explains that the URL and API key are sent directly from the browser to Firecrawl before the user proceeds.
