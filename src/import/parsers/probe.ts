@@ -119,12 +119,19 @@ export type ParserProbeFailureCode =
   | 'resource-limit'
   | 'parse-failed'
 
-export interface ParserProbeRequest {
-  kind: 'parse'
-  requestId: string
-  bytes: ArrayBuffer
-  formatHint?: string
-}
+export type ParserProbeRequest =
+  | { kind: 'parse'; requestId: string; bytes: ArrayBuffer; formatHint?: string }
+  /*
+   * Phase two, PDF only. The Worker classifies, sends `detected`, and STOPS
+   * until this arrives. That pause is what puts the page budget ahead of the
+   * parse it exists to prevent, and it keeps budget enforcement in this runner
+   * — where `maximumInputBytes`, the timeout and the memory ceiling already
+   * live — instead of copying a limit into a Worker where no unit test can
+   * observe the ordering.
+   *
+   * It carries nothing: `bytes` was transferred in on `parse` and stays there.
+   */
+  | { kind: 'extract'; requestId: string }
 
 export type ParserProbeResponse =
   | {
@@ -135,6 +142,7 @@ export type ParserProbeResponse =
       initializationMs: number
     }
   | { kind: 'progress'; requestId: string; phase: 'parsing' }
+  | { kind: 'detected'; requestId: string; detection: ParserDetection }
   | { kind: 'result'; requestId: string; result: ParserProbeResult }
   | {
       kind: 'failure'
@@ -205,6 +213,24 @@ function abortError(): DOMException {
 
 function resourceLimit(message: string): ParserProbeError {
   return new ParserProbeError('resource-limit', message)
+}
+
+/*
+ * The page budget, checked on the CLASSIFICATION and not on the result.
+ * `detectPdf` reads the page tree without extracting text, so this refuses a
+ * 300-page document having built no Markdown for any of it. `resultBudgetFailure`
+ * keeps its own page check as defence in depth: this one only runs for a parser
+ * that sends `detected`, and a budget with one enforcement point is a budget one
+ * refactor away from having none.
+ */
+function detectionBudgetFailure(detection: ParserDetection): ParserProbeError | undefined {
+  if (detection.pageCount > DOCUMENT_IMPORT_LIMITS.maximumPdfPages) {
+    return resourceLimit(
+      `This PDF has ${detection.pageCount} pages; the browser limit is ${DOCUMENT_IMPORT_LIMITS.maximumPdfPages}. ` +
+      'It was rejected before any text was extracted.',
+    )
+  }
+  return undefined
 }
 
 function resultBudgetFailure(result: ParserProbeResult): ParserProbeError | undefined {
@@ -288,6 +314,18 @@ export function createParserProbeRunner(
         }
         if (response.kind === 'progress') {
           reportProgress({ phase: response.phase })
+          return
+        }
+        if (response.kind === 'detected') {
+          const detectionFailure = detectionBudgetFailure(response.detection)
+          if (detectionFailure) {
+            finish(() => reject(detectionFailure))
+            return
+          }
+          // The timeout spans both phases unchanged: it is one budget on the
+          // whole parse, and splitting it would introduce a second number
+          // nobody measured.
+          worker.postMessage({ kind: 'extract', requestId }, [])
           return
         }
         if (response.kind === 'failure') {

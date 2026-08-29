@@ -4,6 +4,7 @@ import {
   type ParserProbeResponse,
   type ParserProbeWorker,
 } from './probe'
+import { DOCUMENT_IMPORT_LIMITS } from '../limits'
 
 class FakeWorker implements ParserProbeWorker {
   readonly requests: unknown[] = []
@@ -310,4 +311,86 @@ test('a pdf result carries the module detection and the raw markdown', async () 
   const result = await pending
   expect(result.detection).toEqual(detection)
   expect(result.markdown).toBe('<!-- Page 1 -->\n\nText.\n')
+})
+
+/** The classification a well-formed three-page text PDF produces. */
+const detection = {
+  pdfType: 'TextBased',
+  pageCount: 3,
+  confidence: 1,
+  pagesNeedingOcr: [],
+  ocrReasonsByPage: [],
+  layout: { isComplex: false, pagesWithTables: [], pagesWithColumns: [] },
+}
+
+const requestKinds = (worker: FakeWorker): unknown[] =>
+  worker.requests.map((request) => (request as { kind: unknown }).kind)
+
+test('an over-budget pdf is refused before any text is extracted', async () => {
+  const worker = new FakeWorker()
+  const run = createParserProbeRunner({
+    createWorker: () => worker,
+    requestId: () => 'over-budget',
+  })
+  const pending = run({ parser: 'pdf-inspector', bytes: new ArrayBuffer(8) })
+
+  worker.emit({
+    kind: 'ready',
+    requestId: 'over-budget',
+    parser: 'pdf-inspector',
+    parserVersion: '1.17.0',
+    initializationMs: 1,
+  })
+  worker.emit({
+    kind: 'detected',
+    requestId: 'over-budget',
+    detection: { ...detection, pageCount: DOCUMENT_IMPORT_LIMITS.maximumPdfPages + 1 },
+  })
+
+  await expect(pending).rejects.toMatchObject({
+    name: 'ParserProbeError',
+    code: 'resource-limit',
+    message: expect.stringMatching(/before any text was extracted/i),
+  })
+  // THE POINT OF THE TEST. Refusing is easy; refusing before the extraction is
+  // the budget's whole purpose, and the only way to observe it from outside the
+  // Worker is that the second phase was never asked for.
+  expect(requestKinds(worker)).toEqual(['parse'])
+})
+
+test('a pdf inside the budget is asked to extract, and the detection reaches the caller', async () => {
+  const worker = new FakeWorker()
+  const run = createParserProbeRunner({
+    createWorker: () => worker,
+    requestId: () => 'in-budget',
+  })
+  const pending = run({ parser: 'pdf-inspector', bytes: new ArrayBuffer(8) })
+
+  worker.emit({
+    kind: 'ready',
+    requestId: 'in-budget',
+    parser: 'pdf-inspector',
+    parserVersion: '1.17.0',
+    initializationMs: 1,
+  })
+  worker.emit({ kind: 'detected', requestId: 'in-budget', detection })
+  expect(requestKinds(worker)).toEqual(['parse', 'extract'])
+
+  worker.emit({
+    kind: 'result',
+    requestId: 'in-budget',
+    result: {
+      parser: 'pdf-inspector',
+      parserVersion: '1.17.0',
+      detectedFormat: 'pdf',
+      inputBytes: 8,
+      outputBytes: 12,
+      parseMs: 5,
+      counts: { blocks: 1, headings: 0, tables: 0, images: 0, assets: 0 },
+      detection,
+      markdown: '<!-- Page 1 -->\n\nText.\n',
+    },
+  })
+
+  await expect(pending).resolves.toMatchObject({ detection: { pageCount: detection.pageCount } })
 })
