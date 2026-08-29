@@ -2,6 +2,11 @@
 
 **Frontier:** 11 — Import text-based PDFs.
 
+Frontier is "first open, unblocked, unclaimed issue by number" (`docs/agents/issue-tracker.md`).
+Issue 17 sits after 12 in that ordering, so 12's `deferred` status is what keeps an agent walking
+this map from stopping at a Firecrawl dependency nobody has agreed to take. The status change is
+load-bearing, not cosmetic — see 17's design for why 12 was not simply rewritten.
+
 | Issue | Status | Blocked by |
 | --- | --- | --- |
 | [01 — Import plain text](issues/01-import-plain-text.md) | resolved | — |
@@ -15,8 +20,9 @@
 | [09 — Harden packaged assets](issues/09-harden-packaged-assets.md) | resolved | 08 |
 | [10 — Edit proposed page plan](issues/10-edit-proposed-page-plan.md) | resolved | 01, 04, 05 |
 | [11 — Import text-based PDFs](issues/11-import-text-based-pdfs.md) | ready-for-agent | 02, 05, 10 |
-| [12 — Import URL with Firecrawl](issues/12-import-url-with-firecrawl.md) | ready-for-agent | 05, 10 |
-| [13 — Release core document importer](issues/13-release-core-document-importer.md) | ready-for-agent | 09, 10, 11, 12 |
+| [12 — Import URL with Firecrawl](issues/12-import-url-with-firecrawl.md) | deferred | 05, 10 |
+| [13 — Release core document importer](issues/13-release-core-document-importer.md) | ready-for-agent | 09, 10, 11, 17 |
 | [14 — Graduate presentations](issues/14-graduate-presentations.md) | ready-for-agent | 04, 09, 10 |
 | [15 — Evaluate legacy DOC/PPT](issues/15-evaluate-legacy-doc-ppt.md) | ready-for-agent | 13, 14 |
 | [16 — Decide spreadsheet imports](issues/16-decide-spreadsheet-imports.md) | ready-for-agent | 13 |
+| [17 — Import a publisher URL](issues/17-import-publisher-url.md) | ready-for-agent | — |

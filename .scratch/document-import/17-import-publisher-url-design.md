@@ -1,4 +1,9 @@
-# Import from a URL — design
+# Import a publisher URL — design
+
+Renamed 2026-08-29 from `12-import-url-design.md` to match the issue it landed under. Its
+recommendation was accepted: the publisher slice is issue 17, and issue 12 (Firecrawl) is left
+intact and deferred. Nothing else in this document was changed; where it says a question is open,
+see the plan's own `## Open questions` for how each was settled or escalated.
 
 Research and design only. No production code was written and no source file was changed.
 
@@ -37,7 +42,7 @@ names those steps read, and compile under the generic `DOCUMENT` profile instead
 
 ### Recommendation: a new sibling issue; leave 12 intact
 
-Open `.scratch/document-import/issues/17-import-a-publisher-url.md` for the publisher slice and leave
+Open `.scratch/document-import/issues/17-import-publisher-url.md` for the publisher slice and leave
 issue 12 exactly as written.
 
 Rewriting 12 would delete a security decision rather than supersede it. Its criteria record a
@@ -438,7 +443,7 @@ is needed for acquisition. The *only* new channel is the compile blocker discuss
 | `src/engine/compile/steps/external-media.ts` *(new)* | `isPublicNetworkUrl` fence on `img.src`; placeholder + blocker |
 | `src/engine/compile/sink.ts`, `src/contracts/index.ts` | `Sink.blocker`; `CompiledSection.blockers`; folded into `isPublishable` |
 | `src/import/refusal-labels.ts` *(new)* | `external-unsafe`'s sentence, shared with `anydoc-html.ts` rather than duplicated |
-| `.scratch/document-import/issues/17-import-a-publisher-url.md` *(new)*, `map.md` | The scope split |
+| `.scratch/document-import/issues/17-import-publisher-url.md` *(new)*, `map.md` | The scope split |
 
 `worker/relay.ts` and `worker/allowlist-hosts.ts` are **unchanged**. That is a design constraint, not
 an observation.
