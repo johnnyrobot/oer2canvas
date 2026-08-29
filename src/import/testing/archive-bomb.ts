@@ -9,8 +9,9 @@ const utf8 = (value: string) => new TextEncoder().encode(value)
  * exhausts the tab. `writeZip` deflates, so the archive stays far inside
  * `maximumInputBytes` while the expanded part does not.
  *
- * `paragraphs` is the dial. Each paragraph is about 78 bytes expanded, so the
- * expanded size is roughly `paragraphs * 78`.
+ * `paragraphs` is the dial. Each paragraph is `<w:p><w:r><w:t>` (15 bytes) + 50 `A`
+ * characters (50 bytes) + `</w:t></w:r></w:p>` (18 bytes) = 83 bytes expanded, so the
+ * expanded size is roughly `paragraphs * 83`.
  */
 export async function compressionBombDocx(paragraphs: number): Promise<Uint8Array<ArrayBuffer>> {
   const body = '<w:p><w:r><w:t>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</w:t></w:r></w:p>'

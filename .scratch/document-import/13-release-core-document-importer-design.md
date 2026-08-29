@@ -222,17 +222,27 @@ calling `probeParser` — the earlier measurement read it after, when the buffer
 transferred into the Worker and reads 0, which is why the ratio was unmeasured the first time.
 Each rung called `probeParser({ parser: 'anydoc', formatHint: 'docx', timeoutMs: 25_000 })`.
 
-| paragraphs | compressed bytes | approx. expanded bytes | ratio | elapsed | outcome |
+| paragraphs | compressed bytes | approx. expanded bytes (`paragraphs * 83`) | ratio | elapsed | outcome |
 | --- | --- | --- | --- | --- | --- |
-| 400,000 | 113,883 | 31,200,000 | 274:1 | 1,613 ms | `resource-limit` — "Parser memory exceeded the 128 MiB browser limit." |
-| 1,000,000 | 282,941 | 78,000,000 | 276:1 | 643 ms | `resource-limit` — "AnyDoc could not inspect this file. resource limit exceeded (max_xml_nodes): part exceeds 2000000 xml nodes" |
-| 2,000,000 | 564,703 | 156,000,000 | 276:1 | 41 ms | `resource-limit` — "AnyDoc could not inspect this file. resource limit exceeded (max_entry_bytes): word/document.xml declares 166000180 decompressed bytes" |
-| 4,000,000 | 1,128,214 | 312,000,000 | 277:1 | 40 ms | `resource-limit` — "AnyDoc could not inspect this file. resource limit exceeded (max_entry_bytes): word/document.xml declares 332000180 decompressed bytes" |
+| 400,000 | 113,883 | 33,200,000 | 292:1 | 1,613 ms | `resource-limit` — "Parser memory exceeded the 128 MiB browser limit." |
+| 1,000,000 | 282,941 | 83,000,000 | 293:1 | 643 ms | `resource-limit` — "AnyDoc could not inspect this file. resource limit exceeded (max_xml_nodes): part exceeds 2000000 xml nodes" |
+| 2,000,000 | 564,703 | 166,000,000 | 294:1 | 41 ms | `resource-limit` — "AnyDoc could not inspect this file. resource limit exceeded (max_entry_bytes): word/document.xml declares 166000180 decompressed bytes" |
+| 4,000,000 | 1,128,214 | 332,000,000 | 294:1 | 40 ms | `resource-limit` — "AnyDoc could not inspect this file. resource limit exceeded (max_entry_bytes): word/document.xml declares 332000180 decompressed bytes" |
 
-**Every rung refuses cleanly, and the achieved ratio holds steady around 275:1** — a trivially
+The exact vendor-reported decompressed byte counts for the two `max_entry_bytes` rejections —
+166,000,180 and 332,000,180 — are `paragraphs * 83 + 180`, where 180 is the fixed overhead of
+the surrounding `[Content_Types].xml`-independent `word/document.xml` template (the XML
+declaration, `<w:document>`/`<w:body>` open tags, `<w:sectPr/>`, and the closing tags). That
+exact match against a byte count the vendor parser computed independently, not this fixture, is
+what caught the original 78-byte error in this section: 83 is the true per-paragraph size,
+confirmed by `2,000,000 * 83 + 180 = 166,000,180` and `4,000,000 * 83 + 180 = 332,000,180`
+exactly. The table's "approx. expanded bytes" column uses the simpler `paragraphs * 83` (no
+fixed overhead), matching `archive-bomb.ts`'s own doc comment.
+
+**Every rung refuses cleanly, and the achieved ratio holds steady around 294:1** — a trivially
 compressible expanded XML deflates to roughly that fraction of its size across the whole range
 tried, so `maximumInputBytes` (16 MiB) already bounds the expanded size a bomb built this way can
-reach to roughly 4.6 GB (16,777,216 bytes × ~275) before the archive itself would be rejected
+reach to roughly 4.9 GB (16,777,216 bytes × ~294) before the archive itself would be rejected
 pre-Worker; every rung tried here is far short of that and still refused.
 
 **This also answers the caveat that `resultBudgetFailure` runs on the `result` message, i.e.
@@ -241,14 +251,14 @@ paragraphs and above, `@firecrawl/anydoc-wasm` itself throws a typed error (`cod
 from its own internal `max_xml_nodes` / `max_entry_bytes` checks, well before it would produce a
 `result`. `anydoc.worker.ts` maps that vendor code to our `resource-limit`
 (`src/import/workers/anydoc.worker.ts:61`) and it reaches `probeParser` through the `failure`
-message path, not through `resultBudgetFailure`. Only the smallest rung (400,000 paragraphs, ~31
+message path, not through `resultBudgetFailure`. Only the smallest rung (400,000 paragraphs, ~33
 MB expanded) survives long enough to actually build a document and get caught by the post-parse
 `wasmMemoryBytes` check instead — consistent with Measured fact 1. Elapsed time falls as the rung
 grows (1,613 ms → 40 ms) because the larger rungs are rejected by a cheap pre-parse node/byte
 count rather than by a parse that ran far enough to approach the 128 MiB ceiling.
 
-**Conclusion: every rung refuses cleanly with `resource-limit`, from 31 MB up to 312 MB
+**Conclusion: every rung refuses cleanly with `resource-limit`, from 33 MB up to 332 MB
 expanded, in every case well inside the 25 s probe timeout used here (and the 30 s production
 `parserTimeoutMs`).** Criterion 3's archive-expansion case needs only the regression test
-Task 3 adds, pinning the largest rung proved here (4,000,000 paragraphs / ~312 MB expanded /
+Task 3 adds, pinning the largest rung proved here (4,000,000 paragraphs / ~332 MB expanded /
 `resource-limit`) — not new machinery. No pre-parse guard is warranted by this finding.
