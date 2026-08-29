@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import {
   RIGHTS_AUTHORITIES,
   type ImportMetadata,
@@ -68,10 +68,24 @@ export function ImportMetadataFields({
   value,
   onChange,
   idPrefix,
+  rightsPreface,
+  sourceUrl,
 }: {
   value: ImportMetadataDraft
   onChange: (next: ImportMetadataDraft) => void
   idPrefix: string
+  /**
+   * Shown above the permission radios. A caller that knows something the user
+   * needs before choosing a basis says it here — the web importer states that
+   * extraction is not a license. Optional, so no existing caller changes.
+   */
+  rightsPreface?: ReactNode
+  /**
+   * Record the source URL rather than asking for it, when the caller already
+   * knows it. READ-ONLY rather than hidden: the URL is part of the attribution
+   * the page will carry, and the user should see exactly what is being recorded.
+   */
+  sourceUrl?: { readOnly: true; note: string }
 }) {
   const update = <Key extends keyof ImportMetadataDraft>(
     key: Key,
@@ -95,7 +109,18 @@ export function ImportMetadataFields({
         </label>
         <label className="block text-sm font-medium">
           Public source URL
-          <input type="url" value={value.sourceUrl} onChange={(event) => update('sourceUrl', event.target.value)} className="mt-1 min-h-9 w-full rounded-md border border-neutral-300 bg-white px-3 dark:border-neutral-700 dark:bg-neutral-900" />
+          <input
+            type="url"
+            value={value.sourceUrl}
+            onChange={(event) => update('sourceUrl', event.target.value)}
+            {...(sourceUrl ? { readOnly: true, 'aria-describedby': `${idPrefix}-source-url-note` } : {})}
+            className="mt-1 min-h-9 w-full rounded-md border border-neutral-300 bg-white px-3 read-only:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:read-only:bg-neutral-800"
+          />
+          {sourceUrl && (
+            <span id={`${idPrefix}-source-url-note`} className="mt-1 block text-sm font-normal text-neutral-600 dark:text-neutral-400">
+              {sourceUrl.note}
+            </span>
+          )}
         </label>
         <label className="block text-sm font-medium">
           License name
@@ -109,6 +134,9 @@ export function ImportMetadataFields({
 
       <fieldset className="mt-5">
         <legend className="text-sm font-medium">Permission to republish</legend>
+        {rightsPreface && (
+          <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300">{rightsPreface}</p>
+        )}
         <div className="mt-2 grid gap-2">
           {IMPORT_RIGHTS_OPTIONS.map((option) => (
             <label key={option.value} className="flex min-h-9 items-center gap-2">

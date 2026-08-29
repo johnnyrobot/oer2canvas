@@ -125,3 +125,50 @@ test('cancellation propagates and is an AbortError', async () => {
   controller.abort()
   await expect(running).rejects.toMatchObject({ name: 'AbortError' })
 })
+
+test('claiming an open license without naming one is disclosed, not blocked', async () => {
+  /*
+   * `validateImportMetadata` requires a license NAME only when a license URL is
+   * given, so `open-license` naming nothing is legal on every import path
+   * today. On a publisher import that is nearly harmless; on an arbitrary web
+   * article it is the difference between a defensible claim and a bare
+   * assertion. This warns and does not block, because tightening the rule
+   * changes every import path and is a product decision — see the plan's Open
+   * questions. Warning, not blocker: it must not stop an instructor who knows
+   * what they are doing and will type the license on the next screen.
+   */
+  const result = await importWebArticle('https://example.com/a', {
+    metadata: { ...metadata, rightsAuthority: 'open-license' },
+    fetcher: stub(),
+  })
+  expect(result.report.findings).toContainEqual(expect.objectContaining({
+    code: 'import-web-license-unnamed', severity: 'warning',
+  }))
+})
+
+test('naming a license clears the disclosure', async () => {
+  const result = await importWebArticle('https://example.com/a', {
+    metadata: { ...metadata, rightsAuthority: 'open-license', licenseName: 'CC BY 4.0' },
+    fetcher: stub(),
+  })
+  expect(result.report.findings.map((f) => f.code)).not.toContain('import-web-license-unnamed')
+})
+
+test('the disclosure is only about an unnamed open license, not every basis', () => {
+  // `permission`, `own` and `public-domain` name no license by design, so
+  // warning about them would be noise on every import.
+  return Promise.all((['permission', 'own', 'public-domain'] as const).map(async (rightsAuthority) => {
+    const result = await importWebArticle('https://example.com/a', {
+      metadata: { ...metadata, rightsAuthority }, fetcher: stub(),
+    })
+    expect(result.report.findings.map((f) => f.code)).not.toContain('import-web-license-unnamed')
+  }))
+})
+
+test('nothing about a license is ever inferred from the fetched page', async () => {
+  // The extractor reports OpenGraph keys and no license. Guessing one from a
+  // meta tag would be exactly the fabrication this repo refuses; the README
+  // already promises "The app never invents a URL or an open license."
+  const result = await importWebArticle('https://example.com/a', { metadata, fetcher: stub() })
+  expect(result.work.provenance.license).toBeUndefined()
+})

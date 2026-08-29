@@ -167,6 +167,28 @@ export async function importWebArticle(
     })
   }
 
+  /*
+   * Disclosure, not policy. `validateImportMetadata` requires a license NAME
+   * only when a license URL is supplied, so `open-license` naming nothing is
+   * legal on every import path today. Tightening that globally would change
+   * every import path and is a product decision, escalated rather than taken
+   * here — see the plan's Open questions.
+   *
+   * A WARNING and not a blocker: it must not stop an instructor who knows what
+   * they have and will type the license on the next screen. On a publisher
+   * import an unnamed license is nearly harmless; on an arbitrary web article
+   * it is the difference between a defensible claim and a bare assertion, which
+   * is why the disclosure lives on this path.
+   */
+  if (options.metadata.rightsAuthority === 'open-license' && !options.metadata.licenseName?.trim()) {
+    findings.push({
+      code: 'import-web-license-unnamed',
+      severity: 'warning',
+      message: 'You said this page’s license permits the use but did not name a license. '
+        + 'Add the license name and URL on the page plan, or choose a different basis.',
+    })
+  }
+
   if (article.cachedAt) {
     findings.push({
       code: 'import-web-cached',
