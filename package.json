@@ -25,6 +25,7 @@
     "test:dist": "node scripts/smoke-dist.mjs",
     "verify:production": "node scripts/verify-production.mjs",
     "verify:edge-rate-limit": "node scripts/verify-edge-rate-limit.mjs",
+    "verify:firecrawl-cors": "node scripts/verify-firecrawl-cors.mjs",
     "verify:canvas-live": "node --env-file-if-exists=.env.local scripts/verify-canvas-release.mjs",
     "test:watch": "vitest",
     "probe:canvas-images:run": "node --env-file-if-exists=.env.local scripts/canvas-image-probe-run.mjs",
