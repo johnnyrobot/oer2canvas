@@ -1,3 +1,21 @@
+> **NOT PURSUED — decided 2026-08-29.** This designed a URL import restricted to the OER hosts the
+> relay already forwards (OpenStax, LibreTexts, Pressbooks). It was dropped once the actual
+> requirement became clear: importing **any article on the web**, which is issue 12. A curated-host
+> import would not have answered that, and issue 12's Firecrawl route reaches these publishers too.
+>
+> Kept because three of its findings are still true and still matter:
+>
+> 1. **LibreTexts URL import already ships** — `src/components/SourceBrowser.tsx:95-111` accepts any
+>    `libretexts.org` URL today. Whatever issue 12 builds has to sit beside that, not duplicate it.
+> 2. **The relay's contract and allowlist**, documented here in detail, are the reason issue 12 must
+>    go browser-direct to Firecrawl rather than proxying through this app's infrastructure.
+> 3. **The private-address image fence** it identified (`isPublicNetworkUrl` is applied by
+>    `markup.ts` and `anydoc-html.ts` but not by the publisher path) is a real gap that issue 12
+>    inherits, because a fetched article's images are on arbitrary hosts. Its proposed fix — fence at
+>    the gate, reusing the `strippedUrls` channel added in `f52b2e5` — still applies.
+>
+> Its analysis of publisher page shapes, catalogs and one-URL-one-page semantics is obsolete.
+
 # Import a publisher URL — design
 
 Renamed 2026-08-29 from `12-import-url-design.md` to match the issue it landed under. Its

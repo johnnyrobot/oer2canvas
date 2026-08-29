@@ -97,4 +97,8 @@ Found by the issue-12 design agent.
   dropping a bad scheme is correct. What was missing was that anyone find out.
 - **#3 — fixed in `0ddeeea`.** The markup path now emits `[Embedded image: alt]`, the placeholder
   `anydoc-html.ts` already used, so both import paths describe the same loss in the same words.
-- **#4 — still open.** Belongs with the publisher-URL work, where the relay's 429 is actually reachable.
+- **#4 — still open.** It was briefly homed in the publisher-URL plan, which was dropped on
+  2026-08-29 (see `publisher-url-import-not-pursued.md`). It needs a new home, and it is still
+  reachable: `webbooks.ts` serves the LibreTexts and OpenStax catalog browse that ships today, and
+  the relay's limiter is 60 requests per 60 seconds — so a 429 is an ordinary outcome of browsing a
+  large book, not a hypothetical.
