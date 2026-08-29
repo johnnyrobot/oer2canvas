@@ -2,8 +2,8 @@ import { useRef, useState, type FormEvent } from 'react'
 import { importStructuredDocument } from '../import/document'
 import { DOCUMENT_IMPORT_LIMITS } from '../import/limits'
 import {
-  STRUCTURED_DOCUMENT_FILE_ACCEPT,
-  STRUCTURED_DOCUMENT_FORMAT_SUMMARY,
+  DOCUMENT_FILE_ACCEPT,
+  DOCUMENT_FORMAT_SUMMARY,
   capabilityForFilename,
 } from '../import/capability'
 import type { ImportResult } from '../import/types'
@@ -55,11 +55,22 @@ export function DocumentImporter({ onImported }: { onImported: (result: ImportRe
     setBusy(true)
     setStatus('Reading the selected file…')
     try {
-      const imported = await importStructuredDocument(file, {
+      const importOptions = {
         metadata: completeImportMetadata(metadata),
         signal: controller.signal,
-        onProgress: (progress) => setStatus(PROGRESS_LABEL[progress.phase]),
-      })
+        onProgress: (progress: { phase: ParserProbeProgressPhase }) =>
+          setStatus(PROGRESS_LABEL[progress.phase]),
+      }
+      /*
+       * Routed on the capability's PARSER, not on the file name, so the table in
+       * `capability.ts` stays the single place that says which module reads
+       * which format. Imported lazily for the same reason the probes are: the
+       * PDF module pulls in the split, findings and sanitizer path, and a user
+       * importing a DOCX should not pay for it.
+       */
+      const imported = selectedCapability?.parser === 'pdf-inspector'
+        ? await (await import('../import/pdf')).importPdfDocument(file, importOptions)
+        : await importStructuredDocument(file, importOptions)
       onImported(imported)
     } catch (caught) {
       setError(isAbortError(caught)
@@ -79,7 +90,7 @@ export function DocumentImporter({ onImported }: { onImported: (result: ImportRe
         <input
           id="document-file"
           type="file"
-          accept={STRUCTURED_DOCUMENT_FILE_ACCEPT}
+          accept={DOCUMENT_FILE_ACCEPT}
           aria-describedby={selectedCapability
             ? 'document-file-help document-file-limitations'
             : 'document-file-help'}
@@ -97,7 +108,7 @@ export function DocumentImporter({ onImported }: { onImported: (result: ImportRe
           className="mt-1 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900"
         />
         <span id="document-file-help" className="mt-1 block text-sm text-neutral-600 dark:text-neutral-400">
-          {STRUCTURED_DOCUMENT_FORMAT_SUMMARY}, up to {DOCUMENT_IMPORT_LIMITS.maximumInputBytes / 1024 / 1024} MiB.
+          {DOCUMENT_FORMAT_SUMMARY}, up to {DOCUMENT_IMPORT_LIMITS.maximumInputBytes / 1024 / 1024} MiB.
           The file stays in this browser. Embedded content blocks this text-oriented workflow.
         </span>
         {selectedCapability && (

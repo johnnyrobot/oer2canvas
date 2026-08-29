@@ -100,8 +100,12 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
     extensions: ['.pdf'],
     mediaTypes: ['application/pdf'],
     parser: 'pdf-inspector',
-    status: 'probe-only',
-    limitations: ['Scanned pages require OCR and complex reading order requires review.'],
+    status: 'enabled',
+    limitations: [
+      'Scanned pages have no text to import and block completion; this release does not run OCR in the browser.',
+      'Figures are marked in place but not imported — add them in Canvas afterwards.',
+      'Multi-column and table reading order needs review.',
+    ],
     probe: parserProbe('pdf-inspector', 'pdf'),
   },
 ] as const
@@ -127,6 +131,26 @@ const structuredDocumentExtensionLabels = ENABLED_ANYDOC_CAPABILITIES
 export const STRUCTURED_DOCUMENT_FORMAT_SUMMARY = [
   structuredDocumentExtensionLabels.slice(0, -1).join(', '),
   structuredDocumentExtensionLabels.at(-1),
+].filter(Boolean).join(', or ')
+
+/*
+ * Every format the file picker offers: anydoc's four plus PDF. Separate from
+ * `ENABLED_ANYDOC_CAPABILITIES` because that list answers a different question —
+ * which formats `importStructuredDocument` itself handles — and its answer
+ * appears in that function's refusal message, which must not offer PDF.
+ */
+export const IMPORTABLE_DOCUMENT_CAPABILITIES = DOCUMENT_FORMAT_CAPABILITIES.filter(
+  (entry) => entry.status === 'enabled' && entry.parser !== 'native',
+)
+export const DOCUMENT_FILE_ACCEPT = IMPORTABLE_DOCUMENT_CAPABILITIES
+  .flatMap((entry) => [...entry.extensions, ...entry.mediaTypes])
+  .join(',')
+const importableDocumentExtensionLabels = IMPORTABLE_DOCUMENT_CAPABILITIES
+  .flatMap((entry) => entry.extensions)
+  .map((extension) => extension.slice(1).toUpperCase())
+export const DOCUMENT_FORMAT_SUMMARY = [
+  importableDocumentExtensionLabels.slice(0, -1).join(', '),
+  importableDocumentExtensionLabels.at(-1),
 ].filter(Boolean).join(', or ')
 
 export function releaseEnabledFormats(): ImportedFormat[] {

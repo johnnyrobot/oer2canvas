@@ -1,15 +1,18 @@
 import {
+  DOCUMENT_FILE_ACCEPT,
   DOCUMENT_FORMAT_CAPABILITIES,
+  DOCUMENT_FORMAT_SUMMARY,
   PLAIN_TEXT_FILE_ACCEPT,
   TEXT_CONTENT_FILE_ACCEPT,
   STRUCTURED_DOCUMENT_FILE_ACCEPT,
   STRUCTURED_DOCUMENT_FORMAT_SUMMARY,
   capabilityForFilename,
+  capabilityForFormat,
   releaseEnabledFormats,
 } from './capability'
 
 test('one capability table distinguishes shipped formats from parser probes', () => {
-  expect(releaseEnabledFormats()).toEqual(['text', 'markdown', 'html', 'docx', 'odt', 'rtf', 'epub'])
+  expect(releaseEnabledFormats()).toEqual(['text', 'markdown', 'html', 'docx', 'odt', 'rtf', 'epub', 'pdf'])
   expect(PLAIN_TEXT_FILE_ACCEPT).toBe('.txt,text/plain')
   expect(TEXT_CONTENT_FILE_ACCEPT).toBe(
     '.txt,text/plain,.md,.markdown,text/markdown,text/x-markdown,.html,.htm,text/html,application/xhtml+xml',
@@ -37,10 +40,28 @@ test('one capability table distinguishes shipped formats from parser probes', ()
   expect(capabilityForFilename('reading.pdf')).toMatchObject({
     format: 'pdf',
     parser: 'pdf-inspector',
-    status: 'probe-only',
+    status: 'enabled',
   })
   expect(capabilityForFilename('archive.zip')).toBeUndefined()
 
+  // Nothing is probe-only any more: PDF was the last one, and this issue ships it.
   expect(DOCUMENT_FORMAT_CAPABILITIES.filter((entry) => entry.status === 'probe-only'))
-    .toHaveLength(1)
+    .toHaveLength(0)
+})
+
+test('pdf is offered, and the accept string is not filtered to anydoc parsers', () => {
+  expect(DOCUMENT_FILE_ACCEPT).toContain('.pdf')
+  expect(DOCUMENT_FILE_ACCEPT).toContain('application/pdf')
+  expect(DOCUMENT_FORMAT_SUMMARY).toMatch(/PDF/)
+  // The anydoc-only list stays anydoc-only; `document.ts`'s refusal message
+  // must not offer a format it cannot import.
+  expect(STRUCTURED_DOCUMENT_FILE_ACCEPT).not.toContain('.pdf')
+  expect(STRUCTURED_DOCUMENT_FORMAT_SUMMARY).not.toMatch(/PDF/)
+})
+
+test('the pdf limitation states the block/warn boundary a user is about to meet', () => {
+  const pdf = capabilityForFormat('pdf')!
+  expect(pdf.status).toBe('enabled')
+  expect(pdf.limitations.join(' ')).toMatch(/scanned/i)
+  expect(pdf.limitations.join(' ')).toMatch(/figure/i)
 })

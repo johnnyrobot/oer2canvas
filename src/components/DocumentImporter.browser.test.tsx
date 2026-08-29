@@ -5,6 +5,7 @@ import {
   malformedStructuredFixture,
 } from '../import/testing/structured-document-fixtures'
 import { DOCUMENT_FIXTURE_CASES } from '../import/testing/document-fixture-cases'
+import { pdfFixturePages } from '../import/testing/pdf-fixture'
 import { capabilityForFormat } from '../import/capability'
 import type { ImportResult } from '../import/types'
 
@@ -79,5 +80,38 @@ test.each(['epub', 'odt', 'rtf'] as const)('%s malformed input produces a focuse
   const alert = await screen.findByRole('alert')
   await waitFor(() => expect(alert).toHaveFocus())
   expect(alert).toHaveTextContent(/could not inspect|not recognized|no readable structured content/i)
+  expect(screen.getByRole('button', { name: 'Inspect document' })).toBeEnabled()
+})
+
+test('a selected pdf is routed to the pdf importer and reaches the plan editor', async () => {
+  const onImported = vi.fn()
+  render(<DocumentImporter onImported={onImported} />)
+  await chooseFile('cells.pdf', pdfFixturePages(['text', 'text-and-figure']))
+
+  expect(screen.getByText(/PDF limitation/i)).toBeVisible()
+  completeRights()
+  fireEvent.click(screen.getByRole('button', { name: 'Inspect document' }))
+
+  await waitFor(() => expect(onImported).toHaveBeenCalledTimes(1))
+  const result = onImported.mock.calls[0]![0] as ImportResult
+  // Routed on the capability's parser, so the anydoc importer never saw it.
+  expect(result).toMatchObject({
+    work: { title: 'cells', format: 'pdf', assets: [] },
+    report: { parser: 'pdf-inspector', format: 'pdf', pageCount: 2 },
+  })
+  // The figure warns and marks its place; nothing about it blocks.
+  expect(result.work.sections[0]!.html).toContain('[Embedded image: Figure on page 2]')
+  expect(result.report.findings.some((finding) => finding.severity === 'blocker')).toBe(false)
+})
+
+test('a scanned pdf refuses with the reason, and stays retryable', async () => {
+  render(<DocumentImporter onImported={() => {}} />)
+  await chooseFile('scan.pdf', pdfFixturePages(['scanned', 'scanned']))
+  completeRights()
+  fireEvent.click(screen.getByRole('button', { name: 'Inspect document' }))
+
+  const alert = await screen.findByRole('alert')
+  await waitFor(() => expect(alert).toHaveFocus())
+  expect(alert).toHaveTextContent(/OCR/i)
   expect(screen.getByRole('button', { name: 'Inspect document' })).toBeEnabled()
 })
