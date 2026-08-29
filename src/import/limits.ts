@@ -2,6 +2,12 @@
  * Browser parser budgets selected from the committed 2026-08-27 desktop
  * Chrome/Firefox release matrix. These are browser application limits, not
  * Cloudflare limits: source bytes never reach a Worker deployment.
+ *
+ * "Selected from the benchmark" is true of every budget the benchmark measured,
+ * which is every budget with a `measured*` counterpart in
+ * `DOCUMENT_IMPORT_LIMIT_EVIDENCE` below. `maximumAssetPixels` is the one
+ * exception and has no entry there: it bounds a DECODED bitmap, which the
+ * benchmark never exercised, and is reasoned rather than measured.
  */
 export const DOCUMENT_IMPORT_LIMITS = PARSER_PROBE_LIMITS
 
