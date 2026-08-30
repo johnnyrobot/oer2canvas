@@ -379,3 +379,42 @@ test('an odp text:s encoded run of spaces does not merge adjacent words (fix-rev
 
   expect(index.slides[0]!.textRuns).toEqual(['Title', 'First second'])
 })
+
+test('an odp text:a hyperlink mid-sentence does not drop its own text or truncate what follows (fix-review round 4 Critical)', async () => {
+  // Measured against a real .odp: an ODF `isTextCarrier` ALLOWLIST (an
+  // earlier version of this function used one, checking only `text:span`)
+  // dropped a `text:a` hyperlink's own text — ODF has no isolating leaf
+  // element the way OOXML has `a:t`, so a hyperlink's text is paragraph
+  // content too. This must hold in BOTH body text and speaker notes, since
+  // `notesText` is compared by strict equality downstream.
+  const index = await odpIndexOf(await odpFixture([
+    {
+      title: 'Title',
+      bodyRuns: ['Read chapter 3 ', { link: 'tonight' }],
+      notesRuns: ['Mention the ', { link: 'lab' }, ' before class.'],
+    },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toContain('Read chapter 3 tonight')
+  expect(index.slides[0]!.notesText).toBe('Mention the lab before class.')
+})
+
+test('an odp office:annotation (reviewer comment) does not leak into textRuns (fix-review round 4 Important)', async () => {
+  // office:annotation is a DIRECT child of draw:page, the same level
+  // presentation:notes sits at. anydoc emits no block for a comment; leaving
+  // it unexcluded invents a content-loss disagreement whose payload is a
+  // private reviewer remark.
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Title', body: ['Body'], commentText: 'Private reviewer comment.' },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Title', 'Body'])
+})
+
+test('an odp text:h heading is found, matching the heading block anydoc emits (fix-review round 4)', async () => {
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Title', headingText: 'A heading paragraph' },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Title', 'A heading paragraph'])
+})

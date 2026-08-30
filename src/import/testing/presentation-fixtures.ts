@@ -443,14 +443,23 @@ const ODP_NS = {
 
 /**
  * One paragraph segment: a `text:span` run's text, `{ break: true }` for a
- * `text:line-break`, `{ tab: true }` for a `text:tab`, or `{ spaces: n }` for
- * a `text:s` encoded run of `n` spaces — none of them a paragraph break. The
- * ODF analogue of `PptxParagraphSegment`, letting a fixture author a
- * `text:span` split mid-word alongside any of ODF's space-producing elements
- * in the SAME paragraph, matching the rule `paragraphText`/its ODF
- * counterpart apply on the index side.
+ * `text:line-break`, `{ tab: true }` for a `text:tab`, `{ spaces: n }` for a
+ * `text:s` encoded run of `n` spaces, or `{ link: text }` for an ordinary
+ * `text:a` hyperlink wrapping `text` mid-paragraph — none of them a
+ * paragraph break. The ODF analogue of `PptxParagraphSegment`, letting a
+ * fixture author a `text:span` split mid-word, a hyperlink, or any of ODF's
+ * space-producing elements in the SAME paragraph, matching the rule
+ * `paragraphText`/its ODF counterpart apply on the index side. `link` exists
+ * to pin fix-review round 4's Critical: ODF has no isolating leaf element
+ * the way OOXML has `a:t`, so `text:a`'s own text is paragraph content too,
+ * not just `text:span`'s.
  */
-export type OdpParagraphSegment = string | { break: true } | { tab: true } | { spaces: number }
+export type OdpParagraphSegment =
+  | string
+  | { break: true }
+  | { tab: true }
+  | { spaces: number }
+  | { link: string }
 
 export interface OdpPageSpec {
   title?: string
@@ -503,6 +512,21 @@ export interface OdpPageSpec {
    * `PresentationIndexError`, rather than crashing with a raw `RangeError`.
    */
   nestedSpanDepth?: number
+  /**
+   * An `office:annotation` — an Impress reviewer comment — authored as a
+   * DIRECT child of `draw:page`, the same level `presentation:notes` sits
+   * at. anydoc emits no block for a comment; leaving it out of the
+   * exclusion (fix-review round 4 Important) let a private reviewer remark
+   * leak into `textRuns` as an invented content-loss disagreement.
+   */
+  commentText?: string
+  /**
+   * A `text:h` heading paragraph (`text:outline-level="1"`), which anydoc
+   * reports as a `heading` block. Fix-review round 4 measured that the
+   * paragraph query missed it entirely — a false content-loss disagreement
+   * on ordinary Impress content that never touched anything unusual.
+   */
+  headingText?: string
 }
 
 /**
@@ -515,6 +539,9 @@ function odpParagraphSegmentsXml(segments: readonly OdpParagraphSegment[]): stri
     if (typeof segment === 'string') return `<text:span>${xmlEscape(segment)}</text:span>`
     if ('break' in segment) return '<text:line-break/>'
     if ('tab' in segment) return '<text:tab/>'
+    if ('link' in segment) {
+      return `<text:a xlink:type="simple" xlink:href="https://example.edu/lab-safety">${xmlEscape(segment.link)}</text:a>`
+    }
     return `<text:s text:c="${segment.spaces}"/>`
   }).join('')
 }
@@ -567,6 +594,19 @@ function odpNestedSpans(depth: number, text: string): string {
   return `<text:p>${xml}</text:p>`
 }
 
+/** An `office:annotation` (Impress reviewer comment) — see `commentText` on `OdpPageSpec`. */
+function odpAnnotation(name: string, text: string): string {
+  return `<office:annotation office:name="${name}"><text:p>${xmlEscape(text)}</text:p></office:annotation>`
+}
+
+/** A `text:h` heading paragraph — see `headingText` on `OdpPageSpec`. */
+function odpHeading(text: string): string {
+  // `text:outline-level="1"` is the top level a presentation body uses;
+  // anydoc's heading level is not this fixture's concern, only that a
+  // `text:h` exists for the index to find.
+  return `<text:h text:outline-level="1">${xmlEscape(text)}</text:h>`
+}
+
 /** `page.notes` (a single run) or `page.notesRuns` (multiple segments in one paragraph) as one `text:p`. */
 function odpNotesContentXml(page: OdpPageSpec): string {
   if (page.notesRuns) return `<text:p>${odpParagraphSegmentsXml(page.notesRuns)}</text:p>`
@@ -580,7 +620,8 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
       ? ''
       : odpFrame(`Title ${index + 1}`, 'title', `<text:p>${xmlEscape(page.title)}</text:p>`)
     const outlineContent = `${odpParagraphsXml(page)}${page.bulletList ? odpBulletListXml(page.bulletList) : ''}` +
-      (page.nestedSpanDepth ? odpNestedSpans(page.nestedSpanDepth, 'Deeply nested') : '')
+      (page.nestedSpanDepth ? odpNestedSpans(page.nestedSpanDepth, 'Deeply nested') : '') +
+      (page.headingText ? odpHeading(page.headingText) : '')
     const outline = outlineContent ? odpFrame(`Body ${index + 1}`, 'outline', outlineContent) : ''
     const image = page.image
       ? `<draw:frame draw:name="Diagram ${index + 1}" svg:width="1cm" svg:height="1cm">` +
@@ -599,9 +640,11 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
     const notes = notesContent
       ? `<presentation:notes>${odpFrame(`Notes ${index + 1}`, 'notes', notesContent)}</presentation:notes>`
       : ''
+    // A direct child of draw:page, the same level presentation:notes sits at.
+    const comment = page.commentText ? odpAnnotation(`Comment ${index + 1}`, page.commentText) : ''
     const extras = `${customShape}${groupedCustomShape}${nestedFrame}`
     const frames = page.titleLast ? `${outline}${image}${extras}${title}` : `${title}${outline}${image}${extras}`
-    return `<draw:page draw:name="Slide ${index + 1}" draw:master-page-name="Default">${frames}${notes}</draw:page>`
+    return `<draw:page draw:name="Slide ${index + 1}" draw:master-page-name="Default">${frames}${notes}${comment}</draw:page>`
   }).join('')
 
   const content = `<?xml version="1.0" encoding="UTF-8"?>

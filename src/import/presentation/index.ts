@@ -81,11 +81,11 @@ const MAX_PARAGRAPH_NESTING_DEPTH = 32
  * data ONLY when its immediate parent is a text carrier (see `isTextCarrier`
  * below), an element matching `isSpace` contributes exactly one space, an
  * excluded element contributes nothing, and any other element (a run, a
- * formatting wrapper, a nested span) is walked the same way. PPTX
- * (`a:r`/`a:t`/`a:br`) and ODF (`text:span`/`text:line-break`/`text:tab`/
- * `text:s`) differ only in which element names carry text and which ones are
- * a space — both share this rule rather than each carrying a parallel
- * definition of it:
+ * formatting wrapper, a nested span, a hyperlink) is walked the same way.
+ * PPTX (`a:r`/`a:t`/`a:br`) and ODF (`text:span`/`text:line-break`/
+ * `text:tab`/`text:s`) differ only in which element names carry text and
+ * which ones are a space — both share this rule rather than each carrying a
+ * parallel definition of it:
  *
  * - Two adjacent text-bearing elements are concatenated with NO separator.
  *   PowerPoint routinely splits a run mid-word — at a spell-check mark
@@ -124,24 +124,36 @@ function joinParagraphText(
     /**
      * True for an element whose OWN direct text-node children are paragraph
      * CONTENT, as opposed to incidental whitespace a formatter, repair tool,
-     * or indenting generator inserted between sibling elements. OOXML
-     * isolates all real text inside `a:t` leaves, so only `a:t` qualifies —
-     * a text node found anywhere else (directly inside `a:p` or `a:r`) is
+     * or indenting generator inserted between sibling elements.
+     *
+     * OMITTED means "no restriction — every element carries text directly."
+     * That is ODF's shape: ODF has NO isolating leaf element the way OOXML
+     * has `a:t`, so bare text lives directly inside `text:p`, `text:span`,
+     * `text:a` (a hyperlink), `text:date`, `text:page-number`,
+     * `text:bookmark-ref`, `text:meta`, `text:ruby-base`, and more. Fix-review
+     * round 4 measured what an ALLOWLIST of "the ODF elements known to carry
+     * text" costs against a real .odp: a `text:a` hyperlink mid-sentence
+     * dropped its own text and the "and everything after it up to the next
+     * plain run — turning `"Mention the lab before class."` into
+     * `"Mention before class."`, silently truncating both body text and,
+     * worse, `notesText`, which is compared by strict equality downstream.
+     * An allowlist of ODF inline elements is a losing, ever-growing list;
+     * "everything except the space-producing elements above carries text" is
+     * the honest, exhaustive shape, so ODF passes no `isTextCarrier` at all.
+     *
+     * PPTX keeps the allowlist, and it is correct THERE: OOXML genuinely
+     * isolates all real text inside `a:t`, so only `a:t` qualifies — a text
+     * node found anywhere else (directly inside `a:p` or `a:r`) is
      * pretty-print indentation, not content. Fix-review round 3 measured
-     * that treating EVERY text node as content (an earlier version of this
-     * function did, checking only for a break and nothing else) turns
-     * `<a:r><a:t>Photosynthesi</a:t></a:r>\n  <a:r><a:t>s</a:t></a:r>` — the
-     * indentation a formatter inserted between the runs — into
+     * that treating EVERY text node as content on the PPTX side (an earlier
+     * version of this function did, checking only for a break and nothing
+     * else) turns `<a:r><a:t>Photosynthesi</a:t></a:r>\n  <a:r><a:t>s</a:t>
+     * </a:r>` — indentation a formatter inserted between the runs — into
      * `"Photosynthesi s"`: the exact mid-word defect two earlier rounds
-     * removed, reintroduced through a text node the ORIGINAL direct-children
-     * implementation could never see in the first place, and it reaches
-     * `notesText`, which is compared by strict equality downstream. PPTX
-     * itself is minified and rarely hits this, but any deck that has passed
-     * through a formatter, a repair tool, or an indenting generator has. ODF
-     * has no such isolation: `text:p` and `text:span` hold bare text
-     * directly as children, so both qualify as carriers.
+     * removed, reintroduced through a text node the direct-children
+     * implementation that preceded this one could never see.
      */
-    isTextCarrier: (element: Element) => boolean
+    isTextCarrier?: (element: Element) => boolean
     exclude?: (element: Element) => boolean
   },
 ): string {
@@ -152,7 +164,7 @@ function joinParagraphText(
       )
     }
     let text = ''
-    const carrier = node.nodeType === Node.ELEMENT_NODE && isTextCarrier(node as Element)
+    const carrier = node.nodeType === Node.ELEMENT_NODE && (isTextCarrier ? isTextCarrier(node as Element) : true)
     for (const child of node.childNodes) {
       if (child.nodeType === Node.TEXT_NODE) {
         if (carrier) text += child.nodeValue ?? ''
@@ -189,17 +201,18 @@ function paragraphText(paragraph: Element, { includeFields }: { includeFields: b
 }
 
 /**
- * One ODF paragraph's (`text:p`) text — the same rule as `paragraphText`,
- * with `text:span` standing in for `a:r`, and `text:line-break`/`text:tab`/
- * `text:s` all standing in for `a:br`. ODF has no field-chrome equivalent to
+ * One ODF paragraph's (`text:p` or `text:h`) text — the same rule as
+ * `paragraphText`, with `text:line-break`/`text:tab`/`text:s` all standing in
+ * for `a:br`. Unlike PPTX, no `isTextCarrier` is passed at all: see that
+ * option's own doc comment on `joinParagraphText` for why an ODF allowlist
+ * (of `text:span`, in an earlier version of this function) is a losing list
+ * that dropped a hyperlink's own text. ODF has no field-chrome equivalent to
  * exclude here.
  */
 function odfParagraphText(paragraph: Element): string {
   return joinParagraphText(paragraph, {
     isSpace: (element) => element.namespaceURI === ODF_TEXT_NS &&
       (element.localName === 'line-break' || element.localName === 'tab' || element.localName === 's'),
-    isTextCarrier: (element) => element.namespaceURI === ODF_TEXT_NS &&
-      (element.localName === 'p' || element.localName === 'span'),
   })
 }
 
@@ -496,6 +509,21 @@ function odfNotesText(notesElement: Element): string | undefined {
   return collapse(paragraphs.join(' ')) || undefined
 }
 
+/**
+ * Document order between two elements NOT necessarily fetched by the same
+ * `getElementsByTagNameNS` call — needed because the page's paragraph query
+ * (below) merges `text:p` and `text:h` results from two separate calls, and
+ * `compareDocumentPosition` is the DOM's own answer for "which comes first,"
+ * rather than assuming a document only ever mixes the two element kinds in
+ * an order this module would have to guess at.
+ */
+function documentOrder(a: Element, b: Element): number {
+  const position = a.compareDocumentPosition(b)
+  if (position & Node.DOCUMENT_POSITION_FOLLOWING) return -1
+  if (position & Node.DOCUMENT_POSITION_PRECEDING) return 1
+  return 0
+}
+
 function odpIndex(parts: Record<string, string>): PresentationIndex {
   const content = parts['content.xml']
   if (!content) {
@@ -512,35 +540,58 @@ function odpIndex(parts: Record<string, string>): PresentationIndex {
     const notesText = notesElement ? odfNotesText(notesElement) : undefined
 
     /*
-     * Every `text:p` in the page, in document order, wherever it lives —
-     * inside a `draw:frame`, inside a shape drawn from the toolbar
-     * (`draw:custom-shape`, `draw:rect`, `draw:caption`, ... — Impress puts
-     * typed text directly inside one of these, with no enclosing frame at
-     * all), inside a `draw:g` group, or inside a frame nested inside another
-     * frame — EXCEPT the notes subtree, via the same deep `contains()` check
-     * the earlier frame-only version used (fix-review round 3 confirmed this
-     * exclusion is airtight even for a paragraph nested several levels
-     * inside the notes element).
+     * Roots to exclude from the page's own text below: the notes subtree
+     * (`presentation:notes`, a direct child of `draw:page`), AND every
+     * `office:annotation` — an Impress comment, ALSO a direct child of
+     * `draw:page`. anydoc emits no block for a comment, so leaving it in
+     * would invent a content-loss disagreement whose payload is a private
+     * reviewer remark — the same category of harm as publishing speaker
+     * notes (fix-review round 4 measured a real comment leaking into
+     * `textRuns` before this exclusion existed). The deep `contains()` check
+     * below is the same one already confirmed airtight for notes nested
+     * several levels down.
+     */
+    const excludedRoots: readonly Element[] = notesElement
+      ? [notesElement, ...page.getElementsByTagNameNS(ODF_OFFICE_NS, 'annotation')]
+      : [...page.getElementsByTagNameNS(ODF_OFFICE_NS, 'annotation')]
+
+    /*
+     * Every `text:p` AND `text:h` in the page, in document order, wherever
+     * they live — inside a `draw:frame`, inside a shape drawn from the
+     * toolbar (`draw:custom-shape`, `draw:rect`, `draw:caption`, ... —
+     * Impress puts typed text directly inside one of these, with no
+     * enclosing frame at all), inside a `draw:g` group, or inside a frame
+     * nested inside another frame — EXCEPT `excludedRoots` above.
+     * `text:h` (a heading) is included alongside `text:p`: anydoc emits a
+     * `heading` block for `<text:h text:outline-level="1">`, and leaving it
+     * out of this query made the index blind to ordinary Impress content
+     * that anydoc reports, a false content-loss disagreement on decks that
+     * never touched anything unusual. The two element kinds are queried
+     * separately (`getElementsByTagNameNS` takes one name at a time) and
+     * merged back into a single document-order list with `documentOrder`.
      *
      * This is deliberately ONE flat query, not a per-shape walk that widens
      * a shape-kind allowlist (`draw:frame` plus `draw:custom-shape` plus
      * ...): fix-review round 3 measured that a per-shape walk double-counts
      * a frame nested inside another frame, because the OUTER frame's own
      * descendant query finds the SAME `text:p` the inner frame also finds —
-     * three copies once a title frame is also present. Querying `text:p`
-     * once, directly against the page, counts each physical paragraph
-     * exactly once no matter what — or how much — wraps it. It also means
-     * `draw:g` (Impress's own "Group" command) needs no explicit recursion
-     * the way PPTX's `p:grpSp` does in `walkShapes`: `getElementsByTagNameNS`
-     * finds a match at ANY depth in a single call, so a paragraph inside a
-     * group is found exactly as if it were not grouped. That single
-     * browser-native call has no recursion of ITS OWN to overflow — the
-     * recursion that DOES exist in this module, `joinParagraphText`'s
-     * per-paragraph run/span walk, is capped separately by
-     * `MAX_PARAGRAPH_NESTING_DEPTH`.
+     * three copies once a title frame is also present. Querying directly
+     * against the page, once, counts each physical paragraph exactly once
+     * no matter what — or how much — wraps it. It also means `draw:g`
+     * (Impress's own "Group" command) needs no explicit recursion the way
+     * PPTX's `p:grpSp` does in `walkShapes`: `getElementsByTagNameNS` finds
+     * a match at ANY depth in a single call, so a paragraph inside a group
+     * is found exactly as if it were not grouped. That single browser-native
+     * call has no recursion of ITS OWN to overflow — the recursion that DOES
+     * exist in this module, `joinParagraphText`'s per-paragraph run/span
+     * walk, is capped separately by `MAX_PARAGRAPH_NESTING_DEPTH`.
      */
-    const paragraphs = [...page.getElementsByTagNameNS(ODF_TEXT_NS, 'p')]
-      .filter((paragraph) => !notesElement?.contains(paragraph))
+    const paragraphs = [
+      ...page.getElementsByTagNameNS(ODF_TEXT_NS, 'p'),
+      ...page.getElementsByTagNameNS(ODF_TEXT_NS, 'h'),
+    ]
+      .sort(documentOrder)
+      .filter((paragraph) => !excludedRoots.some((root) => root.contains(paragraph)))
       .map((paragraph) => ({ element: paragraph, text: odfParagraphText(paragraph) }))
       .filter((paragraph) => paragraph.text.length > 0)
 
