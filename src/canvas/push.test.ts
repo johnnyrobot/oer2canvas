@@ -33,7 +33,7 @@ test('pushes every section as its own page, in book order', async () => {
   const { client, wrote } = fakeClient()
   const result = await pushToCourse({ client, courseId: 17, chapters: CHAPTERS })
 
-  expect(wrote.map((w) => w.title)).toEqual(['Introduction', 'Polynomials', 'Radicals'])
+  expect(wrote.map((w) => w.title)).toEqual(['Chapter 1 Introduction', 'Chapter 1 Polynomials', 'Chapter 2 Radicals'])
   expect(result.landed).toHaveLength(3)
   expect(result.stoppedBy).toBeUndefined()
 })
@@ -51,17 +51,17 @@ test('publishes the compiled html verbatim, the same bytes the audit passed', as
 
 test('a failure stops the run, leaves what landed in place, and names where it stopped', async () => {
   const { client, wrote } = fakeClient({
-    slug: 'Polynomials',
+    slug: 'Chapter 1 Polynomials',
     error: new CanvasError('canvas', 500, 'Canvas refused the request. (HTTP 500)'),
   })
   const result = await pushToCourse({ client, courseId: 17, chapters: CHAPTERS })
 
   // No rollback: the one that succeeded before the failure stays.
   expect(result.landed.map((p) => p.slug)).toEqual(['chapter-1-introduction'])
-  expect(result.stoppedBy).toMatchObject({ title: 'Polynomials', reason: expect.stringMatching(/500/) })
+  expect(result.stoppedBy).toMatchObject({ title: 'Chapter 1 Polynomials', reason: expect.stringMatching(/500/) })
   // And it stops rather than carrying on into chapter 2.
-  expect(wrote.map((w) => w.title)).toEqual(['Introduction'])
-  expect(result.remaining.map((p) => p.title)).toEqual(['Polynomials', 'Radicals'])
+  expect(wrote.map((w) => w.title)).toEqual(['Chapter 1 Introduction'])
+  expect(result.remaining.map((p) => p.title)).toEqual(['Chapter 1 Polynomials', 'Chapter 2 Radicals'])
 })
 
 test('resuming does not re-send the pages that already landed', async () => {
@@ -73,7 +73,7 @@ test('resuming does not re-send the pages that already landed', async () => {
     alreadyLanded: ['chapter-1-introduction'],
   })
 
-  expect(wrote.map((w) => w.title)).toEqual(['Polynomials', 'Radicals'])
+  expect(wrote.map((w) => w.title)).toEqual(['Chapter 1 Polynomials', 'Chapter 2 Radicals'])
   // Still reported as landed — the run's answer is about the course, not about
   // which attempt put each page there.
   expect(result.landed.map((p) => p.slug)).toEqual([
@@ -85,7 +85,7 @@ test('resuming does not re-send the pages that already landed', async () => {
 
 test('records what landed after every page, so a closed tab can resume', async () => {
   const { client } = fakeClient({
-    slug: 'Radicals',
+    slug: 'Chapter 2 Radicals',
     error: new Error('tab closed'),
   })
   const snapshots: string[][] = []
@@ -122,10 +122,10 @@ test('a cancel stops the run and keeps what has already landed', async () => {
     signal: controller.signal,
   })
 
-  expect(wrote).toEqual(['Introduction'])
+  expect(wrote).toEqual(['Chapter 1 Introduction'])
   expect(result.landed.map((p) => p.slug)).toEqual(['chapter-1-introduction'])
   expect(result.stoppedBy?.reason).toMatch(/stopped/i)
-  expect(result.remaining.map((p) => p.title)).toEqual(['Polynomials', 'Radicals'])
+  expect(result.remaining.map((p) => p.title)).toEqual(['Chapter 1 Polynomials', 'Chapter 2 Radicals'])
 })
 
 test('says which pages it overwrote and which it created, from the course it read first', async () => {
@@ -141,9 +141,9 @@ test('says which pages it overwrote and which it created, from the course it rea
   })
 
   expect(result.landed.map((p) => [p.title, p.outcome])).toEqual([
-    ['Introduction', 'updated'],
-    ['Polynomials', 'created'],
-    ['Radicals', 'created'],
+    ['Chapter 1 Introduction', 'updated'],
+    ['Chapter 1 Polynomials', 'created'],
+    ['Chapter 2 Radicals', 'created'],
   ])
 })
 
@@ -164,7 +164,8 @@ test('overwrites at the url Canvas chose, not at the slug we would have picked',
     client,
     courseId: 17,
     chapters: CHAPTERS,
-    existingPages: [{ url: '1-dot-polynomials', title: 'Polynomials' }],
+    // The qualified title, which is what an earlier push created it with.
+    existingPages: [{ url: '1-dot-polynomials', title: 'Chapter 1 Polynomials' }],
   })
   expect(wrote.map((w) => w.existingUrl)).toEqual([undefined, '1-dot-polynomials', undefined])
 })
@@ -179,8 +180,8 @@ test('reports where it is before each page, so the screen is never silent mid-ru
     onProgress: (p) => seen.push(`${p.done + 1} of ${p.total}: ${p.title}`),
   })
   expect(seen).toEqual([
-    '1 of 3: Introduction',
-    '2 of 3: Polynomials',
-    '3 of 3: Radicals',
+    '1 of 3: Chapter 1 Introduction',
+    '2 of 3: Chapter 1 Polynomials',
+    '3 of 3: Chapter 2 Radicals',
   ])
 })

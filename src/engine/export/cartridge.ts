@@ -74,6 +74,8 @@ function resourceId(section: CompiledSection): string {
 interface Page {
   section: CompiledSection
   chapterTitle: string
+  /** The qualified page title, from `page-identity.ts`. */
+  title: string
   path: string
   id: string
 }
@@ -87,6 +89,9 @@ function pagesOf(chapters: readonly CompiledChapter[]): Page[][] {
     group.map((t) => ({
       section: t.section,
       chapterTitle: t.chapterTitle,
+      // The qualified title, so an imported cartridge and a push name the page
+      // identically — the agreement `page-identity.ts` exists to keep.
+      title: t.title,
       path: `wiki_content/${t.slug}.html`,
       id: resourceId(t.section),
     })),
@@ -250,12 +255,12 @@ export function collectPackagedAssets(chapters: readonly CompiledChapter[]): Pac
  * Wrap the compiled fragment in the minimal document a cartridge resource needs.
  *
  * `<title>` is what Canvas reads for the page name on import, which is why it
- * carries the section title rather than being cosmetic.
+ * carries the qualified page title rather than being cosmetic.
  */
-function documentFor(section: CompiledSection, id: string): string {
+function documentFor(section: CompiledSection, id: string, title: string): string {
   return (
     '<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>' +
-    `<title>${xml(section.title)}</title>` +
+    `<title>${xml(title)}</title>` +
     // Canvas reads these to build the WikiPage. `identifier` is what ties this
     // file to its manifest resource and its module item; without
     // `workflow_state` the page imports unpublished, which looks like a failed
@@ -280,7 +285,7 @@ export function buildManifest(chapters: readonly CompiledChapter[]): string {
         .map(
           (p) =>
             `        <item identifier="item-${p.id}" identifierref="${p.id}">\n` +
-            `          <title>${xml(p.section.title)}</title>\n` +
+            `          <title>${xml(p.title)}</title>\n` +
             `        </item>`,
         )
         .join('\n')
@@ -400,7 +405,7 @@ export function buildModuleMeta(chapters: readonly CompiledChapter[]): string {
             `    <item identifier="item-${p.id}">\n` +
             `      <content_type>WikiPage</content_type>\n` +
             `      <workflow_state>active</workflow_state>\n` +
-            `      <title>${xml(p.section.title)}</title>\n` +
+            `      <title>${xml(p.title)}</title>\n` +
             `      <identifierref>${p.id}</identifierref>\n` +
             `      <position>${j + 1}</position>\n` +
             `      <indent>0</indent>\n` +
@@ -451,7 +456,7 @@ export function buildCartridge(chapters: readonly CompiledChapter[]): ZipEntry[]
     { name: 'course_settings/module_meta.xml', data: encoder.encode(buildModuleMeta(chapters)) },
   ]
   for (const page of pagesOf(chapters).flat()) {
-    entries.push({ name: page.path, data: encoder.encode(documentFor(page.section, page.id)) })
+    entries.push({ name: page.path, data: encoder.encode(documentFor(page.section, page.id, page.title)) })
   }
   // Raw bytes, not re-encoded text: `asset.bytes` is already the exact raster
   // `prepareAssets` sniffed and hashed, so writing it verbatim is what keeps

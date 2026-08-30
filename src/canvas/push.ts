@@ -123,7 +123,7 @@ export async function pushToCourse(req: PushRequest): Promise<PushResult> {
   const targets = resolveTargets(pageTargets(req.chapters), req.existingPages)
   const describe = (t: (typeof targets)[number]): PushedPage => ({
     slug: t.slug,
-    title: t.section.title,
+    title: t.title,
     chapterTitle: t.chapterTitle,
     outcome:
       req.existingPages === undefined || t.ambiguous
@@ -142,7 +142,7 @@ export async function pushToCourse(req: PushRequest): Promise<PushResult> {
         landed,
         stoppedBy: {
           slug: target.slug,
-          title: target.section.title,
+          title: target.title,
           // Not an error, and it does not read as one. The user did this on
           // purpose and the only thing they need to know is where it got to.
           reason: 'Stopped at your request.',
@@ -150,7 +150,7 @@ export async function pushToCourse(req: PushRequest): Promise<PushResult> {
         remaining: targets.slice(index).map(describe),
       }
     }
-    req.onProgress?.({ done: index, total: targets.length, title: target.section.title })
+    req.onProgress?.({ done: index, total: targets.length, title: target.title })
     if (done.has(target.slug)) {
       // Reported as landed without being re-sent: the result describes the
       // COURSE, not this attempt's share of the work.
@@ -160,7 +160,7 @@ export async function pushToCourse(req: PushRequest): Promise<PushResult> {
     let stored: CanvasPage
     try {
       stored = await req.client.upsertPage(req.courseId, {
-        title: target.section.title,
+        title: target.title,
         ...(target.existingUrl !== undefined ? { existingUrl: target.existingUrl } : {}),
         // VERBATIM, exactly as the cartridge publishes it. The audited artifact
         // and the published artifact have to be the same bytes or the gate's
@@ -180,7 +180,7 @@ export async function pushToCourse(req: PushRequest): Promise<PushResult> {
        */
       return {
         landed,
-        stoppedBy: { slug: target.slug, title: target.section.title, reason: messageOf(e) },
+        stoppedBy: { slug: target.slug, title: target.title, reason: messageOf(e) },
         remaining: targets.slice(index).map(describe),
       }
     }

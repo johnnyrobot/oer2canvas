@@ -85,7 +85,11 @@ export function resolveTargets(
    * may belong to a different chapter.
    */
   for (const [title, pages] of byTitle) {
-    const wanting = resolved.filter((r) => r.existingUrl === undefined && r.section.title === title)
+    // The QUALIFIED title, which is what a push actually created the page with.
+    // Comparing `section.title` here is what let a later chapter claim an earlier
+    // one's generic page: both sections are called "Introduction", but the pages
+    // are not.
+    const wanting = resolved.filter((r) => r.existingUrl === undefined && r.title === title)
     if (wanting.length === 0) continue
     const free = pages.filter((p) => !claimed.has(p.url))
     if (free.length === 0) continue

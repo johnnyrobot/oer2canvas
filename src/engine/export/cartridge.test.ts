@@ -132,7 +132,7 @@ test('resource identifiers come from the section id, not its position', () => {
 test('the page title is what Canvas reads on import', () => {
   const entries = buildCartridge([chapter('Ch 1', [section('a', 'The Science of Biology')])])
   expect(fileNamed(entries, 'wiki_content/ch-1-the-science-of-biology.html'))
-    .toContain('<title>The Science of Biology</title>')
+    .toContain('<title>Chapter 1 The Science of Biology</title>')
 })
 
 // E6 wants both, and the timestamp is the point: importing never updates, so an

@@ -49,8 +49,8 @@ test('a completed run leaves no journal behind to resume from', async () => {
 
 test('an interrupted run leaves a journal, and the next run resumes from it', async () => {
   const journal = fakeDisk()
-  const first = await run(fakeClient('Polynomials').client, journal)
-  expect(first.stoppedBy?.title).toBe('Polynomials')
+  const first = await run(fakeClient('Chapter 1 Polynomials').client, journal)
+  expect(first.stoppedBy?.title).toBe('Chapter 1 Polynomials')
   expect(journal.data.get('canvas.journal')).toEqual({
     courseId: 7,
     landed: ['chapter-1-introduction'],
@@ -59,7 +59,7 @@ test('an interrupted run leaves a journal, and the next run resumes from it', as
   const second = fakeClient()
   const report = await run(second.client, journal)
   // Only the page that never landed is re-sent.
-  expect(second.wrote).toEqual(['Polynomials'])
+  expect(second.wrote).toEqual(['Chapter 1 Polynomials'])
   expect(report.landed).toHaveLength(2)
   expect(journal.data.has('canvas.journal')).toBe(false)
 })
@@ -71,13 +71,13 @@ test('a journal from another course is ignored rather than resumed into this one
   journal.data.set('canvas.journal', { courseId: 99, landed: ['chapter-1-introduction'] })
   const { client, wrote } = fakeClient()
   await run(client, journal)
-  expect(wrote).toEqual(['Introduction', 'Polynomials'])
+  expect(wrote).toEqual(['Chapter 1 Introduction', 'Chapter 1 Polynomials'])
 })
 
 test('the report carries what each page did to the course', async () => {
   const journal = fakeDisk()
   const report = await run(fakeClient().client, journal, [
-    { url: 'chapter-1-introduction', title: 'Introduction' },
+    { url: 'chapter-1-introduction', title: 'Chapter 1 Introduction' },
   ])
   expect(report.landed.map((p) => p.outcome)).toEqual(['updated', 'created'])
 })
@@ -93,7 +93,7 @@ test('re-reads the course immediately before writing, rather than trusting a lis
   const journal = fakeDisk()
   const seen: string[] = []
   const client = {
-    listPages: async () => [{ url: 'canvas-Introduction', title: 'Introduction' }],
+    listPages: async () => [{ url: 'canvas-Introduction', title: 'Chapter 1 Introduction' }],
     async upsertPage(_c: number, p: PageWrite) {
       seen.push(`${p.title}:${p.existingUrl ?? 'create'}`)
       return { url: p.existingUrl ?? `canvas-${p.title}`, title: p.title }
@@ -106,6 +106,6 @@ test('re-reads the course immediately before writing, rather than trusting a lis
     existingPages: [],
   })
 
-  expect(seen).toEqual(['Introduction:canvas-Introduction', 'Polynomials:create'])
+  expect(seen).toEqual(['Chapter 1 Introduction:canvas-Introduction', 'Chapter 1 Polynomials:create'])
   expect(report.landed.map((p) => p.outcome)).toEqual(['updated', 'created'])
 })

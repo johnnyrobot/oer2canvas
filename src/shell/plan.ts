@@ -1,5 +1,5 @@
 import { isPublishable, type CompiledChapter, type CompiledSection } from '../contracts/index'
-import { pageTargets } from '../engine/export/page-identity'
+import { pageTargets, qualifiedTitle } from '../engine/export/page-identity'
 import type { CanvasPage } from '../canvas/client'
 import { resolveTargets } from '../canvas/resolve'
 import type { Destination } from './phases'
@@ -102,7 +102,10 @@ export function buildPlan(
     chapterTitle: c.chapter.title,
     pages: c.sections.filter(publishable).map((s) => ({
       sectionId: s.id,
-      title: s.title,
+      // What the page will actually be called, not what the section is called:
+      // a generic section carries its chapter (see `page-identity.ts`), and the
+      // plan must not promise a name the push will not use.
+      title: qualifiedTitle(c.chapter.title, s.title),
       chapterTitle: c.chapter.title,
       status:
         destination?.kind !== 'canvas'

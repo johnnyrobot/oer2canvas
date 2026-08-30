@@ -33,3 +33,30 @@ test('a push addresses exactly the pages a cartridge import would create', () =>
     .map((e) => e.name.replace(/^wiki_content\//, '').replace(/\.html$/, ''))
   expect(pageTargets(CHAPTERS).map((p) => p.slug)).toEqual(fromCartridge)
 })
+
+/*
+  A section title that does not say which chapter it belongs to gets told.
+  "Introduction", "Key Terms" and "Summary" repeat verbatim in every chapter of
+  an OpenStax book, and Canvas derives a page url from the title — so without
+  this, two chapters' generic sections collide in the course.
+*/
+test('a section whose title does not name its chapter is qualified with it', () => {
+  const [first] = pageTargets([chapter('Chapter 1 Prerequisites', [section('a', 'Introduction')])])
+  expect(first!.title).toBe('Chapter 1 Introduction')
+})
+
+test('a section that already names its chapter is left alone', () => {
+  const [numbered] = pageTargets([chapter('Chapter 1 Prerequisites', [section('b', '1.4 Polynomials')])])
+  expect(numbered!.title).toBe('1.4 Polynomials')
+})
+
+/*
+  The slug is deliberately NOT changed by any of this. Cartridge filenames — and
+  therefore the Canvas urls of every page already imported from one — must stay
+  exactly where they are, or the product's "running it again updates the same
+  pages" promise breaks for everyone who used that route.
+*/
+test('qualifying a title leaves the slug where it was', () => {
+  expect(pageTargets(CHAPTERS).map((p) => p.slug))
+    .toEqual(['chapter-1-introduction', 'chapter-1-1-4-polynomials', 'chapter-1-introduction-2'])
+})

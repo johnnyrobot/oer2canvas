@@ -160,9 +160,11 @@ test('a page whose slug already exists in the course reads as an overwrite', () 
     CANVAS, 0,
     [{ url: 'chapter-1-introduction', title: 'Introduction' }, { url: 'syllabus', title: 'Syllabus' }],
   )
+  // The titles carry their chapter; the STATUSES are what this test is about,
+  // and the slug match that produces them is unaffected by the qualification.
   expect(plan.groups[0]!.pages.map((p) => [p.title, p.status.kind])).toEqual([
-    ['Introduction', 'overwrite'],
-    ['Polynomials', 'new'],
+    ['Chapter 1 Introduction', 'overwrite'],
+    ['Chapter 1 Polynomials', 'new'],
   ])
 })
 
@@ -204,14 +206,23 @@ test('recognises a page a previous push created under a url Canvas invented', ()
 // plan refuses rather than promising an overwrite it cannot identify.
 test('an ambiguous match is reported as unknown, never as an overwrite', () => {
   const plan = buildPlan(
-    [
-      chapter('Chapter 1', [section('a', { title: 'Introduction' })]),
-      chapter('Chapter 2', [section('b', { title: 'Introduction' })]),
-    ],
+    /*
+      One section, and TWO pages in the course carrying its title. Which is it?
+      Unanswerable, so the plan must say so rather than pick.
+
+      Written with two same-titled PAGES rather than two same-titled sections
+      from different chapters, which is how it read before 2026-08-30: a page
+      title now carries its chapter, so two chapters cannot want one title. That
+      is the fix, and the cross-chapter case has its own test in `resolve.test.ts`.
+    */
+    [chapter('Chapter 1', [section('a', { title: 'Introduction' })])],
     CANVAS, 0,
-    [{ url: 'introduction', title: 'Introduction' }, { url: 'introduction-2', title: 'Introduction' }],
+    [
+      { url: 'introduction', title: 'Chapter 1 Introduction' },
+      { url: 'introduction-2', title: 'Chapter 1 Introduction' },
+    ],
   )
-  expect(plan.groups.flatMap((g) => g.pages).map((p) => p.status.kind)).toEqual(['unknown', 'unknown'])
+  expect(plan.groups.flatMap((g) => g.pages).map((p) => p.status.kind)).toEqual(['unknown'])
 })
 
 /*
@@ -269,12 +280,21 @@ test('an unknown status carries why it is unknown', () => {
   expect(notLoaded.groups[0]!.pages[0]!.status).toEqual({ kind: 'unknown', reason: 'not-loaded' })
 
   const ambiguous = buildPlan(
-    [
-      chapter('Chapter 1', [section('a', { title: 'Introduction' })]),
-      chapter('Chapter 2', [section('b', { title: 'Introduction' })]),
-    ],
+    /*
+      One section, and TWO pages in the course carrying its title. Which is it?
+      Unanswerable, so the plan must say so rather than pick.
+
+      Written with two same-titled PAGES rather than two same-titled sections
+      from different chapters, which is how it read before 2026-08-30: a page
+      title now carries its chapter, so two chapters cannot want one title. That
+      is the fix, and the cross-chapter case has its own test in `resolve.test.ts`.
+    */
+    [chapter('Chapter 1', [section('a', { title: 'Introduction' })])],
     CANVAS, 0,
-    [{ url: 'introduction', title: 'Introduction' }, { url: 'introduction-2', title: 'Introduction' }],
+    [
+      { url: 'introduction', title: 'Chapter 1 Introduction' },
+      { url: 'introduction-2', title: 'Chapter 1 Introduction' },
+    ],
   )
   expect(ambiguous.groups[0]!.pages[0]!.status).toEqual({ kind: 'unknown', reason: 'ambiguous' })
 })

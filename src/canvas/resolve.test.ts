@@ -43,12 +43,24 @@ test('nothing in the course means everything is created, and nothing is aimed at
 })
 
 /*
-  Two sections titled "Introduction" and ONE page that could be either: the same
-  coin toss as two pages, and refused for the same reason. Claiming it for
-  chapter 1 because chapter 1 comes first is a guess dressed as an ordering rule.
+  Two sections that want ONE title, and one page that could be either: a coin
+  toss, refused. Claiming it for the first because it comes first is a guess
+  dressed as an ordering rule.
+
+  The two sections are in the SAME chapter, which is the only way this arises
+  now. It used to be written with one section from each of two chapters, but a
+  target's title carries its chapter since 2026-08-30, so two chapters can no
+  longer want one title — that is the point of the qualification, and the
+  cross-chapter case is covered by its own test below. Same-titled sections
+  within a chapter are anticipated elsewhere in this module: `pageTargetsByChapter`
+  already de-duplicates their slugs.
 */
 test('one page that two sections could both own is claimed by neither', () => {
-  const resolved = resolveTargets(TWO, [page('introduction', 'Introduction')])
+  const twins = pageTargets([
+    chapter('Chapter 1', [section('a', 'Introduction'), section('b', 'Introduction')]),
+  ])
+  // A url Canvas invented, so neither section's slug matches and only the title is left.
+  const resolved = resolveTargets(twins, [page('introduction-xyz', 'Chapter 1 Introduction')])
   expect(resolved.map((r) => r.existingUrl)).toEqual([undefined, undefined])
   expect(resolved.map((r) => r.ambiguous)).toEqual([true, true])
 })
@@ -73,12 +85,16 @@ test('a page already claimed by slug is not claimed again by title', () => {
   and is refused rather than guessed.
 */
 test('refuses to guess when two same-titled pages could each be the target', () => {
-  const resolved = resolveTargets(TWO, [
-    page('introduction', 'Introduction'),
-    page('introduction-2', 'Introduction'),
+  // One wanting section, two free pages carrying its title. Which one is it?
+  // Unanswerable, so neither is touched. (Two pages can share a title in Canvas
+  // even though they cannot share a url.)
+  const one = pageTargets([chapter('Chapter 1', [section('a', 'Introduction')])])
+  const resolved = resolveTargets(one, [
+    page('introduction', 'Chapter 1 Introduction'),
+    page('introduction-2', 'Chapter 1 Introduction'),
   ])
-  expect(resolved.map((r) => r.ambiguous)).toEqual([true, true])
-  expect(resolved.map((r) => r.existingUrl)).toEqual([undefined, undefined])
+  expect(resolved.map((r) => r.ambiguous)).toEqual([true])
+  expect(resolved.map((r) => r.existingUrl)).toEqual([undefined])
 })
 
 test('a slug match settles what a title match could not', () => {
@@ -91,4 +107,25 @@ test('a slug match settles what a title match could not', () => {
     'chapter-2-introduction',
   ])
   expect(resolved.some((r) => r.ambiguous)).toBe(false)
+})
+
+/*
+  THE BUG AN OPERATOR HIT, 2026-08-30: pushing chapter 2 in a SEPARATE run
+  overwrote chapter 1's "Introduction".
+
+  Within one run it was already safe — two sections want the title, so the
+  matcher above calls it ambiguous and creates both. Across runs there is only
+  one wanting section and one free page, which reads as a clean identification
+  and is not one: the free page belongs to a different chapter. Canvas derives
+  the url from the TITLE (see the measurement above), so chapter 1's push left a
+  page at `introduction` that chapter 2 then claimed.
+
+  The fix is that a target's title now carries its chapter, so the two chapters
+  no longer want the same title at all.
+*/
+test('a page from another chapter is not claimed by a same-named section pushed later', () => {
+  const chapterTwoAlone = pageTargets([chapter('Chapter 2', [section('b', 'Introduction')])])
+  // What chapter 1's earlier push left behind, at the url Canvas chose for it.
+  const resolved = resolveTargets(chapterTwoAlone, [page('introduction', 'Introduction')])
+  expect(resolved[0]!.existingUrl).toBeUndefined()
 })
