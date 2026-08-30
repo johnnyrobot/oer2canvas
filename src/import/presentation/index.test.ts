@@ -433,34 +433,37 @@ test('a text:h heading inside speaker notes is not dropped from notesText (fix-r
   expect(index.slides[0]!.textRuns).toEqual(['Title', 'Body'])
 })
 
-test('an office:annotation anchored INSIDE a notes paragraph is counted zero times, not twice (task 6 amendment 3)', async () => {
+test('an office:annotation anchored INSIDE a notes paragraph is counted ONCE, as anydoc emits it', async () => {
   /*
    * The reconciler tells a private speaker note from a genuine pull quote by
-   * comparing `notesText` against the blockquote's text with STRICT EQUALITY,
-   * and strict equality is what keeps a real quotation on the page. An
-   * `office:annotation` anchored inline inside a notes paragraph used to be
-   * counted TWICE — once inside the enclosing paragraph's own text, once again
-   * when `odfParagraphs` found the annotation's inner `text:p` as a standalone
-   * paragraph — so the comparison failed and the notes were published. anydoc
-   * emits no block for a comment anywhere, so the honest reading is that a
-   * comment contributes NOTHING to the notes: not once, not twice.
+   * comparing `notesText` against anydoc's blockquote with STRICT EQUALITY, so
+   * `notesText` has to reproduce anydoc's string exactly — that is the only
+   * definition under which an equality test can work at all.
+   *
+   * MEASURED with real anydoc 0.2.4 on this very fixture shape: the blockquote
+   * reads "Mention the labINLINE PRIVATE before class." — the comment's text
+   * included once, concatenated with no separator. `odfParagraphs` used to find
+   * the annotation's own `text:p` a SECOND time as a standalone paragraph, so
+   * `notesText` doubled it and the comparison failed, publishing the notes.
+   * Counting it zero times instead (an earlier attempt at this fix) fails the
+   * same comparison from the other side.
    */
   const index = await odpIndexOf(await odpFixture([
     {
       title: 'Photosynthesis',
       body: ['Light reactions'],
-      notesRuns: ['Mention the lab', { comment: 'Is this still true?' }, ' before class.'],
+      notesRuns: ['Mention the lab', { comment: 'INLINE PRIVATE' }, ' before class.'],
     },
   ]))
 
-  expect(index.slides[0]!.notesText).toBe('Mention the lab before class.')
+  expect(index.slides[0]!.notesText).toBe('Mention the labINLINE PRIVATE before class.')
 })
 
 test('an inline notes comment does not leak into the page text either', async () => {
   const index = await odpIndexOf(await odpFixture([
     {
       title: 'Photosynthesis',
-      notesRuns: ['Mention the lab', { comment: 'Is this still true?' }, ' before class.'],
+      notesRuns: ['Mention the lab', { comment: 'INLINE PRIVATE' }, ' before class.'],
     },
   ]))
 

@@ -209,30 +209,26 @@ function paragraphText(paragraph: Element, { includeFields }: { includeFields: b
  * for `a:br`. Unlike PPTX, no `isTextCarrier` is passed at all: see that
  * option's own doc comment on `joinParagraphText` for why an ODF allowlist
  * (of `text:span`, in an earlier version of this function) is a losing list
- * that dropped a hyperlink's own text.
+ * that dropped a hyperlink's own text. ODF has no field-chrome equivalent to
+ * exclude here.
  *
- * The one thing excluded is an `office:annotation` anchored INLINE, mid
- * paragraph — a reviewer comment, which anydoc emits no block for anywhere,
- * so it is not paragraph content. Without this, a comment's own text is
- * concatenated straight into the sentence it interrupts (`"Mention the
- * labIs this still true? before class."`) — and inside SPEAKER NOTES that is
- * safety-critical, because `notesText` is compared by strict equality
- * against anydoc's blockquote to tell a private note from a genuine pull
- * quote. Impress anchors its own comments at page level (which
- * `excludedRoots` in `odpIndex` already handles), but format converters emit
- * the inline form.
+ * An `office:annotation` anchored INLINE, mid paragraph, is NOT excluded, and
+ * that is measured rather than assumed. Driving real anydoc 0.2.4 over an
+ * .odp whose notes paragraph carries one, its blockquote reads `"Mention the
+ * labINLINE PRIVATE before class."` — the comment's text included exactly
+ * ONCE, concatenated with no separator, because ODF has no isolating leaf
+ * element. `notesText` is compared to that blockquote by strict equality
+ * downstream, so it has to reproduce anydoc's string exactly; excluding the
+ * comment produced `"Mention the lab before class."`, which fails the same
+ * comparison from the other side and publishes the notes just as surely.
+ * Counting it exactly once is the whole fix — see `odfParagraphs` for the
+ * SECOND count that had to go instead.
  */
 function odfParagraphText(paragraph: Element): string {
   return joinParagraphText(paragraph, {
     isSpace: (element) => element.namespaceURI === ODF_TEXT_NS &&
       (element.localName === 'line-break' || element.localName === 'tab' || element.localName === 's'),
-    exclude: isOdfAnnotation,
   })
-}
-
-/** An `office:annotation` — an Impress/converter reviewer comment. */
-function isOdfAnnotation(element: Element): boolean {
-  return element.namespaceURI === ODF_OFFICE_NS && element.localName === 'annotation'
 }
 
 /**
@@ -519,14 +515,14 @@ function pptxIndex(parts: Record<string, string>): PresentationIndex {
  * single run, which anydoc's own per-paragraph blocks never do, and which
  * the later reconciliation cannot match against.
  *
- * A paragraph living INSIDE an `office:annotation` is not one of the
- * container's own paragraphs and is skipped here, the counterpart of
- * `odfParagraphText` excluding an inline annotation from the paragraph it
- * interrupts. Both halves are needed and neither is redundant: an
- * `office:annotation` carries its own `text:p`, so this flat any-depth query
- * would otherwise find that `text:p` a SECOND time as a standalone
- * paragraph, and `notesText` — the string a blockquote is compared against
- * by strict equality — would count a private reviewer comment twice over.
+ * A paragraph living INSIDE an `office:annotation` is skipped, because this
+ * flat any-depth query would otherwise find it TWICE over: once as part of
+ * the paragraph the comment is anchored in (`odfParagraphText` walks into the
+ * annotation, as anydoc does), and once again here as a standalone paragraph
+ * of its own. The doubled text fails the strict-equality comparison
+ * `notesText` exists for, and a failed comparison publishes the speaker
+ * notes. Removing this second visit — rather than the inline text anydoc
+ * itself emits — is what makes the two strings agree.
  */
 function odfParagraphs(container: Element): string[] {
   const annotations = [...container.getElementsByTagNameNS(ODF_OFFICE_NS, 'annotation')]
