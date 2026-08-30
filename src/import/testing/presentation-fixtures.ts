@@ -1424,3 +1424,24 @@ export async function odpFixture(
   }
   return writeZip(entries) as Promise<Uint8Array<ArrayBuffer>>
 }
+
+/**
+ * Rewrites every uncompressed-size field (central directory and local header)
+ * to `declared`, leaving the payload untouched — which is exactly what a
+ * hand-built hostile archive does. Shared by `zip-read.test.ts` and
+ * `security.browser.test.ts` so there is exactly one hostile-archive builder
+ * to keep truthful, not two that can quietly drift apart.
+ */
+export function patchUncompressedSizes(
+  zip: Uint8Array<ArrayBuffer>,
+  declared: number,
+): Uint8Array<ArrayBuffer> {
+  const patched = zip.slice()
+  const view = new DataView(patched.buffer, patched.byteOffset, patched.byteLength)
+  for (let at = 0; at + 4 <= patched.length; at += 1) {
+    const signature = view.getUint32(at, true)
+    if (signature === 0x02014b50) view.setUint32(at + 24, declared, true)
+    if (signature === 0x04034b50) view.setUint32(at + 22, declared, true)
+  }
+  return patched
+}

@@ -1,5 +1,6 @@
 import { writeZip } from '../engine/export/zip'
 import { readZipParts, ZipReadError, PRESENTATION_PACKAGE_LIMITS } from './zip-read'
+import { patchUncompressedSizes } from './testing/presentation-fixtures'
 
 const utf8 = (value: string) => new TextEncoder().encode(value)
 
@@ -55,7 +56,7 @@ test('refuses an entry whose header lies about its uncompressed size', async () 
   // The classic zip-bomb shape: a small declared size hiding a large payload.
   // Patching the central-directory AND local-header size fields to 4 leaves a
   // valid-looking archive whose inflate must be stopped mid-stream.
-  const bytes = await writeZip([{ name: 'lie.xml', data: utf8('<x/>'.repeat(100_000)) }])
+  const bytes = await writeZip([{ name: 'lie.xml', data: utf8('<x/>'.repeat(100_000)) }]) as Uint8Array<ArrayBuffer>
   const patched = patchUncompressedSizes(bytes, 4)
 
   // The message, not just the code, is asserted: a reader that dropped the
@@ -103,22 +104,6 @@ test('refuses an entry whose compressed bytes are corrupt, not merely its declar
     message: expect.stringMatching(/corrupt|inflat/i),
   })
 })
-
-/**
- * Rewrites every uncompressed-size field (central directory and local header)
- * to `declared`, leaving the payload untouched — which is exactly what a
- * hand-built hostile archive does.
- */
-function patchUncompressedSizes(zip: Uint8Array, declared: number): Uint8Array {
-  const patched = zip.slice()
-  const view = new DataView(patched.buffer, patched.byteOffset, patched.byteLength)
-  for (let at = 0; at + 4 <= patched.length; at += 1) {
-    const signature = view.getUint32(at, true)
-    if (signature === 0x02014b50) view.setUint32(at + 24, declared, true)
-    if (signature === 0x04034b50) view.setUint32(at + 22, declared, true)
-  }
-  return patched
-}
 
 /**
  * Flips a handful of bytes inside `entryName`'s compressed payload, leaving

@@ -3,9 +3,16 @@ import { compressionBombDocx } from './testing/archive-bomb'
 import { malformedStructuredFixture } from './testing/structured-document-fixtures'
 import { encryptedPdfFixture, malformedPdfFixture } from './testing/pdf-fixture'
 import { semanticDocxFixture } from './testing/docx-fixture'
+import { pptxFixture, patchUncompressedSizes } from './testing/presentation-fixtures'
 import { importStructuredDocument } from './document'
 import { importWebArticle } from './web'
 import { DOCUMENT_IMPORT_LIMITS } from './limits'
+import { readZipParts, PRESENTATION_PACKAGE_LIMITS } from './zip-read'
+import { writeZip } from '../engine/export/zip'
+
+const PPTX_MEDIA_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+const PPTM_MEDIA_TYPE = 'application/vnd.ms-powerpoint.presentation.macroEnabled.12'
+const hostileDeckMetadata = { title: 'Lecture', rightsAuthority: 'own' as const, rightsAcknowledged: true }
 
 /*
  * Issue 13, criterion 3: hostile documents, HTML, URLs, archive expansion,
@@ -208,4 +215,77 @@ test('a file whose bytes are not the format its name claims is refused as unsupp
     bytes: new TextEncoder().encode('<html><body>not a pdf</body></html>').buffer,
     formatHint: 'pdf',
   })).rejects.toMatchObject({ code: 'unsupported', retryable: false })
+})
+
+test('a deck whose package entry lies about its size is refused', async () => {
+  /*
+   * Measured 2026-08-30: `pptxFixture`'s slide XML is small enough that
+   * `writeZip` deflates it, so `patchUncompressedSizes` lies about every
+   * entry's declared size — including the slide XML `anydoc-wasm`'s own
+   * `toDocument` reads first. That call SUCCEEDS regardless (anydoc has no
+   * reason to notice a size lie in a part it is not size-checking), so the
+   * refusal does not come from the vendor. It comes from THIS app's own zip
+   * reader: `workers/anydoc.worker.ts` calls `readZipParts` right after
+   * `toDocument` returns, to build the presentation index, and
+   * `zip-read.ts`'s `inflateRaw` hard-stops the moment inflated output
+   * passes the declared size — mid-stream, not after the fact. That
+   * `ZipReadError` (`code: 'malformed'`) is thrown inside the Worker's
+   * try/catch, so it is `failure()`'s `rawCode === 'malformed'` branch that
+   * passes the code through unchanged, and `actionableFailure` in
+   * `probe.ts` that prefixes the vendor label onto the message. Pinning
+   * both proves the size-lie is caught by OUR reader before any bytes reach
+   * the page, not by a downstream size compare after the damage is done.
+   */
+  const deck = await pptxFixture([{ title: 'Photosynthesis' }])
+  const patched = patchUncompressedSizes(deck, 4)
+
+  await expect(importStructuredDocument(
+    new File([patched], 'lecture.pptx', { type: PPTX_MEDIA_TYPE }),
+    { metadata: hostileDeckMetadata },
+  )).rejects.toMatchObject({
+    name: 'ParserProbeError',
+    code: 'malformed',
+    message: expect.stringMatching(/not a readable archive.*inflated past the size/),
+  })
+})
+
+test('a macro-enabled deck imports no macro bytes and packages no macro asset', async () => {
+  // `pptxFixture`'s `withMacroPart` adds `ppt/vbaProject.bin` carrying
+  // `'macro payload placeholder'`, exactly as a real .pptm/.ppsm does — see
+  // `presentation-fixtures.ts`. `parts.ts`'s `wantedPresentationPart` never
+  // matches that path, so `parts.test.ts` already pins that it is never
+  // inflated by the slide index. This test is the end-to-end claim one layer
+  // up: the SAME macro-enabled file, run through the whole import, produces
+  // slide content and neither macro bytes in the page nor an asset packaged
+  // from that part. We never execute the macro; this is the test that keeps
+  // that true.
+  const deck = await pptxFixture([{ title: 'Macro deck' }], { container: 'pptm', withMacroPart: true })
+  const result = await importStructuredDocument(
+    new File([deck], 'lecture.pptm', { type: PPTM_MEDIA_TYPE }),
+    { metadata: hostileDeckMetadata },
+  )
+
+  // The slide's own content survives — proving this is a real import, not a
+  // vacuous pass on a document with nothing in it either way.
+  expect(result.work.sections[0]!.html).toContain('Macro deck')
+  expect(result.work.sections[0]!.html).not.toContain('macro payload placeholder')
+  expect(result.work.assets.map((asset) => asset.originPart)).not.toContain('ppt/vbaProject.bin')
+})
+
+test('a deck with more package entries than the ceiling is refused by resource-limit', async () => {
+  // `parts.ts` only asks `readZipParts` for `ppt/*` XML paths, but the ceiling
+  // in `zip-read.ts` checks the archive's TOTAL entry count before it ever
+  // asks which parts are wanted — so a deck padded with junk entries to
+  // exhaust the central-directory walk itself is refused before path
+  // filtering runs at all.
+  const entries = Array.from(
+    { length: PRESENTATION_PACKAGE_LIMITS.maximumPackageEntries + 1 },
+    (_unused, index) => ({ name: `ppt/slides/slide${index}.xml`, data: new TextEncoder().encode('<p:sld/>') }),
+  )
+
+  await expect(readZipParts(await writeZip(entries), () => true)).rejects.toMatchObject({
+    name: 'ZipReadError',
+    code: 'resource-limit',
+    message: expect.stringMatching(/entries/),
+  })
 })
