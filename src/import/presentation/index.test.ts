@@ -775,6 +775,23 @@ test("a p:pic's fill is read in either namespace, because anydoc renders both", 
   expect(inShapeProperties.slides[0]!.pictureOrigins).toEqual(['ppt/media/image1.png'])
 })
 
+test('a blipFill wrapping its blip in mc:AlternateContent resolves the branch anydoc renders (carried fix, task 7 review)', async () => {
+  /*
+   * `mc:AlternateContent` is legal at any element position, not only where
+   * `walkShapes` meets it on the shape tree, so a fill's own blip can be
+   * wrapped in one too. The Choice requires `p14`, so anydoc renders the
+   * Fallback (see `MC_REQUIRES_NAMESPACES`) — and the Choice's blip names a
+   * relationship the package never declares, so a reader that visited BOTH
+   * branches (an earlier version of this function collected every `a:blip`
+   * at any depth inside the chosen fill) would also misreport a picture as
+   * lost that anydoc never tried to render at all.
+   */
+  const index = await indexOf(await pptxFixture([{ blipFillAlternateContent: true }]))
+
+  expect(index.slides[0]!.pictureOrigins).toEqual(['ppt/media/imageFallback.png'])
+  expect(index.slides[0]!.unrepresentable.pictures).toBe(0)
+})
+
 test('a target resolving to the package root is unresolvable, not the empty string', async () => {
   /*
    * `''` is not a spare value to hand back: it is exactly the origin

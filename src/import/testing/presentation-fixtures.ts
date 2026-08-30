@@ -156,6 +156,18 @@ export interface PptxSlideSpec {
    */
   drawingmlBlipFill?: { inSpPr?: boolean }
   /**
+   * A `p:pic` whose `p:blipFill` wraps its blip in `mc:AlternateContent` —
+   * legal at any element position under OOXML markup compatibility, not only
+   * where `walkShapes` meets it on the shape tree. The `mc:Choice` requires
+   * `p14`, which anydoc renders the `mc:Fallback` for (see
+   * `MC_REQUIRES_NAMESPACES`), so the picture anydoc actually renders is named
+   * by the Fallback's relationship — and the Choice's blip names a
+   * relationship the package never declares, so a reader that visited it
+   * regardless of the branch would also misreport a lost picture that was
+   * never really lost.
+   */
+  blipFillAlternateContent?: boolean
+  /**
    * A pasted Excel worksheet: `p:graphicFrame` → `graphicData uri=…/ole` →
    * `p:oleObj` → a preview `p:pic`. The preview is the only part of it anydoc
    * ever sees, and it is a picture — nested two levels below the shape tree,
@@ -557,6 +569,16 @@ function slideXml(spec: PptxSlideSpec): string {
           `<p:spPr/>`) +
       `</p:pic>`
     : ''
+  const blipFillAlternateContent = spec.blipFillAlternateContent
+    ? `<p:pic><p:nvPicPr><p:cNvPr id="30" name="AlternateContent Fill 30" descr="AC fill"/>` +
+      `<p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+      `<p:blipFill><mc:AlternateContent xmlns:mc="${MC_NS}">` +
+      `<mc:Choice xmlns:p14="${MC_REQUIRES_NAMESPACES.p14}" Requires="p14">` +
+      `<a:blip r:embed="rIdNeverDeclared"/></mc:Choice>` +
+      `<mc:Fallback><a:blip r:embed="rIdFallbackBlip"/></mc:Fallback>` +
+      `</mc:AlternateContent><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+      `<p:spPr/></p:pic>`
+    : ''
   const brokenImage = spec.brokenImage
     ? `<p:pic><p:nvPicPr><p:cNvPr id="11" name="Broken Picture 11"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
       `<p:blipFill><a:blip r:embed="rIdMissingImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
@@ -598,7 +620,7 @@ function slideXml(spec: PptxSlideSpec): string {
   const nested = spec.nestedGroupDepth ? nestedGroups(spec.nestedGroupDepth) : ''
 
   const pictures = `${image}${secondImage}${linkedImage}${brokenImage}${blipWithoutReference}` +
-    `${missingMediaImage}${unpackageableImage}${drawingmlBlipFill}`
+    `${missingMediaImage}${unpackageableImage}${drawingmlBlipFill}${blipFillAlternateContent}`
   const shapes = spec.titleLast
     ? `${body}${pictures}${diagram}${chart}${video}${audio}${table}${oleObject}${group}${alternateContent}${nested}${title}`
     : `${title}${body}${pictures}${diagram}${chart}${video}${audio}${table}${oleObject}${group}${alternateContent}${nested}`
@@ -762,6 +784,12 @@ export async function pptxFixture(
     if (slide.linkedImage) {
       rels.push('<Relationship Id="rIdLinkedImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="https://example.edu/cell.png" TargetMode="External"/>')
     }
+    if (slide.blipFillAlternateContent) {
+      // `rIdNeverDeclared` — the Choice branch's own relationship — is
+      // deliberately absent: the Choice must never be visited at all, so
+      // nothing ever tries to resolve it.
+      rels.push('<Relationship Id="rIdFallbackBlip" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/imageFallback.png"/>')
+    }
     if (rels.length > 0) {
       entries.push({ name: `ppt/slides/_rels/slide${index + 1}.xml.rels`, data: utf8(
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
@@ -776,6 +804,9 @@ export async function pptxFixture(
   }
   if (slides.some((slide) => slide.unpackageableImage || slide.oleObject)) {
     entries.push({ name: 'ppt/media/image2.emf', data: EMF_BYTES })
+  }
+  if (slides.some((slide) => slide.blipFillAlternateContent)) {
+    entries.push({ name: 'ppt/media/imageFallback.png', data: EMBEDDED_IMAGE_PNG })
   }
   if (slides.some((slide) => slide.oleObject)) {
     // The worksheet itself: anydoc never renders it, but a real package always
