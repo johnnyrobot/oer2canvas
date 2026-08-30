@@ -1,11 +1,16 @@
 import { readZipParts } from '../zip-read'
-import { pptxFixture } from '../testing/presentation-fixtures'
+import { pptxFixture, odpFixture } from '../testing/presentation-fixtures'
 import { wantedPresentationPart } from './parts'
 import { readPresentationIndex, PresentationIndexError } from './index'
 
 async function indexOf(bytes: Uint8Array) {
   const parts = await readZipParts(bytes, (path) => wantedPresentationPart('pptx', path))
   return readPresentationIndex('pptx', Object.fromEntries(parts))
+}
+
+async function odpIndexOf(bytes: Uint8Array) {
+  const parts = await readZipParts(bytes, (path) => wantedPresentationPart('odp', path))
+  return readPresentationIndex('odp', Object.fromEntries(parts))
 }
 
 test('slides are numbered in presentation order, not part-name order', async () => {
@@ -185,4 +190,108 @@ test('a title placeholder identified only by idx is read as ordinary text, not a
   expect(index.slides[0]!.title).toBeUndefined()
   expect(index.slides[0]!.textRuns).toEqual(['Photosynthesis', 'Light reactions'])
   expect(index.slides[0]!.titleOutOfOrder).toBe(false)
+})
+
+test('odp pages are numbered in document order with their titles', async () => {
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Photosynthesis', body: ['Light reactions'] },
+    { title: 'Where it happens', body: ['Stroma'] },
+  ]))
+
+  expect(index.kind).toBe('odp')
+  expect(index.slides.map((slide) => slide.title)).toEqual(['Photosynthesis', 'Where it happens'])
+})
+
+test('an odp page with no title frame reports no title', async () => {
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'First page' },
+    { body: ['Body of an untitled page'] },
+  ]))
+
+  expect(index.slides[1]!.title).toBeUndefined()
+})
+
+test('odp notes are found and kept out of the page text', async () => {
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Photosynthesis', body: ['Light reactions'], notes: 'Mention the thylakoid membrane.' },
+  ]))
+
+  expect(index.slides[0]!.notesText).toBe('Mention the thylakoid membrane.')
+  expect(index.slides[0]!.textRuns).not.toContain('Mention the thylakoid membrane.')
+})
+
+test('an odp title frame authored last is NOT out of order, because anydoc hoists it', async () => {
+  /*
+   * Design fact 4: measured 2026-08-29, ODP hoists a `presentation:class="title"`
+   * frame to the top of its page while PPTX preserves `spTree` order. The index
+   * reports what the CONSUMER will see, so ODP's title is in order even when it
+   * is authored last — otherwise every such deck would carry a warning about a
+   * disagreement that does not exist downstream.
+   */
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Title last in XML', body: ['Body first in XML'], titleLast: true },
+  ]))
+
+  expect(index.slides[0]!.titleOutOfOrder).toBe(false)
+  expect(index.slides[0]!.textRuns).toEqual(['Title last in XML', 'Body first in XML'])
+})
+
+test('a two-paragraph odp body produces two separate text-run entries, not one merged run', async () => {
+  // Each bullet is its own `text:p`; collapsing the whole FRAME's textContent
+  // into one string (the defect the PPTX path already removed) would merge
+  // two bullets into one entry, which anydoc's own per-paragraph blocks never
+  // do — and the later reconciliation would raise a false "unattributed
+  // content" blocker on the second bullet.
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Photosynthesis', body: ['Light reactions', 'Dark reactions'] },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Photosynthesis', 'Light reactions', 'Dark reactions'])
+})
+
+test('an odp text:span split mid-word is joined with no separator', async () => {
+  // Impress splits a run mid-word at a spell-check mark or a formatting
+  // change, exactly as PowerPoint does with `a:r` — the two spans are still
+  // one word.
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Overview', bodyRuns: ['Photosynthesi', 's'] },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Overview', 'Photosynthesis'])
+})
+
+test('an odp text:line-break becomes one space, matching a:br on the PPTX side', async () => {
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Overview', bodyRuns: ['First half', { break: true }, 'second half'] },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Overview', 'First half second half'])
+})
+
+test('bullets authored inside a text:list produce one text-run entry each', async () => {
+  // Impress stores a bulleted body placeholder as `text:list > text:list-item
+  // > text:p`, not bare `text:p` siblings — the index must search the whole
+  // frame subtree for `text:p`, not just its direct children.
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Photosynthesis', bulletList: ['Light reactions', 'Dark reactions'] },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Photosynthesis', 'Light reactions', 'Dark reactions'])
+})
+
+test('odp notes text survives a mid-word text:span split and stays out of page text', async () => {
+  // `notesText` is compared by STRICT EQUALITY downstream to decide whether a
+  // blockquote is the author's private speaker notes; a routine mid-word
+  // split reaching it as two words with a wrongly-stitched space would break
+  // that comparison and publish the notes as body text.
+  const index = await odpIndexOf(await odpFixture([
+    {
+      title: 'Photosynthesis',
+      bulletList: ['Light reactions', 'Dark reactions'],
+      notesRuns: ['Mention the thylakoid membran', 'e.'],
+    },
+  ]))
+
+  expect(index.slides[0]!.notesText).toBe('Mention the thylakoid membrane.')
+  expect(index.slides[0]!.textRuns).toEqual(['Photosynthesis', 'Light reactions', 'Dark reactions'])
 })

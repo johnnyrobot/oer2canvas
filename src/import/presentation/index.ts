@@ -41,6 +41,10 @@ const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationship
 const MC_NS = 'http://schemas.openxmlformats.org/markup-compatibility/2006'
 const DIAGRAM_URI = 'http://schemas.openxmlformats.org/drawingml/2006/diagram'
 const CHART_URI = 'http://schemas.openxmlformats.org/drawingml/2006/chart'
+const ODF_OFFICE_NS = 'urn:oasis:names:tc:opendocument:xmlns:office:1.0'
+const ODF_TEXT_NS = 'urn:oasis:names:tc:opendocument:xmlns:text:1.0'
+const ODF_DRAW_NS = 'urn:oasis:names:tc:opendocument:xmlns:drawing:1.0'
+const ODF_PRESENTATION_NS = 'urn:oasis:names:tc:opendocument:xmlns:presentation:1.0'
 
 function parseXml(xml: string, what: string): Document {
   const parsed = new DOMParser().parseFromString(xml, 'application/xml')
@@ -58,43 +62,82 @@ function collapse(value: string | null | undefined): string {
 }
 
 /**
- * One paragraph's (`a:p`) text, walking its DIRECT children in order so an
- * `a:br` soft line break (Shift+Enter, still inside the SAME paragraph) can be
- * told apart from a run boundary:
+ * ONE shared definition of "how runs become a paragraph string", walking a
+ * paragraph's (or a run's) children RECURSIVELY — text nodes contribute their
+ * data directly, an element matching `{ breakNamespace, breakLocalName }`
+ * contributes exactly one space, an excluded element contributes nothing, and
+ * any other element (a run, a formatting wrapper, a nested span) is walked
+ * the same way. PPTX (`a:r`/`a:br`) and ODF (`text:span`/`text:line-break`)
+ * differ only in which element names carry text and which one is a break —
+ * both share this rule rather than each carrying a parallel definition of it:
  *
- * - An `a:r` run's `a:t` text is concatenated with NO separator from its
- *   neighbours. PowerPoint routinely splits a run mid-word — at a spell-check
- *   mark (`err="1"`), a formatting change, or a language boundary — so
- *   `<a:r><a:t>Photosynthesi</a:t></a:r><a:r><a:t>s</a:t></a:r>` is the single
- *   word `Photosynthesis`, never two words with a space stitched in between.
- * - An `a:br` becomes exactly one space. It is NOT a paragraph break — anydoc
+ * - Two adjacent text-bearing elements are concatenated with NO separator.
+ *   PowerPoint routinely splits a run mid-word — at a spell-check mark
+ *   (`err="1"`), a formatting change, or a language boundary — and Impress
+ *   does the same with `text:span`, so `<a:r><a:t>Photosynthesi</a:t></a:r>
+ *   <a:r><a:t>s</a:t></a:r>` (or the ODF equivalent) is the single word
+ *   `Photosynthesis`, never two words with a space stitched in between.
+ * - A break becomes exactly one space. It is NOT a paragraph break — anydoc
  *   renders it inline within the same block rather than starting a new
  *   one — so `<a:r><a:t>First half</a:t></a:r><a:br/><a:r><a:t>second
  *   half</a:t></a:r>` is `"First half second half"`, one `textRuns` entry,
  *   not two. (An earlier version of this function joined every run in a
  *   paragraph with the empty string uniformly, which fixed the mid-word case
- *   above by breaking this one — the space belongs at `a:br`, not between
+ *   above by breaking this one — the space belongs at the break, not between
  *   every pair of runs.)
- * - `includeFields` controls whether an `a:fld` (a field such as the notes
- *   slide-number placeholder's cached `slidenum` text) contributes its own
- *   `a:t`. The slide path leaves this on — a deferred minor, `a:fld` text
- *   still enters a slide's `textRuns` — but the notes-body path (see
- *   `notesBodyText`) turns it off, since a field's cached text is page
- *   chrome, not the presenter's authored words.
+ */
+function joinParagraphText(
+  paragraph: Element,
+  { breakNamespace, breakLocalName, exclude }: {
+    breakNamespace: string
+    breakLocalName: string
+    exclude?: (element: Element) => boolean
+  },
+): string {
+  const walk = (node: Node): string => {
+    let text = ''
+    for (const child of node.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        text += child.nodeValue ?? ''
+        continue
+      }
+      if (child.nodeType !== Node.ELEMENT_NODE) continue
+      const element = child as Element
+      if (element.namespaceURI === breakNamespace && element.localName === breakLocalName) {
+        text += ' '
+        continue
+      }
+      if (exclude?.(element)) continue
+      text += walk(element)
+    }
+    return text
+  }
+  return collapse(walk(paragraph))
+}
+
+/**
+ * One PPTX paragraph's (`a:p`) text. `includeFields` controls whether an
+ * `a:fld` (a field such as the notes slide-number placeholder's cached
+ * `slidenum` text) contributes its own `a:t`. The slide path leaves this on —
+ * a deferred minor, `a:fld` text still enters a slide's `textRuns` — but the
+ * notes-body path (see `notesBodyText`) turns it off, since a field's cached
+ * text is page chrome, not the presenter's authored words.
  */
 function paragraphText(paragraph: Element, { includeFields }: { includeFields: boolean }): string {
-  const parts: string[] = []
-  for (const child of paragraph.children) {
-    if (child.namespaceURI === DRAWING_NS && child.localName === 'br') {
-      parts.push(' ')
-      continue
-    }
-    if (child.namespaceURI === DRAWING_NS && child.localName === 'fld' && !includeFields) {
-      continue
-    }
-    parts.push([...child.getElementsByTagNameNS(DRAWING_NS, 't')].map((run) => run.textContent ?? '').join(''))
-  }
-  return collapse(parts.join(''))
+  return joinParagraphText(paragraph, {
+    breakNamespace: DRAWING_NS,
+    breakLocalName: 'br',
+    exclude: includeFields ? undefined : (element) => element.namespaceURI === DRAWING_NS && element.localName === 'fld',
+  })
+}
+
+/**
+ * One ODF paragraph's (`text:p`) text — the same rule as `paragraphText`,
+ * with `text:span` standing in for `a:r` and `text:line-break` for `a:br`.
+ * ODF has no field-chrome equivalent to exclude here.
+ */
+function odfParagraphText(paragraph: Element): string {
+  return joinParagraphText(paragraph, { breakNamespace: ODF_TEXT_NS, breakLocalName: 'line-break' })
 }
 
 /**
@@ -358,8 +401,110 @@ function pptxIndex(parts: Record<string, string>): PresentationIndex {
   return { kind: 'pptx', slides }
 }
 
-function odpIndex(_parts: Record<string, string>): PresentationIndex {
-  throw new PresentationIndexError('ODP indexing arrives in Task 5.')
+/**
+ * Text of one ODP container (a `draw:frame`, or the whole page), ONE ENTRY
+ * PER PARAGRAPH (`text:p`) — the ODF analogue of `shapeParagraphs`, and for
+ * the same reason: anydoc emits one block per paragraph, and paragraph-per-
+ * entry is what its output is reconciled against. `getElementsByTagNameNS`
+ * finds a `text:p` at ANY depth under `container`, which is exactly what is
+ * needed for Impress's bulleted body — `text:list > text:list-item > text:p`
+ * — where a paragraph is nested two levels below the frame it belongs to,
+ * not a direct child of it. Collapsing a whole FRAME's `textContent` into one
+ * string instead (the ORIGINAL form of this module's ODP stub) merges every
+ * bullet into a single run, which anydoc's own per-paragraph blocks never
+ * do, and which the later reconciliation cannot match against.
+ */
+function odfParagraphs(container: Element): string[] {
+  return [...container.getElementsByTagNameNS(ODF_TEXT_NS, 'p')]
+    .map((paragraph) => odfParagraphText(paragraph))
+    .filter((text) => text.length > 0)
+}
+
+/**
+ * A notes frame's text as ONE STRING, paragraphs joined with a single space —
+ * the ODF analogue of `notesBodyText`, and for the same reason: `notesText`
+ * is compared by STRICT EQUALITY against a single blockquote downstream, and
+ * two authored notes paragraphs are never mid-word the way two `text:span`
+ * runs inside one paragraph can be, so a plain space join between them is
+ * safe where joining WITHIN a paragraph with a space is not.
+ */
+function odfNotesText(notesElement: Element): string | undefined {
+  const paragraphs = odfParagraphs(notesElement)
+  return collapse(paragraphs.join(' ')) || undefined
+}
+
+function odpIndex(parts: Record<string, string>): PresentationIndex {
+  const content = parts['content.xml']
+  if (!content) {
+    throw new PresentationIndexError('This presentation has no content part to read pages from.')
+  }
+  const document = parseXml(content, 'content part')
+  const presentation = document.getElementsByTagNameNS(ODF_OFFICE_NS, 'presentation')[0]
+  if (!presentation) {
+    throw new PresentationIndexError('This presentation has no pages to read.')
+  }
+
+  const slides = [...presentation.getElementsByTagNameNS(ODF_DRAW_NS, 'page')].map((page, position) => {
+    const notesElement = page.getElementsByTagNameNS(ODF_PRESENTATION_NS, 'notes')[0]
+    const notesText = notesElement ? odfNotesText(notesElement) : undefined
+    // Notes live INSIDE the page element, so every text query below must exclude
+    // that subtree — otherwise a note would be read as page text, which is the
+    // exact confusion this index exists to prevent. `draw:g` (Impress's own
+    // "Group" command) needs no explicit recursion here the way PPTX's
+    // `p:grpSp` does in `walkShapes`: both this frame query and `odfParagraphs`
+    // above use `getElementsByTagNameNS`, which already finds a match at ANY
+    // depth in one call, so a frame or paragraph nested inside a group is found
+    // exactly as if it were not grouped, with no risk of the stack-depth
+    // exhaustion `MAX_GROUP_NESTING_DEPTH` guards against on the PPTX side —
+    // there is no recursive function of THIS module's own to overflow.
+    const frames = [...page.getElementsByTagNameNS(ODF_DRAW_NS, 'frame')]
+      .filter((frame) => !notesElement?.contains(frame))
+
+    const textRuns: string[] = []
+    let title: string | undefined
+    let titleIndex = -1
+    for (const frame of frames) {
+      const paragraphs = odfParagraphs(frame)
+      // The title is the FIRST paragraph of the FIRST title frame encountered,
+      // matching `walkShapes`'s "first wins" rule on the PPTX side — any
+      // further paragraph in that same frame is ordinary text, and any later
+      // frame that also claims to be a title is treated as ordinary text too.
+      if (frame.getAttributeNS(ODF_PRESENTATION_NS, 'class') === 'title' && title === undefined && paragraphs.length > 0) {
+        title = paragraphs[0]
+        titleIndex = textRuns.length
+      }
+      textRuns.push(...paragraphs)
+    }
+
+    /*
+     * ODP hoists a title frame to the top of its page regardless of where it
+     * was authored (design fact 4, measured 2026-08-29), so a title is never
+     * out of order downstream. Reporting the AUTHORED position here would
+     * raise a warning about a disagreement the reader never sees. The runs
+     * are reordered to match, title first — spliced out by INDEX
+     * (`titleIndex`, recorded above) rather than by re-filtering for a value
+     * equal to the title string, so a body paragraph that happens to repeat
+     * the title's exact text is never also removed.
+     */
+    const ordered = title === undefined
+      ? textRuns
+      : [title, ...textRuns.slice(0, titleIndex), ...textRuns.slice(titleIndex + 1)]
+
+    return {
+      number: position + 1,
+      ...(title ? { title } : {}),
+      textRuns: ordered,
+      ...(notesText ? { notesText } : {}),
+      titleOutOfOrder: false,
+      // ODF carries charts and media as embedded objects rather than as the
+      // distinct frame kinds PPTX uses. Nothing in the corpus exercises one
+      // yet, so nothing is claimed: this reports zero rather than guessing, and
+      // Task 12's verdict records it as a known limit of the ODP evidence.
+      unrepresentable: { diagrams: 0, charts: 0, media: 0 },
+    }
+  })
+
+  return { kind: 'odp', slides }
 }
 
 export function readPresentationIndex(

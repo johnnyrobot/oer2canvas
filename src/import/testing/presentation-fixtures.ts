@@ -424,3 +424,131 @@ export async function pptxFixture(
 
   return writeZip(entries) as Promise<Uint8Array<ArrayBuffer>>
 }
+
+const ODP_NS = {
+  office: 'urn:oasis:names:tc:opendocument:xmlns:office:1.0',
+  text: 'urn:oasis:names:tc:opendocument:xmlns:text:1.0',
+  draw: 'urn:oasis:names:tc:opendocument:xmlns:drawing:1.0',
+  presentation: 'urn:oasis:names:tc:opendocument:xmlns:presentation:1.0',
+  svg: 'urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0',
+  xlink: 'http://www.w3.org/1999/xlink',
+}
+
+/**
+ * One paragraph segment: a `text:span` run's text, or `{ break: true }` for a
+ * `text:line-break` — still inside the SAME paragraph, not a new one. The ODF
+ * analogue of `PptxParagraphSegment`, letting a fixture author a `text:span`
+ * split mid-word AND a line break in the SAME paragraph, matching the rule
+ * `paragraphText`/its ODF counterpart apply on the index side.
+ */
+export type OdpParagraphSegment = string | { break: true }
+
+export interface OdpPageSpec {
+  title?: string
+  /** Each entry becomes its own `text:p` — Impress's one-paragraph-per-bullet-line shape. */
+  body?: readonly string[]
+  /**
+   * ONE paragraph built from `text:span`/`text:line-break` segments, the way
+   * Impress splits a run at a spell-check mark or a formatting boundary — e.g.
+   * `['Photosynthesi', 's']` is the single word `Photosynthesis` split across
+   * two `text:span` elements with no space between them.
+   */
+  bodyRuns?: readonly OdpParagraphSegment[]
+  /**
+   * Bullets authored inside a `text:list`, one `text:list-item > text:p` each
+   * — how Impress stores a bulleted body placeholder, and why the index must
+   * search for `text:p` through the WHOLE frame subtree rather than only its
+   * direct children.
+   */
+  bulletList?: readonly string[]
+  /** Speaker notes as a single run. Mutually exclusive with `notesRuns`. */
+  notes?: string
+  /** Speaker notes authored as multiple `text:span`/`text:line-break` segments in ONE paragraph — the notes analogue of `bodyRuns`. */
+  notesRuns?: readonly OdpParagraphSegment[]
+  /** Emit the title frame LAST in the page — ODP's form of design fact 4. */
+  titleLast?: boolean
+  image?: { alt?: string }
+}
+
+/**
+ * A paragraph's `text:span` runs and `text:line-break`s, in order (see
+ * `OdpParagraphSegment`). Shared by the body-run and notes-run fixtures so
+ * both exercise the SAME paragraph shape the index has to read.
+ */
+function odpParagraphSegmentsXml(segments: readonly OdpParagraphSegment[]): string {
+  return segments.map((segment) =>
+    typeof segment === 'string' ? `<text:span>${xmlEscape(segment)}</text:span>` : '<text:line-break/>',
+  ).join('')
+}
+
+/** Plain one-string-per-bullet paragraphs, plus an optional run-built paragraph (see `bodyRuns`). */
+function odpParagraphsXml(spec: Pick<OdpPageSpec, 'body' | 'bodyRuns'>): string {
+  const plain = spec.body?.map((text) => `<text:p>${xmlEscape(text)}</text:p>`).join('') ?? ''
+  const runs = spec.bodyRuns ? `<text:p>${odpParagraphSegmentsXml(spec.bodyRuns)}</text:p>` : ''
+  return `${plain}${runs}`
+}
+
+/** A `text:list` of `text:list-item > text:p` bullets — see `bulletList` on `OdpPageSpec`. */
+function odpBulletListXml(bullets: readonly string[]): string {
+  const items = bullets.map((text) => `<text:list-item><text:p>${xmlEscape(text)}</text:p></text:list-item>`).join('')
+  return `<text:list>${items}</text:list>`
+}
+
+function odpFrame(name: string, presentationClass: string, contentXml: string): string {
+  const attribute = presentationClass ? ` presentation:class="${presentationClass}"` : ''
+  return `<draw:frame draw:name="${name}"${attribute} svg:width="20cm" svg:height="3cm" svg:x="2cm" svg:y="1cm">` +
+    `<draw:text-box>${contentXml}</draw:text-box>` +
+    `</draw:frame>`
+}
+
+/** `page.notes` (a single run) or `page.notesRuns` (multiple segments in one paragraph) as one `text:p`. */
+function odpNotesContentXml(page: OdpPageSpec): string {
+  if (page.notesRuns) return `<text:p>${odpParagraphSegmentsXml(page.notesRuns)}</text:p>`
+  if (page.notes !== undefined) return `<text:p>${xmlEscape(page.notes)}</text:p>`
+  return ''
+}
+
+export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Array<ArrayBuffer>> {
+  const body = pages.map((page, index) => {
+    const title = page.title === undefined
+      ? ''
+      : odpFrame(`Title ${index + 1}`, 'title', `<text:p>${xmlEscape(page.title)}</text:p>`)
+    const outlineContent = `${odpParagraphsXml(page)}${page.bulletList ? odpBulletListXml(page.bulletList) : ''}`
+    const outline = outlineContent ? odpFrame(`Body ${index + 1}`, 'outline', outlineContent) : ''
+    const image = page.image
+      ? `<draw:frame draw:name="Diagram ${index + 1}" svg:width="1cm" svg:height="1cm">` +
+        `<draw:image xlink:href="Pictures/image1.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
+        (page.image.alt === undefined ? '' : `<svg:desc>${xmlEscape(page.image.alt)}</svg:desc>`) +
+        `</draw:frame>`
+      : ''
+    const notesContent = odpNotesContentXml(page)
+    const notes = notesContent
+      ? `<presentation:notes>${odpFrame(`Notes ${index + 1}`, 'notes', notesContent)}</presentation:notes>`
+      : ''
+    const frames = page.titleLast ? `${outline}${image}${title}` : `${title}${outline}${image}`
+    return `<draw:page draw:name="Slide ${index + 1}" draw:master-page-name="Default">${frames}${notes}</draw:page>`
+  }).join('')
+
+  const content = `<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content ${Object.entries(ODP_NS).map(([prefix, uri]) => `xmlns:${prefix}="${uri}"`).join(' ')} office:version="1.2">
+  <office:body><office:presentation>${body}</office:presentation></office:body>
+</office:document-content>`
+
+  const entries: { name: string; data: Uint8Array }[] = [
+    { name: 'mimetype', data: utf8('application/vnd.oasis.opendocument.presentation') },
+    { name: 'META-INF/manifest.xml', data: utf8(
+      `<?xml version="1.0" encoding="UTF-8"?>` +
+      `<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">` +
+      `<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.presentation"/>` +
+      `<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>` +
+      (pages.some((page) => page.image)
+        ? `<manifest:file-entry manifest:full-path="Pictures/image1.png" manifest:media-type="image/png"/>`
+        : '') +
+      `</manifest:manifest>`) },
+    { name: 'content.xml', data: utf8(content) },
+  ]
+  if (pages.some((page) => page.image)) {
+    entries.push({ name: 'Pictures/image1.png', data: EMBEDDED_IMAGE_PNG })
+  }
+  return writeZip(entries) as Promise<Uint8Array<ArrayBuffer>>
+}
