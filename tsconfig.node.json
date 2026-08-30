@@ -20,6 +20,11 @@
   "include": [
     "vite.config.ts",
     "vitest.config.ts",
+    // The build-mode validator `vite.config.ts` calls, and its test. Separate
+    // from `vite.config.ts` so a test can reach the function without executing
+    // the React, Tailwind and PWA plugin factories to check a string.
+    "vite.deployment.ts",
+    "vite.deployment.test.ts",
     // The dedicated config `npm run test:artifacts` (`package.json`) uses to
     // reach `cartridge-artifact.test.ts` despite it being excluded from the
     // `unit` project's default `include` in `vitest.config.ts` — see that

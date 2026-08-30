@@ -25,8 +25,14 @@ import { playwright } from '@vitest/browser-playwright'
 export default defineConfig({
   // Test the same fail-closed configuration as the public build. Opted-in
   // Canvas presentation is covered through the components' injected props.
+  //
+  // The extractor origin CANNOT be covered that way, because the whole point of
+  // it is that the public bundle does not contain the branch — a prop would keep
+  // the branch alive and put the extractor's endpoint in the public build, which
+  // `scripts/smoke-dist.mjs` refuses. So it gets a project of its own below.
   define: {
     __OER2CANVAS_SELF_HOSTED_CANVAS_ORIGIN__: JSON.stringify(''),
+    __OER2CANVAS_SELF_HOSTED_EXTRACTOR_ORIGIN__: JSON.stringify(''),
   },
   test: {
     projects: [
@@ -36,9 +42,24 @@ export default defineConfig({
           globals: true,
           environment: 'jsdom',
           setupFiles: ['./src/test/setup.ts'],
-          include: ['src/**/*.test.{ts,tsx}', 'worker/**/*.test.ts', 'scripts/**/*.test.mjs'],
+          include: [
+            'src/**/*.test.{ts,tsx}',
+            'worker/**/*.test.ts',
+            'scripts/**/*.test.mjs',
+            // The build-mode validator behind the two `define`s. At the root
+            // rather than under `src/` because it is build tooling, and named
+            // individually here for the same reason `tsconfig.node.json` names
+            // its files: this list should be hard to grow by accident.
+            'vite.deployment.test.ts',
+          ],
           exclude: [
             'src/**/*.browser.test.{ts,tsx}',
+            // Matches the `include` glob above and must NOT run here too: this
+            // project pins the extractor origin to '' — the public build — so
+            // every assertion in a self-hosted file would pass while measuring
+            // the configuration it exists to say nothing about. Same failure
+            // shape as the forced-colors exclusion in the `browser` project.
+            'src/**/*.self-hosted.test.{ts,tsx}',
             // Depends on an artifact `cartridge-artifact.browser.test.ts` (the
             // `browser` project) writes to disk, and nothing in this config
             // orders one project's files ahead of another's — so a plain
@@ -52,6 +73,36 @@ export default defineConfig({
             // this coverage is not lost, just moved out of the default run.
             'src/import/cartridge-artifact.test.ts',
           ],
+        },
+      },
+      {
+        /*
+         * THE OPTED-IN WEB-EXTRACTION BUILD, WHICH IS A `define` AND SO CANNOT
+         * BE SWITCHED ON FROM INSIDE A TEST.
+         *
+         * Same constraint that made `browser-forced-colors` a project rather
+         * than a test option, arriving from the build side instead of the
+         * browser side: Vite substitutes `__OER2CANVAS_SELF_HOSTED_EXTRACTOR_ORIGIN__`
+         * before a test ever runs, so the only way to exercise the branch is a
+         * second configuration. It is jsdom and its `include` is one glob, so
+         * unlike the forced-colors project it costs no browser launch.
+         *
+         * Deliberately narrow. Everything that does not depend on the switch
+         * stays in `unit`: the fetcher itself takes its origin as an injected
+         * dependency, exactly as `firecrawl.ts` takes its key, so its whole
+         * failure taxonomy is testable with no build switch at all. What lives
+         * here is only what the switch decides — which fetcher the panel wires
+         * up, and that the key UI is absent rather than hidden.
+         */
+        define: {
+          __OER2CANVAS_SELF_HOSTED_EXTRACTOR_ORIGIN__: JSON.stringify('https://extract.example.edu'),
+        },
+        test: {
+          name: 'unit-self-hosted',
+          globals: true,
+          environment: 'jsdom',
+          setupFiles: ['./src/test/setup.ts'],
+          include: ['src/**/*.self-hosted.test.{ts,tsx}'],
         },
       },
       {
