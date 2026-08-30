@@ -4,7 +4,7 @@
 
 **Blocked by:** 12 — Import one URL using a memory-only Firecrawl key.
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 Issue 12 builds a `WebArticleFetcher` seam in `src/import/web.ts` with `firecrawlFetcher` as its first
 implementation, and keeps every shared concern — sanitization, the 404-inside-200 check, PDF refusal,
