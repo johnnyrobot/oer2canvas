@@ -854,6 +854,15 @@ export interface OdpPageSpec {
   /** Speaker notes authored as multiple `text:span`/`text:line-break` segments in ONE paragraph — the notes analogue of `bodyRuns`. */
   notesRuns?: readonly OdpParagraphSegment[]
   /**
+   * A `draw:frame` (with its own `draw:text-box`) nested INSIDE the notes
+   * frame, carrying text. The notes analogue of `nestedFrameText`, and the last
+   * place the slide body's nesting rule had not been checked: `notesText` is
+   * compared to anydoc's blockquote by STRICT EQUALITY, so if the two accounts
+   * disagree about this shape the blockquote is not recognised as speaker notes
+   * and the presenter's private notes are published into a student-facing page.
+   */
+  notesNestedFrameText?: string
+  /**
    * A `text:h` heading authored BEFORE the notes body, inside speaker notes.
    * Fix-review round 5 measured that anydoc's OWN blockquote rendering of
    * the notes includes the heading's text (`"Notes heading Notes body."`),
@@ -1127,6 +1136,11 @@ function odpMedia(name: string, poster: boolean | undefined, imageHref: string):
  */
 function odpNotesContentXml(page: OdpPageSpec, imageHref: string): string {
   const heading = page.notesHeadingText ? odpHeading(page.notesHeadingText) : ''
+  // A frame inside the notes frame, exactly as `odpNestedFrame` builds one for
+  // the slide body: `draw:frame > draw:text-box > draw:frame > draw:text-box`.
+  const nested = page.notesNestedFrameText
+    ? odpFrame(`Notes inner frame`, '', `<text:p>${xmlEscape(page.notesNestedFrameText)}</text:p>`)
+    : ''
   if (page.notesImage) {
     const picture = `<draw:frame draw:name="Notes picture" svg:width="1cm" svg:height="1cm">` +
       `<draw:image xlink:href="${imageHref}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
@@ -1134,9 +1148,9 @@ function odpNotesContentXml(page: OdpPageSpec, imageHref: string): string {
     if (page.notes !== undefined) return `${heading}<text:p>${xmlEscape(page.notes)}</text:p>${picture}`
     return `${heading}${picture}`
   }
-  if (page.notesRuns) return `${heading}<text:p>${odpParagraphSegmentsXml(page.notesRuns)}</text:p>`
-  if (page.notes !== undefined) return `${heading}<text:p>${xmlEscape(page.notes)}</text:p>`
-  return heading
+  if (page.notesRuns) return `${heading}<text:p>${odpParagraphSegmentsXml(page.notesRuns)}</text:p>${nested}`
+  if (page.notes !== undefined) return `${heading}<text:p>${xmlEscape(page.notes)}</text:p>${nested}`
+  return `${heading}${nested}`
 }
 
 export async function odpFixture(

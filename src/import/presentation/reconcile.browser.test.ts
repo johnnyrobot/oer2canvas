@@ -913,3 +913,41 @@ test.each([
     expect(result.findings.map((finding) => finding.code)).toEqual(['presentation-untitled-slide'])
   },
 )
+
+
+test.each([
+  ['beside notes text of its own', { notes: 'PRIVATE NOTE.', notesNestedFrameText: 'NESTED PRIVATE' },
+    'PRIVATE NOTE. NESTED PRIVATE'],
+  ['as the only notes content', { notesNestedFrameText: 'NESTED ONLY' }, 'NESTED ONLY'],
+] as const)(
+  'a frame nested inside speaker notes keeps the notes recognised, %s',
+  async (_name, page, expectedNotes) => {
+    /*
+     * THE ASYMMETRY, measured rather than assumed — and the expectation it
+     * overturned was mine and the reviewer's alike.
+     *
+     * On a `draw:page` anydoc's walk stops the moment a shape contains another
+     * shape, which is the rule three ODP counterexamples came from. Inside
+     * `presentation:notes` it does NOT stop: a `draw:frame` nested in the notes
+     * frame contributes its paragraph to the blockquote. So the notes query's
+     * any-depth reach is what AGREES with anydoc, and `notesText` equals the
+     * blockquote's own text — the only thing the strict-equality comparison can
+     * rest on.
+     *
+     * Applying the slide body's rule here was measured doing the harm the
+     * consistency argument was meant to prevent: `notesText` came out short,
+     * the comparison failed, the blockquote was no longer recognised as speaker
+     * notes, and the deck took a `presentation-unattributed-content` blocker.
+     */
+    const { anydocHtml, index, result } = await reconcileFixture([
+      { title: 'One', body: ['Body one'], ...page },
+    ])
+
+    expect(anydocHtml).toContain('<blockquote>')
+    expect(index.slides[0]!.notesText).toBe(expectedNotes)
+    // Recognised, and therefore kept off the page: both halves of the note.
+    expect(result.html).not.toContain('NESTED')
+    expect(result.html).not.toContain('PRIVATE NOTE')
+    expect(result.findings.map((finding) => finding.code)).toEqual(['presentation-speaker-notes'])
+  },
+)

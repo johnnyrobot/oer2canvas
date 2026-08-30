@@ -494,6 +494,26 @@ test("a shape's OWN text is still read, at every depth of grouping", async () =>
     .toEqual(['Data', 'Body text', 'Stage', 'Location', 'Calvin cycle', 'Stroma'])
 })
 
+test('a frame nested inside speaker notes contributes its text, unlike one on the slide', async () => {
+  /*
+   * The one place the slide body's nesting rule deliberately does NOT apply,
+   * and it is measured: on a `draw:page` anydoc stops at a shape inside a
+   * shape, but inside `presentation:notes` it walks the nested frame and its
+   * paragraph reaches the blockquote. `notesText` is compared to that
+   * blockquote by strict equality, so this any-depth reach is what makes the
+   * two accounts agree — see `odfParagraphs` for the measurement and for why
+   * applying `isWalkedText` here publishes the notes rather than protecting
+   * them.
+   */
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'One', body: ['Body one'], notes: 'PRIVATE NOTE.', notesNestedFrameText: 'NESTED PRIVATE' },
+  ]))
+
+  expect(index.slides[0]!.notesText).toBe('PRIVATE NOTE. NESTED PRIVATE')
+  // And none of it leaks into the page's own runs.
+  expect(index.slides[0]!.textRuns).toEqual(['One', 'Body one'])
+})
+
 test('an odp text:tab becomes one space so notesText matches anydoc (fix-review round 3 Important 4)', async () => {
   // `notesText` is compared by STRICT EQUALITY downstream; anydoc renders a
   // tab as a space, so dropping text:tab entirely produces "TermDefinition"

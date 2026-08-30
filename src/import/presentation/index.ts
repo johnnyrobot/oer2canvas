@@ -886,6 +886,29 @@ function pptxIndex(parts: Record<string, string>): PresentationIndex {
  * single run, which anydoc's own per-paragraph blocks never do, and which
  * the later reconciliation cannot match against.
  *
+ * THE NESTING RULE THE SLIDE BODY OBEYS DOES NOT APPLY HERE, AND THAT IS
+ * MEASURED, NOT AN OVERSIGHT. On a `draw:page`, anydoc's walk stops the moment
+ * a shape contains another shape (see `enclosingShapeCount` and `isWalkedText`):
+ * a `draw:frame` inside a `draw:frame` emits no block at all. Inside
+ * `presentation:notes` it does NOT stop — measured with real anydoc 0.2.4 on a
+ * notes frame containing a nested frame:
+ *
+ *     <blockquote><p>PRIVATE NOTE.</p><p>NESTED PRIVATE</p></blockquote>
+ *
+ * so this any-depth query is the one that AGREES, producing
+ * `"PRIVATE NOTE. NESTED PRIVATE"` — byte-for-byte the blockquote's own text,
+ * which is the only definition under which the strict-equality comparison
+ * downstream can work.
+ *
+ * DO NOT "FIX" THIS BY APPLYING `isWalkedText`. Measured by doing exactly that:
+ * `notesText` becomes `"PRIVATE NOTE."`, the comparison against anydoc's
+ * blockquote fails, the blockquote is no longer recognised as speaker notes,
+ * and the deck takes a `presentation-unattributed-content` blocker — a refusal
+ * on an ordinary deck at best, and on a deck whose notes happen to fit the
+ * slide's own run accumulation, the presenter's private notes published into a
+ * student-facing page. That is the single failure this module exists to
+ * prevent, and the "consistency" fix causes it rather than preventing it.
+ *
  * A paragraph living INSIDE an `office:annotation` is skipped, because this
  * flat any-depth query would otherwise find it TWICE over: once as part of
  * the paragraph the comment is anchored in (`odfParagraphText` walks into the
