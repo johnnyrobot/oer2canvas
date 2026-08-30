@@ -114,13 +114,25 @@ export function blocksOf(html: string): PlanBlock[] {
     if (node.nodeType === Node.ELEMENT_NODE) {
       const element = node as Element
       const tag = element.localName.toLowerCase()
+      // A block may name itself. The presentation importer uses this so split
+      // points read as slide boundaries; nothing here knows what a slide is,
+      // which is the point of naming the attribute for the plan rather than for
+      // the format that happens to set it.
+      const declared = element.getAttribute('data-plan-label')?.trim()
       const level = HEADING_LEVEL[tag]
       const text = collapse(element.textContent)
       if (level) {
-        blocks.push({ html: element.outerHTML, heading: { level, text }, summary: `Heading: ${excerpt(text)}` })
+        blocks.push({
+          html: element.outerHTML,
+          heading: { level, text },
+          summary: declared || `Heading: ${excerpt(text)}`,
+        })
       } else {
         const kind = KIND_LABEL[tag] ?? `<${tag}>`
-        blocks.push({ html: element.outerHTML, summary: text ? `${kind}: ${excerpt(text)}` : kind })
+        blocks.push({
+          html: element.outerHTML,
+          summary: declared || (text ? `${kind}: ${excerpt(text)}` : kind),
+        })
       }
     } else if (node.nodeType === Node.TEXT_NODE && collapse(node.textContent)) {
       blocks.push({ html: serializeText(node), summary: `Text: ${excerpt(collapse(node.textContent))}` })

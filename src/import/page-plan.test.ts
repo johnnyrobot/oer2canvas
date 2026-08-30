@@ -1,5 +1,6 @@
 import {
   MAX_PROPOSED_PAGES,
+  blocksOf,
   confirmImport,
   mergeWithNext,
   movePage,
@@ -256,4 +257,25 @@ test('confirming an invalid plan or metadata fails before anything is built', ()
 
   expect(() => confirmImport(source, empty, metadata)).toThrow(/include at least one page/i)
   expect(() => confirmImport(source, plan, { ...metadata, title: ' ' })).toThrow(/title/i)
+})
+
+test('a block may declare its own plan label', () => {
+  const blocks = blocksOf('<section data-plan-label="Slide 2: Photosynthesis"><h2>Photosynthesis</h2><p>Light</p></section>')
+
+  expect(blocks).toHaveLength(1)
+  expect(blocks[0]!.summary).toBe('Slide 2: Photosynthesis')
+})
+
+test('a deck of sections proposes one page, not one page per slide', () => {
+  // Every slide title is an `h2`, so WITHOUT the section wrapper `proposeRanges`
+  // would split at the minimum repeated heading level and propose one page per
+  // slide. Wrapping makes each slide a single top-level block with no top-level
+  // heading, which is the existing "no repeated heading" path.
+  const html =
+    '<section data-slide="1" data-plan-label="Slide 1: A"><h2>A</h2></section>' +
+    '<section data-slide="2" data-plan-label="Slide 2: B"><h2>B</h2></section>'
+  const { plan } = proposePagePlan(work(html, { format: 'pptx' }))
+
+  expect(plan.pages).toHaveLength(1)
+  expect(plan.blocks.map((block) => block.summary)).toEqual(['Slide 1: A', 'Slide 2: B'])
 })
