@@ -438,7 +438,10 @@ test('a spreadsheet is refused by the importer, with the format named', async ()
 
   await expect(importStructuredDocument(file, {
     metadata: { title: 'Enrollment', rightsAuthority: 'own', rightsAcknowledged: true },
-  })).rejects.toThrow(/Choose a supported document file/)
+    // Names the format, per this test's own title, because issue 15 taught
+    // `enabledCapabilityFor` to refuse a known-but-disabled capability with its
+    // own label and first limitation instead of the generic extension list.
+  })).rejects.toThrow(/Excel workbook: Spreadsheets are not imported in this release/)
 })
 
 test('the capability table explains the refusal before a user submits', () => {

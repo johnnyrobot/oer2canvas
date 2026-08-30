@@ -131,9 +131,14 @@ test('a spreadsheet says it is unavailable before the user submits it', async ()
   expect(screen.getByText(/Spreadsheets are not imported in this release/i)).toBeVisible()
   expect(screen.queryByText(/Excel workbook limitation/i)).not.toBeInTheDocument()
 
-  // And submitting still refuses, naming the formats that do work.
+  // And submitting still refuses. The message NAMES the format and the way out
+  // rather than listing the extensions that do work: issue 15 gave every
+  // known-but-disabled capability that treatment in `enabledCapabilityFor`,
+  // and a spreadsheet is one, so it inherits it rather than falling through to
+  // the generic list.
   completeRights()
   fireEvent.click(screen.getByRole('button', { name: 'Inspect document' }))
   const alert = await screen.findByRole('alert')
-  expect(alert).toHaveTextContent(/Choose a supported document file/i)
+  expect(alert).toHaveTextContent(/Excel workbook: Spreadsheets are not imported in this release/i)
+  expect(alert).toHaveTextContent(/Markdown tab/i)
 })
