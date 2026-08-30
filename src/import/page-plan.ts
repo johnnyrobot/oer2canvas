@@ -125,6 +125,21 @@ export function blocksOf(html: string): PlanBlock[] {
       // every other block honours.
       const declared = element.getAttribute('data-plan-label')?.trim()
       const declaredSummary = declared ? excerpt(declared) : undefined
+      /*
+       * READ HERE, AND REMOVED HERE. `data-plan-label` is a seam between an
+       * adapter and this planner — it exists so a split point can read as a
+       * slide boundary — and nothing downstream of this function has any use
+       * for it. Left in place it rode `PlanBlock.html` all the way into the
+       * published Canvas page, where it names an internal boundary in the
+       * author's own file to every reader of the page source.
+       *
+       * That is the same rule `presentation/reconcile.ts` already states for
+       * `data-origin-part` and enforces on every path out of that module: a
+       * join key is a join key, never content. A plan-editor seam is the same
+       * category, and this is its one place — every block, on every path, goes
+       * through `blocksOf`.
+       */
+      if (declared !== undefined) element.removeAttribute('data-plan-label')
       const level = HEADING_LEVEL[tag]
       const text = collapse(element.textContent)
       if (level) {

@@ -42,14 +42,14 @@ import type { PresentationIndex, PresentationSlideIndex } from './index'
  * every picture it emits with the package part its bytes came from (or, for a
  * picture linked from outside the package, that URL) in
  * `data-origin-part`; the index records, per slide, the set of those same parts
- * the slide's own shapes reference. `claimPictures` below joins the two.
+ * the slide's own shapes reference. `proposePictureClaim` below joins the two.
  *
  * WHAT THE JOIN GUARANTEES, AND WHAT IT DOES NOT. Both halves are load-bearing
  * and the difference is the difference between two defects:
  *
  * - GUARANTEED, unconditionally, whether or not any finding fires: a picture
  *   block is never published under a slide that does not reference its origin
- *   part. `claimPictures` returns false for an unreferenced part and the block
+ *   part. `proposePictureClaim` refuses an unreferenced part and the block
  *   ends the slide, so the BYTES under a heading are always bytes that slide's
  *   own shapes point at. That is what a count could never promise.
  * - NOT GUARANTEED: WHICH INSTANCE of a part shared by several slides lands
@@ -123,17 +123,46 @@ export interface ReconcileResult {
 const collapse = (value: string) => value.replace(/\s+/g, ' ').trim()
 
 /**
+ * Characters anydoc REMOVES from the text it renders while the deck's own XML
+ * keeps them, so a comparison that did not remove them too would fail on text
+ * that is identical to any reader.
+ *
+ * MEASURED with real anydoc 0.2.4, one character per otherwise identical
+ * package, twelve tried on BOTH formats and each answered independently: a zero
+ * width space (U+200B), a soft hyphen (U+00AD), a byte order mark (U+FEFF) and
+ * a C0 control (U+0001) are all dropped; a zero width non-joiner (U+200C), a
+ * zero width joiner (U+200D), a left-to-right and right-to-left mark
+ * (U+200E/U+200F), a word joiner (U+2060) and an object replacement character
+ * (U+FFFC) are all KEPT, so removing them here would be removing a difference
+ * that is really there. U+FEFF is already whitespace to `\s`; U+00A0 and U+202F
+ * are squeezed away as whitespace on both sides whether anydoc turns them into
+ * a space or not.
+ *
+ * THE ZERO WIDTH SPACE IS NOT EXOTIC. PowerPoint writes one wherever text was
+ * pasted from a browser, and a real 13-slide teaching deck on this machine
+ * carried four — `…for faculty in all disciplines\u200B.` — which alone refused
+ * the whole file, because `\s` does not match U+200B (it stops at U+200A).
+ */
+const ANYDOC_DROPPED_CHARACTERS = '\u200B\u00AD'
+
+/**
  * The comparison form for BOTH accounts: every whitespace character removed,
- * not just runs of it collapsed. anydoc and the deck's own XML disagree about
- * whitespace wherever it carries no meaning — `<li>` boundaries inside the one
- * `<ul>` block a bulleted body becomes, a soft line break anydoc renders as
- * `<br>` (whose `textContent` joins with nothing) against the single space the
- * index renders it as, and the whitespace ODF leaves between sibling runs. None
- * of those differences is a difference in content, and squeezing is the one
+ * not just runs of it collapsed, plus the invisible characters anydoc drops
+ * (see above). anydoc and the deck's own XML disagree about whitespace wherever
+ * it carries no meaning — `<li>` boundaries inside the one `<ul>` block a
+ * bulleted body becomes, a soft line break anydoc renders as `<br>` (whose
+ * `textContent` joins with nothing) against the single space the index renders
+ * it as, and the whitespace ODF leaves between sibling runs. None of those
+ * differences is a difference in content, and squeezing is the one
  * normalisation under which the two accounts can be compared for equality at
  * all.
+ *
+ * Applied to BOTH sides, which is what makes it safe: on anydoc's side removing
+ * a character anydoc already removed is a no-op, so this can only ever make the
+ * index agree with a rendering, never make two different renderings agree.
  */
-const squeeze = (value: string) => value.replace(/\s+/g, '')
+const SQUEEZED_AWAY = new RegExp(`[\\s${ANYDOC_DROPPED_CHARACTERS}]+`, 'g')
+const squeeze = (value: string) => value.replace(SQUEEZED_AWAY, '')
 
 /**
  * What a soft line break contributes to a block's text: ONE SPACE. anydoc
@@ -149,6 +178,55 @@ const squeeze = (value: string) => value.replace(/\s+/g, '')
 const SOFT_BREAK_TEXT = ' '
 
 const HEADING_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+
+/**
+ * The ONLY tags an EMPTY BLOCK may be built from — a block that carries no
+ * content at all, and is therefore skippable rather than slide-ending.
+ *
+ * MEASURED with real anydoc 0.2.4, both shapes, on packages LibreOffice wrote
+ * itself as well as on fixtures:
+ *
+ * - An empty ODF `text:p` comes out as exactly `<p></p>` — whether it is a
+ *   presenter's own blank line between two bullets, or the empty paragraph
+ *   LibreOffice writes inside EVERY shape that has no text of its own.
+ * - A notes frame holding only an empty `text:p` comes out as
+ *   `<blockquote><p></p></blockquote>`. `notesText` is `undefined` for such a
+ *   frame, so the notes comparison above cannot consume it either.
+ *
+ * The index drops both (a paragraph with no text is not a run), so nothing on
+ * the deck's side accounts for them — and until this existed, the walk's "no
+ * text and no picture" branch ended the slide at the first one and ORPHANED
+ * EVERY BLOCK AFTER IT IN THE DOCUMENT. On a 13-page deck Impress wrote itself
+ * that read `432 blocks of content belong to no slide` out of 434. Of the
+ * fourteen real `.odp` files on this machine, eight carry an empty paragraph
+ * (one carries 99) and three carry an empty notes blockquote.
+ *
+ * PPTX needs no equivalent and gets one anyway, because the rule is about the
+ * HTML rather than about the format: an empty `a:p` makes anydoc emit no block
+ * at all, so the two accounts already agree there (measured).
+ *
+ * THE SET IS THIS SMALL ON PURPOSE, and every clause of `isVacant` is
+ * load-bearing:
+ *
+ * - These two tags and no others. An `<hr>` also has no text and no children,
+ *   and it is CONTENT — a thematic break the reader is meant to see, and one
+ *   `document.ts` already counts as rendered media. Admitting "any childless,
+ *   textless block" would drop it silently, which is the exact class of defect
+ *   this module exists to prevent.
+ * - No picture anywhere in the subtree. `<p><img …></p>` is a picture and is
+ *   claimed by identity; `<p><span>[Embedded image: …]</span></p>` is a picture
+ *   that could not be packaged. Vacancy is read BEFORE the placeholder spans
+ *   are stripped, so neither can be mistaken for an empty paragraph.
+ * - No text. A paragraph with text is attributed by the accumulation, as before.
+ *
+ * So what is skipped carries nothing: no text to misattribute, no bytes to
+ * lose, and — since an empty blockquote has no words in it — no note to leak.
+ * The refusal it must NOT weaken (a block with content that no slide can claim
+ * ends the slide and blocks the deck) is unchanged, and `reconcile.test.ts`
+ * pins that in four directions: an `<hr>`, a table, a picture no slide
+ * references, and a NON-empty unattributable blockquote all still refuse.
+ */
+const VACANT_BLOCK_TAGS: ReadonlySet<string> = new Set(['p', 'blockquote'])
 
 /**
  * The placeholder THIS REPO'S OWN normalizer puts in place of a picture it
@@ -199,7 +277,7 @@ const withoutJoinKeys = (html: string): string => html.replace(PICTURE_ORIGIN_AT
  * showing that picture, so the same picture twice on one slide is one part. As
  * soon as a second slide references it (the same logo on two slides), a second
  * block carrying it may be either slide's and identity alone cannot say which.
- * See `claimPictures`.
+ * See `proposePictureClaim`.
  */
 const SOLE_REFERENCING_SLIDE = 1
 
@@ -256,6 +334,12 @@ interface BlockFacts {
   hasId: boolean
   isQuote: boolean
   /**
+   * An EMPTY PARAGRAPH — `<p></p>`, or the `<blockquote><p></p></blockquote>`
+   * an empty notes frame becomes: no text, no picture, and nothing in its
+   * subtree but those two container tags. See `VACANT_BLOCK_TAGS`.
+   */
+  isVacant: boolean
+  /**
    * ONE ENTRY PER PICTURE this block carries — an `<img>`, or a placeholder
    * standing in for one that could not be packaged — holding that picture's
    * `data-origin-part`. An empty entry is a picture whose origin the parser
@@ -272,6 +356,12 @@ function readBlock(html: string): BlockFacts {
     lineBreak.replaceWith(parsed.createTextNode(SOFT_BREAK_TEXT))
   }
   const element = parsed.body.firstElementChild
+  // Read BEFORE the placeholder spans are removed below, so a picture that
+  // could not be packaged is never mistaken for an empty paragraph.
+  const isVacant = element !== null &&
+    collapse(element.textContent ?? '') === '' &&
+    [element, ...element.getElementsByTagName('*')]
+      .every((descendant) => VACANT_BLOCK_TAGS.has(descendant.localName))
   // Placeholder spans are REMOVED before the text is read, so a picture that
   // could not be packaged reads as a picture rather than as text no slide
   // claims — and so a paragraph carrying both a placeholder and real text still
@@ -289,6 +379,7 @@ function readBlock(html: string): BlockFacts {
     isHeading: element !== null && HEADING_TAGS.has(element.localName),
     hasId: element !== null && element.hasAttribute('id'),
     isQuote: element !== null && element.localName === 'blockquote',
+    isVacant,
     pictureOrigins,
   }
 }
@@ -378,7 +469,7 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
    * slide really can carry the same picture twice (one relationship, two
    * `p:pic` shapes; measured). If another slide also references P — the same
    * logo on two slides — then no: the second block is as likely to be that
-   * slide's, and taking it would be a guess. See `claimPictures`.
+   * slide's, and taking it would be a guess. See `proposePictureClaim`.
    */
   const referencingSlides = new Map<string, number>()
   for (const slide of slides) {
@@ -403,28 +494,38 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
     const claimed = new Set<string>()
 
     /**
-     * Whether THIS slide may take a block carrying pictures from `parts`, and
-     * if so, taking them. A picture is claimable when the slide references its
-     * part, and either the slide has not taken one from that part yet, or no
-     * other slide in the deck references it. `''` — a picture whose origin the
-     * parser could not determine at all — is never referenced by anything, so
-     * it can never be claimed by anyone.
+     * What `claimed` WOULD become if this slide took a block carrying pictures
+     * from `parts`, or `undefined` when it may not take it at all. A picture is
+     * claimable when the slide references its part, and either the slide has
+     * not taken one from that part yet, or no other slide in the deck
+     * references it. `''` — a picture whose origin the parser could not
+     * determine at all — is never referenced by anything, so it can never be
+     * claimed by anyone.
      *
      * ALL OR NOTHING, and atomic. A block is one block and cannot be split
      * between two slides, so every picture in it has to be claimable or the
      * block belongs to the next slide — and a partial claim would then mark
      * this slide as having received a picture it never took, hiding the very
      * refusal the join exists to raise.
+     *
+     * IT PROPOSES, IT DOES NOT COMMIT, and that is the whole reason it returns
+     * a set rather than a boolean. It is only one of THREE tests a block has to
+     * pass, and the text test below can still reject a block this one accepted.
+     * Committing here — which an earlier version did — marked the slide as
+     * having taken a picture from a block that then went to the NEXT slide,
+     * which is exactly the "partial claim" this doc comment forbids one line
+     * up: `claimed` grows without `referenced` being spent, so the
+     * `referenced.size > claimed.size` refusal that should have fired is masked.
+     * The caller commits once, after every test has passed.
      */
-    const claimPictures = (parts: readonly string[]): boolean => {
+    const proposePictureClaim = (parts: readonly string[]): ReadonlySet<string> | undefined => {
       const provisional = new Set(claimed)
       for (const part of parts) {
-        if (!referenced.has(part)) return false
-        if (provisional.has(part) && referencingSlides.get(part) !== SOLE_REFERENCING_SLIDE) return false
+        if (!referenced.has(part)) return undefined
+        if (provisional.has(part) && referencingSlides.get(part) !== SOLE_REFERENCING_SLIDE) return undefined
         provisional.add(part)
       }
-      for (const part of parts) claimed.add(part)
-      return true
+      return provisional
     }
 
     while (at < blocks.length) {
@@ -464,21 +565,37 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
        * generated heading, and no finding said so — misattribution AND content
        * loss, silently.
        *
-       * See `claimPictures` for the rule and for why a block carrying several
-       * pictures is claimed all at once or not at all.
+       * See `proposePictureClaim` for the rule, for why a block carrying
+       * several pictures is claimed all at once or not at all, and for why the
+       * claim is only COMMITTED below, once every test has passed.
        */
-      if (block.pictureOrigins.length > 0 && !claimPictures(block.pictureOrigins)) break
+      const claim = block.pictureOrigins.length > 0
+        ? proposePictureClaim(block.pictureOrigins)
+        : undefined
+      if (block.pictureOrigins.length > 0 && claim === undefined) break
 
       // A block that would take the accumulation off the slide's own text ends
       // the slide: it belongs to the next one, or to nobody, and the checks
       // below decide which.
       if (block.squeezed && !expected.startsWith(accumulated + block.squeezed)) break
 
-      // Nothing left to claim it by: no text this slide is still expecting, and
-      // no picture either. It ends the slide and becomes the refusal below,
-      // rather than being swallowed into a section it may not belong to.
-      if (!block.squeezed && block.pictureOrigins.length === 0) break
+      if (!block.squeezed && block.pictureOrigins.length === 0) {
+        // An EMPTY BLOCK carries nothing, so no slide can be wrong about it
+        // and nothing is lost by consuming it here. It is dropped rather than
+        // published: it is a blank line in the author's text box, not content.
+        // See `VACANT_BLOCK_TAGS` for the measurement and for why the test is
+        // narrow enough that an `<hr>` still ends the slide.
+        if (block.isVacant) {
+          at += 1
+          continue
+        }
+        // Nothing left to claim it by: no text this slide is still expecting,
+        // and no picture either. It ends the slide and becomes the refusal
+        // below, rather than being swallowed into a section it may not belong to.
+        break
+      }
 
+      if (claim) for (const part of claim) claimed.add(part)
       accumulated += block.squeezed
       taken.push(block)
       at += 1
@@ -500,8 +617,9 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
      * this join needs. Both are disagreements between the two accounts, and
      * neither may be published as if the slide were complete.
      *
-     * `claimed` is a subset of `referenced` by construction (`claimPictures`
-     * refuses anything not referenced), so comparing sizes is comparing sets.
+     * `claimed` is a subset of `referenced` by construction
+     * (`proposePictureClaim` refuses anything not referenced), so comparing
+     * sizes is comparing sets.
      *
      * The two are recorded SEPARATELY so the refusal can say which kind of
      * content is missing: "missing text" sends an author to look at a slide's

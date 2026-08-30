@@ -259,11 +259,31 @@ test('confirming an invalid plan or metadata fails before anything is built', ()
   expect(() => confirmImport(source, plan, { ...metadata, title: ' ' })).toThrow(/title/i)
 })
 
-test('a block may declare its own plan label', () => {
+test('a block may declare its own plan label, and the label does not reach the block html', () => {
   const blocks = blocksOf('<section data-plan-label="Slide 2: Photosynthesis"><h2>Photosynthesis</h2><p>Light</p></section>')
 
   expect(blocks).toHaveLength(1)
   expect(blocks[0]!.summary).toBe('Slide 2: Photosynthesis')
+  /*
+   * A JOIN KEY IS NEVER CONTENT. `PlanBlock.html` is what a page is assembled
+   * from and what is eventually published, so a seam attribute left on it names
+   * an internal boundary in the author's own file to every reader of the
+   * published page source. `presentation/reconcile.ts` already states and
+   * enforces exactly this rule for `data-origin-part`; this is the same rule
+   * for the plan's own attribute, at the one place every block passes through.
+   */
+  expect(blocks[0]!.html).not.toContain('data-plan-label')
+  expect(blocks[0]!.html).toBe('<section><h2>Photosynthesis</h2><p>Light</p></section>')
+})
+
+test('a page assembled from a labelled block carries no plan label either', () => {
+  // The end of the same path: `pageHtml` is what `confirmImport` publishes.
+  const { plan } = proposePagePlan(work(
+    '<section data-slide="1" data-plan-label="Slide 1: A"><h2>A</h2></section>',
+    { format: 'pptx' },
+  ))
+
+  expect(pageHtml(plan, plan.pages[0]!)).toBe('<section data-slide="1"><h2>A</h2></section>')
 })
 
 test('a declared plan label is excerpted like every other summary', () => {

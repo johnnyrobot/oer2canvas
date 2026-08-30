@@ -673,6 +673,158 @@ test('a deck with no slides at all blocks rather than producing an empty page', 
   }))
 })
 
+test('an empty paragraph between two slides is skipped, not treated as unattributable', () => {
+  /*
+   * MEASURED: anydoc emits `<p></p>` for an empty ODF `text:p`, and LibreOffice
+   * writes one inside every shape that has no text of its own. The index drops
+   * it — a paragraph with no text is not a run — so before this the walk's
+   * "no text and no picture" branch ended slide 1 here and orphaned every block
+   * after it: on a real 13-page Impress deck, 432 blocks of 434.
+   */
+  const result = reconcilePresentation({
+    html: '<h2>Photosynthesis</h2><p>Light reactions</p><p></p><p>Calvin cycle</p>' +
+      '<h2>Where it happens</h2><p>Stroma</p>',
+    index: index([
+      slide(1, { title: 'Photosynthesis', textRuns: ['Photosynthesis', 'Light reactions', 'Calvin cycle'] }),
+      slide(2, { title: 'Where it happens', textRuns: ['Where it happens', 'Stroma'] }),
+    ]),
+    sourceLabel: 'ODP',
+  })
+
+  expect(result.findings).toEqual([])
+  // Consumed, not published: an author's blank line is not content, and
+  // publishing it would put an empty paragraph into the Canvas page.
+  expect(result.html).not.toContain('<p></p>')
+  expect(result.html).toContain('<p>Calvin cycle</p></section>')
+})
+
+test('an EMPTY notes blockquote is skipped, though a non-empty one that matches nothing still refuses', () => {
+  /*
+   * MEASURED: a notes frame holding only an empty `text:p` comes out as
+   * `<blockquote><p></p></blockquote>`, and `notesText` is `undefined` for such
+   * a frame — so the notes comparison cannot consume it either. It carries no
+   * words, so there is no note to leak and nothing to misattribute.
+   *
+   * The second half is the guarantee this must not weaken: a blockquote with
+   * TEXT that no slide accounts for still ends the slide and still blocks.
+   */
+  const skipped = reconcilePresentation({
+    html: '<h2>Photosynthesis</h2><blockquote><p></p></blockquote><p>Light reactions</p>',
+    index: index([slide(1, { title: 'Photosynthesis', textRuns: ['Photosynthesis', 'Light reactions'] })]),
+    sourceLabel: 'ODP',
+  })
+  expect(skipped.findings).toEqual([])
+  expect(skipped.html).not.toContain('blockquote')
+
+  const refused = reconcilePresentation({
+    html: '<h2>Photosynthesis</h2><blockquote><p>PRIVATE NOTE</p></blockquote><p>Light reactions</p>',
+    index: index([slide(1, { title: 'Photosynthesis', textRuns: ['Photosynthesis', 'Light reactions'] })]),
+    sourceLabel: 'ODP',
+  })
+  expect(codes(refused)).toContain('presentation-unattributed-content')
+  expect(refused.html).not.toContain('PRIVATE NOTE')
+})
+
+test.each([
+  // Each of these has no text and no picture, exactly like `<p></p>` — and each
+  // is CONTENT a reader is meant to see, or content no slide can account for.
+  // If "empty" were widened from `<p>`/`<blockquote>` to "any childless,
+  // textless block", every one of these would be dropped in silence.
+  ['a thematic break', '<hr>'],
+  ['an empty table', '<table><tbody><tr><td></td></tr></tbody></table>'],
+  ['an empty list', '<ul><li></li></ul>'],
+])('%s is NOT an empty paragraph and still refuses', (_label, html) => {
+  const result = reconcilePresentation({
+    html: `<h2>Photosynthesis</h2><p>Light reactions</p>${html}`,
+    index: index([slide(1, { title: 'Photosynthesis', textRuns: ['Photosynthesis', 'Light reactions'] })]),
+    sourceLabel: 'ODP',
+  })
+
+  expect(codes(result)).toContain('presentation-unattributed-content')
+})
+
+test('a picture in an empty paragraph is a picture, not an empty block', () => {
+  // `<p><img></p>` and `<p><span>[Embedded image]</span></p>` both have no text
+  // once the placeholder is stripped. Vacancy is read BEFORE that strip, so
+  // neither is skippable — and a picture no slide references still refuses.
+  const result = reconcilePresentation({
+    html: `<h2>Photosynthesis</h2>${picture(OTHER_PART)}`,
+    index: index([slide(1, { title: 'Photosynthesis', textRuns: ['Photosynthesis'], pictureOrigins: [PART] })]),
+    sourceLabel: 'PPTX',
+  })
+
+  expect(codes(result)).toContain('presentation-unattributed-content')
+  expect(result.html).not.toContain('<img')
+})
+
+test.each([
+  // MEASURED with real anydoc 0.2.4 on both formats: these are removed from the
+  // text it renders while the deck's own XML keeps them. A real 13-slide
+  // teaching deck carried four zero width spaces and refused because of them.
+  ['a zero width space', '\u200B'],
+  ['a soft hyphen', '\u00AD'],
+])('%s in the deck but not in the rendering does not refuse', (_label, character) => {
+  const result = reconcilePresentation({
+    html: '<h2>Photosynthesis</h2><p>all disciplines.</p>',
+    index: index([
+      slide(1, { title: 'Photosynthesis', textRuns: ['Photosynthesis', `all disciplines${character}.`] }),
+    ]),
+    sourceLabel: 'PPTX',
+  })
+
+  expect(result.findings).toEqual([])
+  expect(result.html).toContain('<p>all disciplines.</p>')
+})
+
+test.each([
+  // The other side of the same measurement: anydoc KEEPS these, so squeezing
+  // them away here would hide a difference that is really there.
+  ['a zero width joiner', '\u200D'],
+  ['a left-to-right mark', '\u200E'],
+  ['a word joiner', '\u2060'],
+])('%s that anydoc keeps is still compared', (_label, character) => {
+  const result = reconcilePresentation({
+    html: '<h2>Photosynthesis</h2><p>all disciplines.</p>',
+    index: index([
+      slide(1, { title: 'Photosynthesis', textRuns: ['Photosynthesis', `all disciplines${character}.`] }),
+    ]),
+    sourceLabel: 'PPTX',
+  })
+
+  expect(codes(result)).toContain('presentation-unattributed-content')
+})
+
+test('a block whose pictures are claimable but whose TEXT is rejected claims nothing', () => {
+  /*
+   * The three tests a block has to pass are not independent: the picture claim
+   * used to COMMIT before the text test could reject the block. Here slide 1
+   * references one part and the block carrying it also carries text slide 1
+   * does not have, so the block belongs to slide 2 — and slide 1 must still be
+   * reported as missing the picture the deck says it carries.
+   *
+   * Committing early made `claimed` and `referenced` the same size, so the
+   * `referenced.size > claimed.size` refusal never fired and the message lost
+   * the clause that tells the author to go and look at slide 1's pictures.
+   */
+  const result = reconcilePresentation({
+    html: '<h2>Photosynthesis</h2>' +
+      `<h2><img src="cell.png" alt="A cell" data-origin-part="${PART}">Where it happens</h2>`,
+    index: index([
+      slide(1, { title: 'Photosynthesis', textRuns: ['Photosynthesis'], pictureOrigins: [PART] }),
+      slide(2, { title: 'Where it happens', textRuns: ['Where it happens'], pictureOrigins: [PART] }),
+    ]),
+    sourceLabel: 'PPTX',
+  })
+
+  // Every other account balances: slide 2 takes the block, no block is
+  // orphaned, and no slide is missing text. Committing the claim early left
+  // NOTHING to report at all, so the deck imported with slide 1's picture
+  // silently absent — which is why this assertion is on the blocker existing
+  // and on the clause that names slide 1.
+  expect(only(result, 'presentation-unattributed-content').message)
+    .toContain('slide 1 is missing a picture the deck says it carries')
+})
+
 describe('formatSlideList', () => {
   // Tested directly because every aggregated finding's message is built from
   // it, and a joining bug would be invisible until a user read the warning.

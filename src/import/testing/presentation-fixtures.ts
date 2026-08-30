@@ -37,7 +37,18 @@ const EMF_BYTES = (() => {
  * lets a fixture reproduce that indentation deliberately, independent of the
  * run-joining and soft-break rules `break` and plain strings already cover.
  */
-export type PptxParagraphSegment = string | { break: true } | { indent: true }
+export type PptxParagraphSegment =
+  | string
+  | { break: true }
+  | { indent: true }
+  /**
+   * An `a:fld` — a FIELD, inline in the same paragraph, holding the CACHED
+   * rendering a reader that does not recompute fields displays. PowerPoint
+   * writes one wherever an author inserts a date or a slide number into their
+   * own text, including into the notes body; `type` is the field's own
+   * `a:fld/@type` (`datetime1`, `slidenum`).
+   */
+  | { field: string; text: string }
 
 export interface PptxSlideSpec {
   /** Omitted means the slide has NO title placeholder — design fact 3. */
@@ -200,7 +211,19 @@ export interface PptxSlideSpec {
    * written first instead flips which one anydoc renders. That is document
    * order, not branch selection — see `readBlipOrigins`.
    */
-  blipFillChoiceFallback?: { choice: 'image' | 'image2'; fallback: 'image' | 'image2' }
+  blipFillChoiceFallback?: {
+    choice: 'image' | 'image2'
+    fallback: 'image' | 'image2'
+    /**
+     * Write the `mc:Fallback` element BEFORE the `mc:Choice`. Legal, and the
+     * whole point of the measurement `readBlipOrigins` rests on: inside a
+     * `p:blipFill` anydoc does not evaluate `Requires` at all, it renders
+     * whichever blip comes FIRST IN DOCUMENT ORDER — so flipping the two
+     * elements has to flip which part the picture comes from, and if it does
+     * not, the claim is branch selection rather than document order.
+     */
+    fallbackFirst?: boolean
+  }
   /**
    * A pasted Excel worksheet: `p:graphicFrame` → `graphicData uri=…/ole` →
    * `p:oleObj` → a preview `p:pic`. The preview is the only part of it anydoc
@@ -209,6 +232,23 @@ export interface PptxSlideSpec {
    * bytes here are the EMF a real preview usually is (see `unpackageableImage`).
    */
   oleObject?: boolean
+  /**
+   * A pasted worksheet AS POWERPOINT REALLY WRITES ONE: the `p:oleObj` lives
+   * inside an `mc:AlternateContent` under `a:graphicData`, with a VML-requiring
+   * `mc:Choice` and an `mc:Fallback`. PowerPoint puts the SAME `r:id` in both
+   * branches; this fixture deliberately puts a DIFFERENT one in each
+   * (`rIdOle` in the Choice, `rIdOle2` in the Fallback) so a reader that
+   * collects every `p:oleObj` at any depth records TWO origins where anydoc
+   * renders ONE picture, and a reader that chooses a branch records one.
+   */
+  oleObjectInAlternateContent?: {
+    /**
+     * Write the `mc:Fallback` element BEFORE the `mc:Choice`. The flip that
+     * separates "first in document order" from "always the Choice" — without
+     * it the two rules give the same answer and neither can be measured.
+     */
+    fallbackFirst?: boolean
+  }
   /**
    * An `mc:AlternateContent` whose branches carry DIFFERENT TEXT, so a test can
    * say which branch was read. Measured: anydoc renders the `mc:Fallback`
@@ -261,6 +301,15 @@ export interface PptxSlideSpec {
   /** Content anydoc drops entirely — design fact 6. */
   diagram?: boolean
   chart?: boolean
+  /**
+   * A chart frame WITH ITS CHART PART — `ppt/charts/chart1.xml` carrying the
+   * cached category and series values PowerPoint stores so a reader need not
+   * open the workbook. `chart` above writes the frame alone, pointing at a
+   * relationship the package does not declare, which is why anydoc emits
+   * nothing for it. A REAL chart is this one, and anydoc renders it as a DATA
+   * TABLE — see the measurement in `reconcile.browser.test.ts`.
+   */
+  chartWithData?: boolean
   video?: boolean
   /**
    * A media `p:pic` carrying `a:audioFile` rather than `a:videoFile` — an
@@ -294,9 +343,52 @@ export interface PptxSlideSpec {
    * `PresentationIndexError`, rather than crashing with a raw `RangeError`.
    */
   nestedGroupDepth?: number
+  /**
+   * The placeholder shapes PowerPoint's Insert ▸ Header & Footer dialog adds to
+   * a slide — a footer, a slide number, a date — written in `spTree` exactly as
+   * PowerPoint writes them, AFTER the content shapes. See `PptxPlaceholderShape`.
+   */
+  placeholders?: readonly PptxPlaceholderShape[]
 }
 
-const DIAGRAM_URI = 'http://schemas.openxmlformats.org/drawingml/2006/diagram'
+/**
+ * One placeholder shape authored by its `p:ph/@type`, so a test can measure
+ * what ANYDOC does with that type rather than assume it.
+ *
+ * `field` writes the text inside an `<a:fld type="…">` — the form PowerPoint
+ * uses for a slide number (`slidenum`) and a date (`datetime1`), where the
+ * `a:t` holds the CACHED rendering a reader that does not recompute fields
+ * displays. A plain `text` writes an ordinary `a:r` run instead, which is what
+ * a footer carries.
+ */
+export interface PptxPlaceholderShape {
+  /** `p:ph/@type` — `ftr`, `sldNum`, `dt`, `hdr`, `subTitle`, `body`, … */
+  type: string
+  text: string
+  field?: 'slidenum' | 'datetime1'
+}
+
+/**
+ * The placeholder shapes on a slide, in the order given, written the way
+ * PowerPoint writes footer chrome: an ordinary `p:sp` whose `p:ph` names the
+ * type, holding one paragraph.
+ */
+function placeholderShapes(shapes: readonly PptxPlaceholderShape[]): string {
+  return shapes.map((shape, position) => {
+    const id = 40 + position
+    const content = shape.field
+      ? `<a:fld id="{2AB2A61C-1E1C-4D0F-9B2A-0000000000${String(position).padStart(2, '0')}}" ` +
+        `type="${shape.field}"><a:rPr lang="en-US"/><a:t>${xmlEscape(shape.text)}</a:t></a:fld>`
+      : `<a:r><a:rPr lang="en-US"/><a:t>${xmlEscape(shape.text)}</a:t></a:r>`
+    return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${shape.type} Placeholder ${id}"/>` +
+      `<p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>` +
+      `<p:nvPr><p:ph type="${shape.type}" sz="quarter" idx="${10 + position}"/></p:nvPr></p:nvSpPr>` +
+      `<p:spPr><a:xfrm><a:off x="838200" y="6356350"/><a:ext cx="2743200" cy="365125"/></a:xfrm></p:spPr>` +
+      `<p:txBody><a:bodyPr/><a:lstStyle/><a:p>${content}</a:p></p:txBody></p:sp>`
+  }).join('')
+}
+
+const DIAGRAM_URI ='http://schemas.openxmlformats.org/drawingml/2006/diagram'
 const CHART_URI = 'http://schemas.openxmlformats.org/drawingml/2006/chart'
 const TABLE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/table'
 const OLE_URI = 'http://schemas.openxmlformats.org/presentationml/2006/ole'
@@ -330,6 +422,18 @@ function textShape(id: number, name: string, paragraphs: readonly string[], plac
     `</p:txBody></p:sp>`
 }
 
+/**
+ * One `p:oleObj` with the preview `p:pic` that is all anydoc ever sees of it —
+ * the EMF a real preview usually is, on `rIdEmf`.
+ */
+function oleObjectXml(pictureId: number, relationshipId: string): string {
+  return `<p:oleObj spid="_x0000_s1026" name="Worksheet" r:id="${relationshipId}" imgW="2540000" imgH="1270000" ` +
+    `progId="Excel.Sheet.12"><p:embed/>` +
+    `<p:pic><p:nvPicPr><p:cNvPr id="${pictureId}" name="Worksheet" descr="Worksheet"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+    `<p:blipFill><a:blip r:embed="rIdEmf"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+    `<p:spPr/></p:pic></p:oleObj>`
+}
+
 function graphicFrame(id: number, name: string, uri: string, payload: string): string {
   return `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="${id}" name="${name}"/>` +
     `<p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr>` +
@@ -346,6 +450,10 @@ function paragraphSegmentsXml(segments: readonly PptxParagraphSegment[]): string
   return segments.map((segment) => {
     if (typeof segment === 'string') return `<a:r><a:rPr lang="en-US"/><a:t>${xmlEscape(segment)}</a:t></a:r>`
     if ('break' in segment) return '<a:br/>'
+    if ('field' in segment) {
+      return `<a:fld id="{2AB2A61C-1E1C-4D0F-9B2A-0000000000FF}" type="${segment.field}">` +
+        `<a:rPr lang="en-US"/><a:t>${xmlEscape(segment.text)}</a:t></a:fld>`
+    }
     // A literal newline-and-indent text node between sibling `<a:r>`
     // elements, exactly as a pretty-printer would insert — never itself a
     // run's `<a:t>` content, and never a break.
@@ -553,6 +661,11 @@ function slideXml(spec: PptxSlideSpec): string {
         '<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" ' +
         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rIdChart"/>')
     : ''
+  const chartWithData = spec.chartWithData
+    ? graphicFrame(35, 'Real Chart 35', CHART_URI,
+        '<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" ' +
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rIdRealChart"/>')
+    : ''
   /*
    * A media `p:pic` AS POWERPOINT WRITES ONE: the `a:videoFile` link that makes
    * it media, AND a POSTER FRAME — an ordinary embedded picture in the
@@ -629,13 +742,14 @@ function slideXml(spec: PptxSlideSpec): string {
   const blipFillChoiceFallback = spec.blipFillChoiceFallback
     ? (() => {
         const relFor = (which: 'image' | 'image2') => (which === 'image' ? 'rIdImage' : 'rIdImage2')
-        const { choice, fallback } = spec.blipFillChoiceFallback!
+        const { choice, fallback, fallbackFirst } = spec.blipFillChoiceFallback!
+        const choiceXml = `<mc:Choice xmlns:p14="${MC_REQUIRES_NAMESPACES.p14}" Requires="p14">` +
+          `<a:blip r:embed="${relFor(choice)}"/></mc:Choice>`
+        const fallbackXml = `<mc:Fallback><a:blip r:embed="${relFor(fallback)}"/></mc:Fallback>`
         return `<p:pic><p:nvPicPr><p:cNvPr id="32" name="Choice Fallback Fill 32" descr="Choice fallback fill"/>` +
           `<p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
           `<p:blipFill><mc:AlternateContent xmlns:mc="${MC_NS}">` +
-          `<mc:Choice xmlns:p14="${MC_REQUIRES_NAMESPACES.p14}" Requires="p14">` +
-          `<a:blip r:embed="${relFor(choice)}"/></mc:Choice>` +
-          `<mc:Fallback><a:blip r:embed="${relFor(fallback)}"/></mc:Fallback>` +
+          (fallbackFirst ? `${fallbackXml}${choiceXml}` : `${choiceXml}${fallbackXml}`) +
           `</mc:AlternateContent><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
           `<p:spPr/></p:pic>`
       })()
@@ -656,13 +770,19 @@ function slideXml(spec: PptxSlideSpec): string {
       `<p:blipFill><a:blip r:embed="rIdMissingMedia"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
       `<p:spPr/></p:pic>`
     : ''
-  const oleObject = spec.oleObject
-    ? graphicFrame(17, 'Worksheet 17', OLE_URI,
-        `<p:oleObj spid="_x0000_s1026" name="Worksheet" r:id="rIdOle" imgW="2540000" imgH="1270000" ` +
-        `progId="Excel.Sheet.12"><p:embed/>` +
-        `<p:pic><p:nvPicPr><p:cNvPr id="18" name="Worksheet" descr="Worksheet"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
-        `<p:blipFill><a:blip r:embed="rIdEmf"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
-        `<p:spPr/></p:pic></p:oleObj>`)
+  const oleObject = spec.oleObject ? graphicFrame(17, 'Worksheet 17', OLE_URI, oleObjectXml(18, 'rIdOle')) : ''
+  const oleObjectInAlternateContent = spec.oleObjectInAlternateContent
+    ? (() => {
+        const choiceXml = `<mc:Choice xmlns:v="${MC_REQUIRES_NAMESPACES.v}" Requires="v">` +
+          oleObjectXml(37, 'rIdOle') + `</mc:Choice>`
+        const fallbackXml = `<mc:Fallback>` + oleObjectXml(38, 'rIdOle2') + `</mc:Fallback>`
+        return graphicFrame(36, 'Branching Worksheet 36', OLE_URI,
+          `<mc:AlternateContent xmlns:mc="${MC_NS}">` +
+          (spec.oleObjectInAlternateContent!.fallbackFirst
+            ? `${fallbackXml}${choiceXml}`
+            : `${choiceXml}${fallbackXml}`) +
+          `</mc:AlternateContent>`)
+      })()
     : ''
   const table = spec.table
     ? graphicFrame(8, 'Table 8', TABLE_URI,
@@ -679,13 +799,14 @@ function slideXml(spec: PptxSlideSpec): string {
     (spec.inkInAlternateContent ? alternateContentInk() : '') +
     (spec.pictureInChoiceOnlyAlternateContent ? choiceOnlyAlternateContentPicture() : '')
   const nested = spec.nestedGroupDepth ? nestedGroups(spec.nestedGroupDepth) : ''
+  const chrome = spec.placeholders ? placeholderShapes(spec.placeholders) : ''
 
   const pictures = `${image}${image2}${secondImage}${linkedImage}${brokenImage}${blipWithoutReference}` +
     `${missingMediaImage}${unpackageableImage}${drawingmlBlipFill}` +
     `${siblingBlipsInFill}${blipInExtLst}${blipFillChoiceFallback}`
   const shapes = spec.titleLast
-    ? `${body}${pictures}${diagram}${chart}${video}${audio}${table}${oleObject}${group}${alternateContent}${nested}${title}`
-    : `${title}${body}${pictures}${diagram}${chart}${video}${audio}${table}${oleObject}${group}${alternateContent}${nested}`
+    ? `${body}${pictures}${diagram}${chart}${chartWithData}${video}${audio}${table}${oleObject}${oleObjectInAlternateContent}${group}${alternateContent}${nested}${title}${chrome}`
+    : `${title}${body}${pictures}${diagram}${chart}${chartWithData}${video}${audio}${table}${oleObject}${oleObjectInAlternateContent}${group}${alternateContent}${nested}${chrome}`
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -748,6 +869,35 @@ function notesSegments(slide: PptxSlideSpec): readonly PptxParagraphSegment[] | 
   return undefined
 }
 
+/**
+ * A minimal but REAL chart part: one clustered bar series over two categories,
+ * with the `strCache`/`numCache` values PowerPoint writes so a reader can draw
+ * the chart without opening the workbook.
+ *
+ * Those caches are the whole point. `chart` on `PptxSlideSpec` writes the frame
+ * with no chart part at all, and anydoc emits NOTHING for it — which is what
+ * design fact 6 was written from. Given the cached values, anydoc renders the
+ * chart as a `<table>` instead (measured, real anydoc 0.2.4), which is a
+ * different fact about a different package.
+ */
+function chartXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+    `<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" ` +
+    `xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ` +
+    `xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+    `<c:chart><c:plotArea><c:layout/><c:barChart><c:barDir val="col"/><c:grouping val="clustered"/>` +
+    `<c:ser><c:idx val="0"/><c:order val="0"/>` +
+    `<c:tx><c:strRef><c:f>Sheet1!$B$1</c:f><c:strCache><c:ptCount val="1"/>` +
+    `<c:pt idx="0"><c:v>Series 1</c:v></c:pt></c:strCache></c:strRef></c:tx>` +
+    `<c:cat><c:strRef><c:f>Sheet1!$A$2:$A$3</c:f><c:strCache><c:ptCount val="2"/>` +
+    `<c:pt idx="0"><c:v>Category 1</c:v></c:pt><c:pt idx="1"><c:v>Category 2</c:v></c:pt>` +
+    `</c:strCache></c:strRef></c:cat>` +
+    `<c:val><c:numRef><c:f>Sheet1!$B$2:$B$3</c:f><c:numCache><c:formatCode>General</c:formatCode>` +
+    `<c:ptCount val="2"/><c:pt idx="0"><c:v>1.6</c:v></c:pt><c:pt idx="1"><c:v>2.4</c:v></c:pt>` +
+    `</c:numCache></c:numRef></c:val></c:ser>` +
+    `<c:axId val="1"/><c:axId val="2"/></c:barChart></c:plotArea></c:chart></c:chartSpace>`
+}
+
 /** The main-part content type each PPTX-family extension carries (design fact 1). */
 export const PPTX_CONTENT_TYPES = {
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml',
@@ -759,7 +909,8 @@ export const PPTX_CONTENT_TYPES = {
 export async function pptxFixture(
   slides: readonly PptxSlideSpec[],
   { container = 'pptx', withMacroPart = false, imagePartName = 'image1.png',
-    secondImagePartName = 'image-second.png' }: {
+    secondImagePartName = 'image-second.png', reverseSlidePartNames = false,
+    absoluteSlideTargets = false }: {
     container?: keyof typeof PPTX_CONTENT_TYPES
     /** Adds `ppt/vbaProject.bin`, as a real .pptm/.ppsm does. Never executed. */
     withMacroPart?: boolean
@@ -781,15 +932,37 @@ export async function pptxFixture(
      * origin names.
      */
     secondImagePartName?: string
+    /**
+     * Write each slide's XML to the part named for its REVERSE position, while
+     * `sldIdLst` still lists them in the order given — so presentation order
+     * and filename order are opposites, and a reader that sorted on the
+     * filename would return the deck backwards. Without this, the fixture's
+     * `slide1.xml` is also the first `sldId`, and a test asserting
+     * "presentation order, not part-name order" passes under either rule.
+     */
+    reverseSlidePartNames?: boolean
+    /**
+     * Write the presentation's slide relationships with an ABSOLUTE part name
+     * (`Target="/ppt/slides/slide1.xml"`) instead of the relative
+     * `slides/slide1.xml`. OPC allows both, and three real decks on this
+     * machine write the absolute form — which the string-hack path resolution
+     * this replaced turned into `ppt//ppt/slides/slide1.xml`, refusing the deck.
+     */
+    absoluteSlideTargets?: boolean
   } = {},
 ): Promise<Uint8Array<ArrayBuffer>> {
+  // The part NUMBER a slide's XML is written under. It is the slide's own
+  // position by default and its mirror image under `reverseSlidePartNames`,
+  // which is what makes `sldIdLst` order and filename order disagree.
+  const partNumber = (index: number) => reverseSlidePartNames ? slides.length - index : index + 1
   const overrides = slides.map((_unused, index) =>
-    `<Override PartName="/ppt/slides/slide${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`).join('')
+    `<Override PartName="/ppt/slides/slide${partNumber(index)}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`).join('')
   const notesOverrides = slides.map((slide, index) => notesSegments(slide)
     ? `<Override PartName="/ppt/notesSlides/notesSlide${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml"/>`
     : '').join('')
   const slideRels = slides.map((_unused, index) =>
-    `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide${index + 1}.xml"/>`).join('')
+    `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" ` +
+    `Target="${absoluteSlideTargets ? '/ppt/' : ''}slides/slide${partNumber(index)}.xml"/>`).join('')
   const slideIds = slides.map((_unused, index) =>
     `<p:sldId id="${256 + index}" r:id="rId${index + 1}"/>`).join('')
 
@@ -802,6 +975,9 @@ export async function pptxFixture(
       `<Default Extension="png" ContentType="image/png"/>` +
       `<Default Extension="emf" ContentType="image/x-emf"/>` +
       `<Default Extension="bin" ContentType="application/vnd.ms-office.vbaProject"/>` +
+      slides.map((slide, index) => slide.chartWithData
+        ? `<Override PartName="/ppt/charts/chart${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`
+        : '').join('') +
       `<Override PartName="/ppt/presentation.xml" ContentType="${PPTX_CONTENT_TYPES[container]}"/>` +
       `${overrides}${notesOverrides}</Types>`) },
     { name: '_rels/.rels', data: utf8(
@@ -821,7 +997,7 @@ export async function pptxFixture(
   ]
 
   slides.forEach((slide, index) => {
-    entries.push({ name: `ppt/slides/slide${index + 1}.xml`, data: utf8(slideXml(slide)) })
+    entries.push({ name: `ppt/slides/slide${partNumber(index)}.xml`, data: utf8(slideXml(slide)) })
     const rels: string[] = []
     const segments = notesSegments(slide)
     if (segments) {
@@ -834,10 +1010,13 @@ export async function pptxFixture(
     // One `rIdImage` relationship serves every embedded picture on the slide,
     // including a video's poster frame and a grouped picture — exactly as
     // PowerPoint reuses one relationship for one media part.
-    if (slide.oleObject) {
+    if (slide.oleObject || slide.oleObjectInAlternateContent) {
       rels.push('<Relationship Id="rIdOle" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject" Target="../embeddings/worksheet1.xlsx"/>')
     }
-    if (slide.unpackageableImage || slide.oleObject) {
+    if (slide.oleObjectInAlternateContent) {
+      rels.push('<Relationship Id="rIdOle2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject" Target="../embeddings/worksheet2.xlsx"/>')
+    }
+    if (slide.unpackageableImage || slide.oleObject || slide.oleObjectInAlternateContent) {
       rels.push('<Relationship Id="rIdEmf" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image2.emf"/>')
     }
     if (slide.audio) {
@@ -856,11 +1035,15 @@ export async function pptxFixture(
       // Declared, and pointing at a part deliberately never written below.
       rels.push('<Relationship Id="rIdMissingMedia" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image3.png"/>')
     }
+    if (slide.chartWithData) {
+      rels.push(`<Relationship Id="rIdRealChart" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart${index + 1}.xml"/>`)
+      entries.push({ name: `ppt/charts/chart${index + 1}.xml`, data: utf8(chartXml()) })
+    }
     if (slide.linkedImage) {
       rels.push('<Relationship Id="rIdLinkedImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="https://example.edu/cell.png" TargetMode="External"/>')
     }
     if (rels.length > 0) {
-      entries.push({ name: `ppt/slides/_rels/slide${index + 1}.xml.rels`, data: utf8(
+      entries.push({ name: `ppt/slides/_rels/slide${partNumber(index)}.xml.rels`, data: utf8(
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
         `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels.join('')}</Relationships>`) })
     }
@@ -871,14 +1054,17 @@ export async function pptxFixture(
     slide.drawingmlBlipFill || slide.siblingBlipsInFill || slide.blipInExtLst || slide.blipFillChoiceFallback)) {
     entries.push({ name: `ppt/media/${imagePartName}`, data: EMBEDDED_IMAGE_PNG })
   }
-  if (slides.some((slide) => slide.unpackageableImage || slide.oleObject)) {
+  if (slides.some((slide) => slide.unpackageableImage || slide.oleObject || slide.oleObjectInAlternateContent)) {
     entries.push({ name: 'ppt/media/image2.emf', data: EMF_BYTES })
   }
   if (slides.some((slide) => slide.image2 || slide.siblingBlipsInFill || slide.blipInExtLst ||
     slide.blipFillChoiceFallback)) {
     entries.push({ name: `ppt/media/${secondImagePartName}`, data: EMBEDDED_IMAGE_PNG })
   }
-  if (slides.some((slide) => slide.oleObject)) {
+  if (slides.some((slide) => slide.oleObjectInAlternateContent)) {
+    entries.push({ name: 'ppt/embeddings/worksheet2.xlsx', data: utf8('second worksheet payload placeholder') })
+  }
+  if (slides.some((slide) => slide.oleObject || slide.oleObjectInAlternateContent)) {
     // The worksheet itself: anydoc never renders it, but a real package always
     // carries it, and its absence would make the OLE frame unrealistic.
     entries.push({ name: 'ppt/embeddings/worksheet1.xlsx', data: utf8('worksheet payload placeholder') })
@@ -1161,6 +1347,38 @@ export interface OdpPageSpec {
    * anydoc's row-major rendering with one expectation.
    */
   table?: boolean
+  /**
+   * The page-chrome frames Impress writes for a slide number, a footer and a
+   * date — `presentation:class="page-number" | "footer" | "date-time"`, each
+   * with its own `draw:text-box`. See `OdpChromeFrame`.
+   */
+  chromeFrames?: readonly OdpChromeFrame[]
+  /**
+   * A media frame NESTED inside another frame's `draw:text-box` — the placement
+   * the walk rule refuses to enter for text and for pictures. anydoc renders
+   * nothing for media at any depth, so the loss counters read it anyway; this
+   * exists so that decision is pinned rather than incidental.
+   */
+  nestedMedia?: boolean
+  /**
+   * A `draw:custom-shape` carrying nothing but an EMPTY `<text:p/>` — the shape
+   * LibreOffice writes for every drawing that has no text, and by far the most
+   * common single element in a real Impress file (32 of them on a four-page
+   * deck Impress converted itself, 99 on a 31-page one).
+   */
+  emptyCustomShape?: boolean
+}
+
+/**
+ * One `presentation:class` chrome frame. `field` writes the text inside the ODF
+ * field element Impress uses — `text:page-number` holds the literal placeholder
+ * `<number>` in a saved file, which is what a reader that does not recompute
+ * fields would show.
+ */
+export interface OdpChromeFrame {
+  presentationClass: 'page-number' | 'footer' | 'date-time'
+  text: string
+  field?: 'page-number' | 'date' | 'time'
 }
 
 /**
@@ -1199,6 +1417,31 @@ function odpFrame(name: string, presentationClass: string, contentXml: string): 
   return `<draw:frame draw:name="${name}"${attribute} svg:width="20cm" svg:height="3cm" svg:x="2cm" svg:y="1cm">` +
     `<draw:text-box>${contentXml}</draw:text-box>` +
     `</draw:frame>`
+}
+
+/**
+ * The chrome frames Impress writes for a slide number, footer or date, exactly
+ * as it writes them: a `draw:frame` with `presentation:class`, a
+ * `draw:text-box`, and — for a field — the ODF field element holding the text a
+ * reader that does not recompute fields displays. See `OdpChromeFrame`.
+ */
+function odpChromeFrames(frames: readonly OdpChromeFrame[], pageIndex: number): string {
+  return frames.map((frame, slot) => {
+    const inner = frame.field
+      ? `<text:${frame.field}>${xmlEscape(frame.text)}</text:${frame.field}>`
+      : xmlEscape(frame.text)
+    return odpFrame(
+      `${frame.presentationClass} Placeholder ${pageIndex + 1}-${slot + 1}`,
+      frame.presentationClass,
+      `<text:p><text:span>${inner}</text:span></text:p>`,
+    )
+  }).join('')
+}
+
+/** A `draw:custom-shape` holding nothing but an empty `text:p` — see `emptyCustomShape`. */
+function odpEmptyCustomShape(name: string): string {
+  return `<draw:custom-shape draw:name="${name}" svg:width="5cm" svg:height="2cm" svg:x="2cm" svg:y="10cm">` +
+    `<text:p/></draw:custom-shape>`
 }
 
 /** A `draw:custom-shape` with typed text as a direct `text:p` child — see `customShapeText` on `OdpPageSpec`. */
@@ -1456,6 +1699,11 @@ export async function odpFixture(
       : ''
     const table = page.table ? odpTable(`Table ${index + 1}`) : ''
     const media = page.video ? odpMedia(`Video ${index + 1}`, page.video.poster, imageHref) : ''
+    const nestedMedia = page.nestedMedia
+      ? `<draw:frame draw:name="Outer media frame ${index + 1}" svg:width="10cm" svg:height="6cm">` +
+        `<draw:text-box>${odpMedia(`Nested video ${index + 1}`, false, imageHref)}</draw:text-box>` +
+        `</draw:frame>`
+      : ''
     const embeddedObjects = (page.embeddedObjects ?? []).map((object, slot) =>
       `<draw:frame draw:name="${odfObjectDirectory(index, slot)}" svg:width="10cm" svg:height="8cm">` +
       `<draw:object xlink:href="./${encodeURI(odfObjectDirectory(index, slot))}" xlink:type="simple" ` +
@@ -1476,7 +1724,10 @@ export async function odpFixture(
       : ''
     // A direct child of draw:page, the same level presentation:notes sits at.
     const comment = page.commentText ? odpAnnotation(`Comment ${index + 1}`, page.commentText) : ''
-    const extras = `${customShape}${groupedCustomShape}${nestedFrame}${table}${media}${embeddedObjects}`
+    const emptyCustomShape = page.emptyCustomShape ? odpEmptyCustomShape(`Empty shape ${index + 1}`) : ''
+    const chrome = page.chromeFrames ? odpChromeFrames(page.chromeFrames, index) : ''
+    const extras = `${customShape}${groupedCustomShape}${nestedFrame}${table}${media}${nestedMedia}` +
+      `${embeddedObjects}${emptyCustomShape}${chrome}`
     const pictures = `${image}${secondImage}${alternateImages}${hyperlinkedImage}${imageInTableCell}` +
       `${imageInNestedFrame}${imageInCustomShape}${unframedImage}${groupedImage}${deeplyGroupedImage}` +
       `${imageInFrameInFrame}${imageInFrameInGroupInFrame}${imageInFrameInFrameInGroup}${groupDepthImage}` +

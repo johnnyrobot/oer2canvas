@@ -124,9 +124,9 @@ const MAX_PARAGRAPH_NESTING_DEPTH = 32
  * ONE shared definition of "how runs become a paragraph string", walking a
  * paragraph's (or a run's) children RECURSIVELY — a text node contributes its
  * data ONLY when its immediate parent is a text carrier (see `isTextCarrier`
- * below), an element matching `isSpace` contributes exactly one space, an
- * excluded element contributes nothing, and any other element (a run, a
- * formatting wrapper, a nested span, a hyperlink) is walked the same way.
+ * below), an element matching `isSpace` contributes exactly one space, and any
+ * other element (a run, a field, a formatting wrapper, a nested span, a
+ * hyperlink) is walked the same way.
  * PPTX (`a:r`/`a:t`/`a:br`) and ODF (`text:span`/`text:line-break`/
  * `text:tab`/`text:s`) differ only in which element names carry text and
  * which ones are a space — both share this rule rather than each carrying a
@@ -151,7 +151,7 @@ const MAX_PARAGRAPH_NESTING_DEPTH = 32
  */
 function joinParagraphText(
   paragraph: Element,
-  { isSpace, isTextCarrier, exclude }: {
+  { isSpace, isTextCarrier }: {
     /**
      * True for an element that stands in for one or more space characters
      * within the paragraph — never itself a paragraph break, since anydoc
@@ -202,7 +202,6 @@ function joinParagraphText(
      * implementation that preceded this one could never see.
      */
     isTextCarrier?: (element: Element) => boolean
-    exclude?: (element: Element) => boolean
   },
 ): string {
   const walk = (node: Node, depth: number): string => {
@@ -224,7 +223,6 @@ function joinParagraphText(
         text += ' '
         continue
       }
-      if (exclude?.(element)) continue
       text += walk(element, depth + 1)
     }
     return text
@@ -233,18 +231,19 @@ function joinParagraphText(
 }
 
 /**
- * One PPTX paragraph's (`a:p`) text. `includeFields` controls whether an
- * `a:fld` (a field such as the notes slide-number placeholder's cached
- * `slidenum` text) contributes its own `a:t`. The slide path leaves this on —
- * a deferred minor, `a:fld` text still enters a slide's `textRuns` — but the
- * notes-body path (see `notesBodyText`) turns it off, since a field's cached
- * text is page chrome, not the presenter's authored words.
+ * One PPTX paragraph's (`a:p`) text.
+ *
+ * AN `a:fld` CONTRIBUTES ITS OWN `a:t`, everywhere — a field's cached text is
+ * text anydoc renders. This function used to take an `includeFields` flag so
+ * the notes-body path could turn it OFF; MEASURED with real anydoc 0.2.4, that
+ * was backwards on the notes path and had no user on the slide path, so the
+ * flag is gone rather than left as a second joining rule to keep in step. See
+ * `notesBodyText` for the measurement and for what the false setting cost.
  */
-function paragraphText(paragraph: Element, { includeFields }: { includeFields: boolean }): string {
+function paragraphText(paragraph: Element): string {
   return joinParagraphText(paragraph, {
     isSpace: (element) => element.namespaceURI === DRAWING_NS && element.localName === 'br',
     isTextCarrier: (element) => element.namespaceURI === DRAWING_NS && element.localName === 't',
-    exclude: includeFields ? undefined : (element) => element.namespaceURI === DRAWING_NS && element.localName === 'fld',
   })
 }
 
@@ -254,8 +253,10 @@ function paragraphText(paragraph: Element, { includeFields }: { includeFields: b
  * for `a:br`. Unlike PPTX, no `isTextCarrier` is passed at all: see that
  * option's own doc comment on `joinParagraphText` for why an ODF allowlist
  * (of `text:span`, in an earlier version of this function) is a losing list
- * that dropped a hyperlink's own text. ODF has no field-chrome equivalent to
- * exclude here.
+ * that dropped a hyperlink's own text. ODF's own field elements
+ * (`text:page-number`, `text:date`) need no special handling either: they
+ * carry text like any other inline element, and the frames that hold them are
+ * excluded whole — see `ODF_UNRENDERED_PRESENTATION_CLASSES`.
  *
  * An `office:annotation` anchored INLINE, mid paragraph, is NOT excluded, and
  * that is measured rather than assumed. Driving real anydoc 0.2.4 over an
@@ -284,7 +285,7 @@ function odfParagraphText(paragraph: Element): string {
  */
 function shapeParagraphs(shape: Element): string[] {
   return [...shape.getElementsByTagNameNS(DRAWING_NS, 'p')]
-    .map((paragraph) => paragraphText(paragraph, { includeFields: true }))
+    .map((paragraph) => paragraphText(paragraph))
     .filter((text) => text.length > 0)
 }
 
@@ -317,6 +318,46 @@ function isTitleShape(shape: Element): boolean {
 }
 
 /**
+ * The placeholder types anydoc renders NOTHING for: the footer, the slide
+ * number, and the date that PowerPoint's Insert ▸ Header & Footer dialog puts
+ * on a slide.
+ *
+ * MEASURED against real anydoc 0.2.4, one placeholder type per otherwise
+ * identical package, SEVENTEEN types tried and each answered independently
+ * rather than inferred from a list: `title` and `ctrTitle` come out as an
+ * `<h2>`; `body`, `subTitle`, `hdr`, `obj`, `tbl`, `chart`, `clipArt`, `dgm`,
+ * `media`, `pic`, `sldImg` and an unknown type all come out as a `<p>`; and
+ * exactly `ftr`, `sldNum` and `dt` come out as nothing at all. Pinned one type
+ * per row in `reconcile.browser.test.ts`, so a future anydoc that starts
+ * rendering one of the three — or stops rendering one of the others — turns
+ * that row red instead of turning an ordinary deck into a refusal.
+ *
+ * READING THEM WAS A REFUSAL ON AN ORDINARY DECK, not a cosmetic surplus. The
+ * reconciler consumes anydoc's blocks while the text accumulated so far stays a
+ * PREFIX of the slide's own runs and requires exact equality at the end, so ONE
+ * run anydoc never rendered leaves the slide incomplete and blocks the whole
+ * file — and `document.ts` throws on a presentation blocker, which puts the
+ * user back at the file picker with no page and nothing saying a slide number
+ * caused it. Measured on a real 27-slide deck: slide 27's cached `<a:t>27</a:t>`
+ * alone refused it. Census over the real decks on this machine: 4 of 15
+ * distinct decks and 48 of 143 slides carry one of these three.
+ *
+ * The date and slide-number placeholders hold their text inside an `a:fld`
+ * whose `a:t` is the CACHED rendering, so excluding the FIELD rather than the
+ * SHAPE would have fixed those two and left the footer — which is an ordinary
+ * run — still refusing. The shape is the unit anydoc skips, so the shape is the
+ * unit skipped here.
+ */
+const UNRENDERED_PLACEHOLDER_TYPES: ReadonlySet<string> = new Set(['ftr', 'sldNum', 'dt'])
+
+/** Whether this `p:sp` is chrome anydoc renders nothing for — see above. */
+function isUnrenderedChrome(shape: Element): boolean {
+  const placeholder = shape.getElementsByTagNameNS(PML_NS, 'ph')[0]
+  if (!placeholder) return false
+  return UNRENDERED_PLACEHOLDER_TYPES.has(placeholder.getAttribute('type') ?? '')
+}
+
+/**
  * `TargetMode="External"` on a relationship: the `Target` is a URL rather than
  * a part inside the package. PowerPoint's "Link to File" insert writes one, and
  * anydoc emits an ordinary `<img src="https://…">` for it (measured) — with no
@@ -332,7 +373,10 @@ const EXTERNAL_TARGET_MODE = 'External'
  * a blip names it, so an unused image relationship (a picture background lives
  * in the slide's rels too) can never make the index expect a picture.
  */
-function slideRelationshipTargets(relsXml: string | undefined): Map<string, string> {
+function slideRelationshipTargets(
+  relsXml: string | undefined,
+  partDirectory: string,
+): Map<string, string> {
   const targets = new Map<string, string>()
   if (!relsXml) return targets
   const document = parseXml(relsXml, 'relationship part')
@@ -349,7 +393,7 @@ function slideRelationshipTargets(relsXml: string | undefined): Map<string, stri
     // I cannot identify" and "this slide references nothing" is the difference
     // between a refusal and a neighbouring slide quietly claiming exclusivity
     // it does not have. See `UNRESOLVABLE_REFERENCE`.
-    targets.set(id, resolvePackagePath(target, SLIDE_PART_DIRECTORY) ?? UNRESOLVABLE_REFERENCE)
+    targets.set(id, resolvePackagePath(target, partDirectory) ?? UNRESOLVABLE_REFERENCE)
   }
   return targets
 }
@@ -364,10 +408,35 @@ function relationshipTargets(relsXml: string | undefined, type: string): string[
 }
 
 /**
- * The directory every relationship in `ppt/slides/_rels/slideN.xml.rels` is
- * relative to — the part's OWN directory, per OPC.
+ * The directory every relationship in `ppt/_rels/presentation.xml.rels` is
+ * relative to — the presentation part's OWN directory, per OPC. A slide's own
+ * relationships resolve against the slide part's directory instead, which is
+ * derived from wherever that slide actually turned out to live rather than
+ * assumed to be `ppt/slides/`.
  */
-const SLIDE_PART_DIRECTORY = 'ppt/slides/'
+const PRESENTATION_PART_DIRECTORY = 'ppt/'
+
+/**
+ * The directory a part lives in, as `resolvePackagePath` wants it — with the
+ * trailing slash, and `''` for a part at the package root.
+ */
+function partDirectoryOf(partPath: string): string {
+  const cut = partPath.lastIndexOf('/')
+  return cut < 0 ? PACKAGE_ROOT : partPath.slice(0, cut + 1)
+}
+
+/**
+ * A part's OPC relationship part: `ppt/slides/slide1.xml` →
+ * `ppt/slides/_rels/slide1.xml.rels`. Built from the part's REAL path rather
+ * than from a fixed `ppt/slides/` prefix, for the same reason the part path
+ * itself is resolved rather than string-hacked.
+ */
+function relationshipPartFor(partPath: string): string {
+  const cut = partPath.lastIndexOf('/')
+  return cut < 0
+    ? `_rels/${partPath}.rels`
+    : `${partPath.slice(0, cut)}/_rels/${partPath.slice(cut + 1)}.rels`
+}
 
 /**
  * A host that exists only to give `URL` something to resolve against. Nothing
@@ -487,13 +556,30 @@ function isAbsoluteReference(reference: string): boolean {
  * speaker-notes warning — the same leak, through a different door.
  *
  * Paragraph text is built with `paragraphText` — the SAME per-run,
- * per-`a:br` logic `shapeParagraphs` uses on the slide path, with
- * `includeFields: false` so the slide-number field's cached text is excluded
- * even where it sits inside the body placeholder itself. Maintaining a
- * second, different joining rule here is exactly what let a routine mid-word
- * run split (`"Photosynthesi" + "s"`) reach `notesText` as two words with a
- * space wrongly stitched in between, breaking the exact-string comparison
- * the later reconciliation relies on.
+ * per-`a:br` logic `shapeParagraphs` uses on the slide path, and with the SAME
+ * `includeFields: true`. Maintaining a second, different joining rule here is
+ * exactly what let a routine mid-word run split (`"Photosynthesi" + "s"`)
+ * reach `notesText` as two words with a space wrongly stitched in between,
+ * breaking the exact-string comparison the later reconciliation relies on.
+ *
+ * `includeFields` USED TO BE `false` HERE, and it was backwards. The comment
+ * that justified it said the exclusion was needed "even where it sits inside
+ * the body placeholder itself" — the opposite of what anydoc does. MEASURED
+ * with real anydoc 0.2.4, one shape per otherwise identical package: a field
+ * inside a `sldNum` or `dt` SHAPE is not rendered, because the whole shape is
+ * not rendered; a field inside the BODY placeholder IS rendered, cached text
+ * and all. So with a `datetime1` field inline in the notes body, anydoc's
+ * blockquote read `Mention the 8/30/26 deadline` while `notesText` read
+ * `Mention the deadline`, the strict-equality comparison failed, the
+ * blockquote was NOT recognised as speaker notes, and the deck blocked — and
+ * on a deck whose notes happen to fit the slide's own run accumulation, that
+ * same failed comparison PUBLISHES THE PRESENTER'S PRIVATE NOTE, which is the
+ * one outcome this module exists to prevent.
+ *
+ * The chrome that comment was really defending against is the separate
+ * `sldNum` SHAPE, and the body-shape restriction below already excludes it —
+ * a fact `index.test.ts` now pins in both directions, with a notes part
+ * carrying both a slide-number shape and an inline field of its own.
  */
 function notesBodyText(notesDocument: Document): string | undefined {
   const bodyShape = [...notesDocument.getElementsByTagNameNS(PML_NS, 'sp')].find((shape) => {
@@ -502,7 +588,7 @@ function notesBodyText(notesDocument: Document): string | undefined {
   })
   if (!bodyShape) return undefined
   const paragraphs = [...bodyShape.getElementsByTagNameNS(DRAWING_NS, 'p')]
-    .map((paragraph) => paragraphText(paragraph, { includeFields: false }))
+    .map((paragraph) => paragraphText(paragraph))
     .filter((text) => text.length > 0)
   // Paragraphs join with a single space rather than concatenating: unlike
   // `textRuns` (one array entry per paragraph, matching anydoc's
@@ -627,6 +713,34 @@ function readBlipOrigins(shape: Element, state: ShapeWalkState): void {
   else state.pictureOrigins.add(origin)
 }
 
+/**
+ * The `p:oleObj` anydoc actually renders for an OLE `graphicFrame`: THE FIRST
+ * ONE IN DOCUMENT ORDER, at any depth under `a:graphicData`.
+ *
+ * A frame carries more than one only through `mc:AlternateContent`, which is
+ * how PowerPoint really writes a pasted worksheet — a VML-requiring `mc:Choice`
+ * and an `mc:Fallback`, one `p:oleObj` in each. This used to collect ALL of
+ * them, which was right only by coincidence: PowerPoint writes the SAME `r:id`
+ * in both branches, so the `Set` deduped the pair. Give the two branches
+ * different relationships — a converter, a hand-edited package — and the index
+ * recorded two origins for the one picture anydoc renders, so the slide
+ * referenced a part no block ever carried and the deck refused.
+ *
+ * FIRST IN DOCUMENT ORDER, NOT `rendersChoiceBranch`, and that is measured
+ * rather than inherited. `Requires="v"` is one of the seven prefixes measured
+ * to make anydoc render the FALLBACK at the shape-tree level — and here, with
+ * exactly that `Requires`, anydoc rendered the CHOICE. Authoring the same
+ * package with the `mc:Fallback` written FIRST flipped the origin it reported
+ * (`…/worksheet1.xlsx` → `…/worksheet2.xlsx`), which is what makes it document
+ * order rather than branch selection. Both rows are pinned in
+ * `reconcile.browser.test.ts`. It is the same rule `readBlipOrigins` already
+ * follows one element down, for the same reason: `mc:AlternateContent` only
+ * governs anydoc's rendering where it wraps a SHAPE.
+ */
+function renderedOleObject(graphicData: Element): Element | undefined {
+  return graphicData.getElementsByTagNameNS(PML_NS, 'oleObj')[0]
+}
+
 interface ShapeWalkState {
   textRuns: string[]
   title: string | undefined
@@ -681,6 +795,10 @@ function walkShapes(container: Element, state: ShapeWalkState, depth = 0): void 
   }
   for (const shape of container.children) {
     if (shape.namespaceURI === PML_NS && shape.localName === 'sp') {
+      // Footer, slide-number and date chrome: anydoc renders no block for any
+      // of the three, so reading their text refuses the deck. See
+      // `UNRENDERED_PLACEHOLDER_TYPES` for the measurement and the census.
+      if (isUnrenderedChrome(shape)) continue
       const paragraphs = shapeParagraphs(shape)
       // The title is the FIRST paragraph of the FIRST title shape encountered;
       // any further paragraphs in that same shape are ordinary text, and any
@@ -727,10 +845,16 @@ function walkShapes(container: Element, state: ShapeWalkState, depth = 0): void 
          * never arrives and the preview belong to no slide, which is a refusal
          * on an ordinary pasted worksheet. The blip is deliberately NOT also
          * recorded: it would be a second part nothing ever carries.
+         *
+         * ONE `p:oleObj`, not every one at any depth: PowerPoint writes an
+         * OLE object as `mc:AlternateContent` INSIDE `a:graphicData`, one
+         * `p:oleObj` per branch, and collecting both recorded two origins for
+         * one rendered picture. See `renderedOleObject` for which one anydoc
+         * renders and for the flip that measured it.
          */
-        for (const oleObject of shape.getElementsByTagNameNS(PML_NS, 'oleObj')) {
-          const relationshipId = oleObject.getAttributeNS(R_NS, 'id')
-          if (!relationshipId) continue
+        const oleObject = data ? renderedOleObject(data) : undefined
+        const relationshipId = oleObject?.getAttributeNS(R_NS, 'id')
+        if (relationshipId) {
           const origin = state.resolveRelationship(relationshipId)
           // Same rule as a blip's: a named relationship the package does not
           // declare is an embedded object the deck says is there and is not.
@@ -845,9 +969,21 @@ function pptxIndex(parts: Record<string, string>): PresentationIndex {
 
   slideIds.forEach((slideId, position) => {
     const target = targetById.get(slideId.getAttributeNS(R_NS, 'id') ?? '')
-    const path = target ? `ppt/${target.replace(/^\.\.\//, '')}` : undefined
+    /*
+     * RESOLVED, not string-hacked. This used to be
+     * `ppt/${target.replace(/^\.\.\//, '')}`, and `resolvePackagePath`'s own
+     * doc comment already said that hack had been replaced — on the picture
+     * path, where an identity depended on it. It was still here, and it is not
+     * cosmetic: OPC allows a relationship `Target` to be an ABSOLUTE part name,
+     * and three real decks on this machine write exactly
+     * `Target="/ppt/slides/slide1.xml"`, which the hack turned into
+     * `ppt//ppt/slides/slide1.xml`. All three refused with "names a slide (1)
+     * whose part is missing from the package" — a deck the package plainly
+     * contains.
+     */
+    const path = target ? resolvePackagePath(target, PRESENTATION_PART_DIRECTORY) : undefined
     const xml = path ? parts[path] : undefined
-    if (!xml) {
+    if (!xml || path === undefined) {
       throw new PresentationIndexError(
         `This presentation names a slide (${position + 1}) whose part is missing from the package.`,
       )
@@ -858,8 +994,13 @@ function pptxIndex(parts: Record<string, string>): PresentationIndex {
       throw new PresentationIndexError(`Slide ${position + 1} has no shape tree to read.`)
     }
 
-    const relsXml = parts[`ppt/slides/_rels/${path!.split('/').pop()}.rels`]
-    const relationshipTargetById = slideRelationshipTargets(relsXml)
+    // Both derived from where the slide part REALLY is, not from a fixed
+    // `ppt/slides/` prefix: a producer that puts its slides elsewhere (or names
+    // them absolutely, as three real decks do) still finds its own rels, and
+    // its pictures still resolve against its own directory.
+    const slideDirectory = partDirectoryOf(path)
+    const relsXml = parts[relationshipPartFor(path)]
+    const relationshipTargetById = slideRelationshipTargets(relsXml, slideDirectory)
 
     const state: ShapeWalkState = {
       textRuns: [],
@@ -872,7 +1013,7 @@ function pptxIndex(parts: Record<string, string>): PresentationIndex {
     walkShapes(tree, state)
 
     const notesTarget = relationshipTargets(relsXml, 'notesSlide')[0]
-    const notesPath = notesTarget ? resolvePackagePath(notesTarget, SLIDE_PART_DIRECTORY) : undefined
+    const notesPath = notesTarget ? resolvePackagePath(notesTarget, slideDirectory) : undefined
     const notesXml = notesPath ? parts[notesPath] : undefined
     const notesText = notesXml ? notesBodyText(parseXml(notesXml, 'notes part')) : undefined
 
@@ -1207,6 +1348,38 @@ function odfObjectKind(
   return undefined
 }
 
+/**
+ * ODF's half of `UNRENDERED_PLACEHOLDER_TYPES`: the `presentation:class` values
+ * anydoc renders NOTHING for.
+ *
+ * MEASURED against real anydoc 0.2.4, one class per otherwise identical
+ * package, all SIXTEEN of ODF's presentation classes tried and each answered
+ * independently: `title` comes out as an `<h2>`; `outline`, `subtitle`, `text`,
+ * `graphic`, `object`, `chart`, `table`, `orgchart`, `page`, `notes` and
+ * `handout` come out as a `<p>`; and exactly `footer`, `page-number`,
+ * `date-time` and `header` come out as nothing at all. Pinned one class per row
+ * in `reconcile.browser.test.ts`.
+ *
+ * THE TWO FORMATS ARE NOT THE SAME SET, and that is measured rather than
+ * assumed: PPTX's `hdr` placeholder IS rendered while ODF's `header` class is
+ * NOT, so a list derived from one format by translation would have been wrong
+ * on that row.
+ *
+ * A real deck reaches this constantly. Impress writes the slide number as
+ * `<text:page-number>&lt;number&gt;</text:page-number>` — the literal
+ * placeholder string a reader that does not recompute the field displays — so
+ * without this the index expects the text `<number>` on every page that shows a
+ * slide number, and the whole deck refuses. Of the fourteen `.odp` files
+ * LibreOffice wrote on this machine, eight carry a `page-number` frame.
+ *
+ * Excluded as a ROOT rather than filtered paragraph by paragraph, because
+ * anydoc publishes nothing from these frames AT ALL — not their text, not a
+ * picture, not an embedded object — so every one of this function's queries
+ * must skip them, exactly as they all skip the notes subtree and a comment.
+ */
+const ODF_UNRENDERED_PRESENTATION_CLASSES: ReadonlySet<string> =
+  new Set(['footer', 'page-number', 'date-time', 'header'])
+
 function odpIndex(parts: Record<string, string>): PresentationIndex {
   const content = parts['content.xml']
   if (!content) {
@@ -1236,10 +1409,18 @@ function odpIndex(parts: Record<string, string>): PresentationIndex {
      * `textRuns` before this exclusion existed). The deep `contains()` check
      * below is the same one already confirmed airtight for notes nested
      * several levels down.
+     *
+     * The page-chrome frames join them for the same reason, one format over:
+     * see `ODF_UNRENDERED_PRESENTATION_CLASSES`.
      */
-    const excludedRoots: readonly Element[] = notesElement
-      ? [notesElement, ...page.getElementsByTagNameNS(ODF_OFFICE_NS, 'annotation')]
-      : [...page.getElementsByTagNameNS(ODF_OFFICE_NS, 'annotation')]
+    const excludedRoots: readonly Element[] = [
+      ...(notesElement ? [notesElement] : []),
+      ...page.getElementsByTagNameNS(ODF_OFFICE_NS, 'annotation'),
+      ...[...page.getElementsByTagNameNS(ODF_DRAW_NS, 'frame')]
+        .filter((frame) => ODF_UNRENDERED_PRESENTATION_CLASSES.has(
+          frame.getAttributeNS(ODF_PRESENTATION_NS, 'class') ?? '',
+        )),
+    ]
 
     /*
      * Every `text:p` AND `text:h` in the page, in document order, wherever
@@ -1316,10 +1497,23 @@ function odpIndex(parts: Record<string, string>): PresentationIndex {
     /*
      * Embedded objects on THIS page, classified by the manifest. Counted in
      * one pass rather than two queries so a `draw:object` can never be counted
-     * as both a chart and a diagram, and excluded roots (notes, comments) are
-     * skipped for the same reason they are everywhere else in this function:
-     * anydoc publishes nothing from them, so a loss there is not a loss on the
-     * page.
+     * as both a chart and a diagram, and excluded roots (notes, comments,
+     * page chrome) are skipped for the same reason they are everywhere else in
+     * this function: anydoc publishes nothing from them, so a loss there is not
+     * a loss on the page.
+     *
+     * ANY DEPTH, DELIBERATELY — the loss counters do NOT obey `isWalkedText`
+     * and `isWalkedPicture`'s "a shape nested inside another shape is not
+     * entered", and the difference is not an oversight. That rule exists to
+     * make the index's walk exactly as wide as anydoc's rendering, because text
+     * and pictures are the two things the two accounts must AGREE about: a part
+     * the index collects and no block carries is a refusal. A loss counter is
+     * not an agreement. anydoc renders NOTHING for an embedded object or a
+     * media plugin at ANY depth (measured, including one nested inside another
+     * frame), so obeying the rule here would report FEWER real losses without
+     * making any account agree better — it would hide a video from the reader
+     * because of where its author happened to put it. Pinned by
+     * `index.test.ts`'s nested-media row, in both directions.
      */
     const odfObjectKindCounts = { chart: 0, diagram: 0 }
     for (const object of page.getElementsByTagNameNS(ODF_DRAW_NS, 'object')) {

@@ -639,6 +639,29 @@ test('inside a blipFill, anydoc renders the FIRST blip written, not the branch R
   expect(result.findings).toEqual([])
 })
 
+test('authoring the mc:Fallback FIRST flips which blip anydoc renders, which is what makes it document order', async () => {
+  /*
+   * THE HALF OF THE CLAIM ABOVE THAT HAD NO TEST. Its doc comment — and
+   * `readBlipOrigins`' — assert that anydoc picks the blip by DOCUMENT ORDER
+   * rather than by branch, and cited "authoring the same package with the
+   * Fallback written first flips which one anydoc renders" as the measurement.
+   * Nothing committed authored that package, so "first in document order" and
+   * "always the Choice" were indistinguishable, and a reader taking the Choice
+   * unconditionally passed every test in this file.
+   *
+   * Here the Fallback is written first and names `image2`. Everything else,
+   * including `Requires="p14"`, is identical to the test above — so the two
+   * rows differ in exactly one thing and answer exactly one question.
+   */
+  const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', blipFillChoiceFallback: { choice: 'image', fallback: 'image2', fallbackFirst: true } },
+  ]))
+
+  expect(anydocHtml.match(/<img/g)).toHaveLength(1)
+  expect(index.slides[0]!.pictureOrigins).toEqual(['ppt/media/image-second.png'])
+  expect(result.findings).toEqual([])
+})
+
 test('the motivating misattribution deck: a plain picture beside an mc:AlternateContent fill keeps its own picture', async () => {
   /*
    * Slide 1 carries a plain picture on the SECOND real image plus a
@@ -1129,4 +1152,290 @@ test('an ODP chart is still named when it carries the GDI metafile preview Libre
   const unrepresentable = result.findings.find((entry) => entry.code === 'presentation-unrepresentable')
   expect(unrepresentable!.sourcePage).toBe(1)
   expect(unrepresentable!.message).toContain('1 chart')
+})
+
+
+/*
+ * ============================================================================
+ * WHAT ANYDOC RENDERS NOTHING FOR — the measurement `index.ts`'s two chrome
+ * sets are built from, taken against real anydoc rather than restated from the
+ * OOXML and ODF specifications. Every row here is one placeholder type or one
+ * presentation class on an otherwise identical package, so a row can only be
+ * about the thing it names.
+ * ============================================================================
+ */
+
+test.each([
+  // The three PPTX placeholder types anydoc renders NOTHING for. Reading their
+  // text refused 4 of the 15 distinct real decks on this machine, 48 of 143
+  // slides, and `document.ts` THROWS on a presentation blocker — so the user
+  // was returned to the file picker with no page and no clue that a slide
+  // number had caused it.
+  ['ftr'],
+  ['sldNum'],
+  ['dt'],
+])('anydoc renders nothing for a pptx %s placeholder, and the deck still imports', async (type) => {
+  const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'Photosynthesis', body: ['Light reactions'], placeholders: [{ type, text: 'CHROME' }] },
+  ]))
+
+  expect(anydocHtml).not.toContain('CHROME')
+  expect(index.slides[0]!.textRuns).toEqual(['Photosynthesis', 'Light reactions'])
+  expect(result.findings).toEqual([])
+})
+
+test.each([
+  // The other direction, on the same package shape: these ARE rendered, so the
+  // index has to keep them. `hdr` is here because ODF's `header` class is NOT
+  // rendered — the two formats' sets are measured separately, not translated.
+  ['hdr'],
+  ['subTitle'],
+  ['body'],
+  ['obj'],
+])('anydoc DOES render a pptx %s placeholder, and the index keeps its text', async (type) => {
+  const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'Photosynthesis', body: ['Light reactions'], placeholders: [{ type, text: 'CHROME' }] },
+  ]))
+
+  expect(anydocHtml).toContain('CHROME')
+  expect(index.slides[0]!.textRuns).toEqual(['Photosynthesis', 'Light reactions', 'CHROME'])
+  expect(result.findings).toEqual([])
+})
+
+test.each([
+  // ODF's half. `header` is the row that makes this a separate measurement
+  // rather than a translation of the PPTX one.
+  ['page-number' as const],
+  ['footer' as const],
+  ['date-time' as const],
+])('anydoc renders nothing for an odp %s frame, and the deck still imports', async (presentationClass) => {
+  const { anydocHtml, index, result } = await reconcileFixture([
+    { title: 'Photosynthesis', body: ['Light reactions'], chromeFrames: [{ presentationClass, text: 'CHROME' }] },
+  ])
+
+  expect(anydocHtml).not.toContain('CHROME')
+  expect(index.slides[0]!.textRuns).toEqual(['Photosynthesis', 'Light reactions'])
+  expect(result.findings).toEqual([])
+})
+
+test('a real Impress slide-number field imports instead of expecting the literal <number>', async () => {
+  // What LibreOffice actually saves. Eight of the fourteen `.odp` files it
+  // wrote on this machine carry one of these frames.
+  const { anydocHtml, index, result } = await reconcileFixture([
+    {
+      title: 'Photosynthesis',
+      body: ['Light reactions'],
+      chromeFrames: [{ presentationClass: 'page-number', text: '<number>', field: 'page-number' }],
+    },
+  ])
+
+  expect(anydocHtml).not.toContain('&lt;number&gt;')
+  expect(index.slides[0]!.textRuns).toEqual(['Photosynthesis', 'Light reactions'])
+  expect(result.findings).toEqual([])
+})
+
+/*
+ * ============================================================================
+ * EMPTY BLOCKS — see `VACANT_BLOCK_TAGS` in `reconcile.ts`.
+ * ============================================================================
+ */
+
+test('an empty text:p is a <p></p> anydoc emits, and it does not orphan the rest of the deck', async () => {
+  const { anydocHtml, result } = await reconcileFixture([
+    { title: 'Photosynthesis', body: ['Light reactions', '', 'Calvin cycle'] },
+    { title: 'Where it happens', body: ['Stroma'] },
+  ])
+
+  // The measurement the skip exists for. PPTX is the opposite: an empty `a:p`
+  // makes anydoc emit no block at all, so its two accounts already agree.
+  expect(anydocHtml).toContain('<p>Light reactions</p><p></p><p>Calvin cycle</p>')
+  expect(result.findings).toEqual([])
+  expect(sectionsOf(result.html)).toHaveLength(2)
+  expect(sectionsOf(result.html)[1]).toHaveTextContent('Stroma')
+})
+
+test("LibreOffice's empty shape paragraph does not orphan the rest of the deck either", async () => {
+  // `emptyCustomShape` is the single most common element in a real Impress
+  // file: one empty `text:p` per shape that carries no text. A four-page deck
+  // Impress converted carried 32 of them; a 31-page one carried 99.
+  const { anydocHtml, result } = await reconcileFixture([
+    { title: 'Photosynthesis', body: ['Light reactions'], emptyCustomShape: true },
+    { title: 'Where it happens', body: ['Stroma'] },
+  ])
+
+  expect(anydocHtml).toContain('<p></p>')
+  expect(result.findings).toEqual([])
+  expect(sectionsOf(result.html)).toHaveLength(2)
+  expect(sectionsOf(result.html)[1]).toHaveTextContent('Stroma')
+})
+
+test('a notes frame holding only an empty paragraph is an empty blockquote, and does not refuse', async () => {
+  const { anydocHtml, index, result } = await reconcileFixture([
+    { title: 'Photosynthesis', body: ['Light reactions'], notes: '' },
+    { title: 'Where it happens', body: ['Stroma'] },
+  ])
+
+  // `notesText` is `undefined` for a frame with no words, so the notes
+  // comparison cannot consume this block — which is why it needs the empty
+  // block rule rather than the notes rule.
+  expect(anydocHtml).toContain('<blockquote><p></p></blockquote>')
+  expect(index.slides[0]!.notesText).toBeUndefined()
+  expect(result.findings).toEqual([])
+  expect(sectionsOf(result.html)).toHaveLength(2)
+})
+
+/*
+ * ============================================================================
+ * INVISIBLE CHARACTERS — see `ANYDOC_DROPPED_CHARACTERS` in `reconcile.ts`.
+ * ============================================================================
+ */
+
+test.each([
+  ['a zero width space', '\u200B'],
+  ['a soft hyphen', '\u00AD'],
+])('anydoc drops %s from the text it renders, and the deck still imports', async (_label, character) => {
+  const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'Photosynthesis', body: [`all disciplines${character}.`] },
+  ]))
+
+  expect(anydocHtml).toContain('<p>all disciplines.</p>')
+  expect(anydocHtml).not.toContain(character)
+  // The index keeps it, which is the whole disagreement: the comparison form
+  // is what reconciles the two, not the index dropping it as well.
+  expect(index.slides[0]!.textRuns[1]).toContain(character)
+  expect(result.findings).toEqual([])
+})
+
+test.each([
+  ['a zero width joiner', '\u200D'],
+  ['a left-to-right mark', '\u200E'],
+  ['a word joiner', '\u2060'],
+])('anydoc KEEPS %s, so nothing is normalised away for it', async (_label, character) => {
+  const { anydocHtml, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'Photosynthesis', body: [`all disciplines${character}.`] },
+  ]))
+
+  expect(anydocHtml).toContain(character)
+  expect(result.findings).toEqual([])
+})
+
+/*
+ * ============================================================================
+ * A REAL CHART — the residual behind every remaining refusal on real decks.
+ * ============================================================================
+ */
+
+test('a chart WITH its cached data is rendered by anydoc as a table, and the deck refuses', async () => {
+  /*
+   * DESIGN FACT 6 SAID ANYDOC DROPS A CHART ENTIRELY. That is true only of a
+   * chart frame with no chart part — which is what every fixture in this repo
+   * wrote until now, and why nothing caught it. Given the `strCache`/`numCache`
+   * values PowerPoint stores so a reader need not open the workbook, anydoc
+   * renders the chart as a DATA TABLE instead.
+   *
+   * The index has no account of that table: it counts the frame as an
+   * unrepresentable chart and records no text for it. So the table belongs to
+   * no slide and the deck refuses — which is the SAFE answer (nothing is
+   * published under the wrong slide) but not a useful one, and it is why 4 of
+   * the 39 real `.pptx` decks on this machine still refuse.
+   *
+   * It is pinned rather than fixed deliberately. Reproducing this table in the
+   * index means predicting how anydoc turns a chart's caches into rows —
+   * series order, category axis, number formatting, chart type — which is the
+   * exact class of rule that produced eleven silent misattributions in this
+   * module and was retired in favour of joining on identities both accounts
+   * already hold. A chart's table carries no such identity today.
+   *
+   * WHEN THIS TEST FAILS, read which half changed. If anydoc stops emitting the
+   * table, the refusal goes away on its own. If the index learns to account for
+   * it, this row is the one that says so.
+   */
+  const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'Enrolment by term', chartWithData: true },
+  ]))
+
+  expect(anydocHtml).toContain('<table>')
+  expect(anydocHtml).toContain('Category 1')
+  expect(index.slides[0]!.textRuns).toEqual(['Enrolment by term'])
+  expect(index.slides[0]!.unrepresentable.charts).toBe(1)
+  expect(result.findings).toContainEqual(expect.objectContaining({
+    code: 'presentation-unattributed-content',
+    severity: 'blocker',
+  }))
+})
+
+test('a chart frame with NO chart part is dropped entirely, which is what design fact 6 measured', async () => {
+  // The contrast row: same frame, no cached data, and anydoc emits nothing —
+  // so the deck imports and the chart is REPORTED lost rather than refused.
+  const { anydocHtml, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'Enrolment by term', chart: true },
+  ]))
+
+  expect(anydocHtml).not.toContain('<table>')
+  expect(result.findings.map((finding) => finding.code)).toEqual(['presentation-unrepresentable'])
+})
+
+
+test('an OLE object written as mc:AlternateContent records ONE origin, from the branch anydoc renders', async () => {
+  /*
+   * THE SHAPE POWERPOINT REALLY WRITES. A pasted worksheet is not a bare
+   * `p:oleObj` under `a:graphicData`: it is an `mc:AlternateContent` with a
+   * VML-requiring `mc:Choice` and an `mc:Fallback`, one `p:oleObj` in each.
+   * Real PowerPoint puts the SAME `r:id` in both, so a reader that collected
+   * every `p:oleObj` at any depth got the right answer by coincidence — the
+   * `Set` deduped the pair.
+   *
+   * This fixture gives the two branches DIFFERENT relationships, which is what
+   * a converter or a hand-edited package can write, and the coincidence stops
+   * covering for it: the flat query records two origins for the one picture
+   * anydoc renders, so the slide references a part no block ever carries and
+   * the deck refuses.
+   *
+   * WHICH one anydoc renders is measured, and it is NOT the branch rule. With
+   * `Requires="v"` — one of the seven prefixes measured to make anydoc render
+   * the FALLBACK at the shape-tree level — anydoc rendered the CHOICE here.
+   */
+  const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'Pasted worksheet', oleObjectInAlternateContent: {} },
+  ]))
+
+  // ONE picture, from ONE branch — the preview, as an unpackageable EMF.
+  expect(anydocHtml.match(/Embedded image/g)).toHaveLength(1)
+  expect(anydocHtml).toContain('data-origin-part="ppt/embeddings/worksheet1.xlsx"')
+  expect(index.slides[0]!.pictureOrigins).toEqual(['ppt/embeddings/worksheet1.xlsx'])
+  // No presentation-level disagreement. (`embedded-content` still blocks on
+  // the EMF preview, which is the shared unpackageable-image rule.)
+  expect(result.findings).toEqual([])
+})
+
+test('writing the OLE mc:Fallback FIRST flips the object anydoc renders, which is what makes it document order', async () => {
+  // The flip that separates "first in document order" from "always the
+  // Choice". Without it both rules give the same answer on the row above and
+  // `renderedOleObject`'s rule would be an assumption wearing a measurement's
+  // clothes — the defect this branch has produced four times.
+  const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'Pasted worksheet', oleObjectInAlternateContent: { fallbackFirst: true } },
+  ]))
+
+  expect(anydocHtml).toContain('data-origin-part="ppt/embeddings/worksheet2.xlsx"')
+  expect(index.slides[0]!.pictureOrigins).toEqual(['ppt/embeddings/worksheet2.xlsx'])
+  expect(result.findings).toEqual([])
+})
+
+
+test('anydoc renders nothing for a media frame nested inside another frame, so counting it at any depth loses nothing', async () => {
+  /*
+   * The measurement behind `odpIndex`'s decision to leave the LOSS counters
+   * any-depth while the text and picture queries obey "a shape nested inside
+   * another shape is not entered". If anydoc rendered this nested video, the
+   * counter would be reporting a loss that is not a loss; it renders nothing,
+   * so counting it tells the reader something true that nothing else records.
+   */
+  const { anydocHtml, index, result } = await reconcileFixture([
+    { title: 'Cellular respiration', body: ['Overview'], nestedMedia: true },
+  ])
+
+  expect(anydocHtml).toBe('<h2 id="Cellular-respiration">Cellular respiration</h2><p>Overview</p>')
+  expect(index.slides[0]!.unrepresentable.media).toBe(1)
+  expect(result.findings.map((finding) => finding.code)).toEqual(['presentation-unrepresentable'])
 })

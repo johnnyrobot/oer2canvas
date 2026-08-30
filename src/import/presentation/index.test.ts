@@ -14,13 +14,47 @@ async function odpIndexOf(bytes: Uint8Array) {
 }
 
 test('slides are numbered in presentation order, not part-name order', async () => {
+  /*
+   * `reverseSlidePartNames` writes slide 1's XML to `slide2.xml` and slide 2's
+   * to `slide1.xml` while `sldIdLst` still lists them in presentation order —
+   * the shape a real deck takes when its slides were reordered after being
+   * authored, since PowerPoint keeps each slide's original part name.
+   *
+   * WITHOUT IT THIS TEST COULD NOT FAIL. The fixture's `slide1.xml` used to be
+   * the first `sldId` too, so sorting on the filename and following `sldIdLst`
+   * gave the same answer, and the assertion held under the rule it exists to
+   * rule out. Verified by mutation: reading `parts` in filename order now
+   * returns `['Where it happens', 'Photosynthesis']` and turns this red.
+   */
   const index = await indexOf(await pptxFixture([
     { title: 'Photosynthesis', body: ['Light reactions'] },
     { title: 'Where it happens', body: ['Stroma'] },
-  ]))
+  ], { reverseSlidePartNames: true }))
 
   expect(index.slides.map((slide) => slide.number)).toEqual([1, 2])
   expect(index.slides.map((slide) => slide.title)).toEqual(['Photosynthesis', 'Where it happens'])
+})
+
+test('a slide relationship written as an ABSOLUTE part name resolves to that part', async () => {
+  /*
+   * OPC allows a relationship `Target` to be an absolute part name, and three
+   * of the real `.pptx` decks on this machine write exactly
+   * `Target="/ppt/slides/slide1.xml"`. The string-hack resolution this replaced
+   * (`ppt/${target.replace(/^\.\.\//, '')}`) turned that into
+   * `ppt//ppt/slides/slide1.xml`, and all three refused with "names a slide (1)
+   * whose part is missing from the package" — a part the package plainly holds.
+   *
+   * The slide's OWN relationships are asserted too, because they are resolved
+   * against the slide part's directory rather than a fixed `ppt/slides/`: if
+   * the rels part were still looked up by the old fixed path, the picture would
+   * have no origin here and the assertion would go red.
+   */
+  const index = await indexOf(await pptxFixture([
+    { title: 'Absolute target', body: ['Body'], image: { alt: 'A chloroplast' } },
+  ], { absoluteSlideTargets: true }))
+
+  expect(index.slides.map((slide) => slide.title)).toEqual(['Absolute target'])
+  expect(index.slides[0]!.pictureOrigins).toEqual(['ppt/media/image1.png'])
 })
 
 test('a slide with no title placeholder reports no title (design fact 3)', async () => {
@@ -92,16 +126,26 @@ test('a two-paragraph body produces two separate text-run entries (fix-review Im
 })
 
 test('shapes nested in a group are visited: diagram and video counted, grouped text placed in order (fix-review Important 2)', async () => {
+  /*
+   * `titleLast` puts a NON-GROUPED shape AFTER the group in `spTree`, which is
+   * what makes the ORDER assertion below load-bearing. With the group written
+   * last — as it was — recursing into it IN PLACE and collecting its text into
+   * a separate list APPENDED at the end produce the identical array, so the
+   * test could not tell the two apart and could not fail. Verified by mutation:
+   * appending grouped runs after the walk now yields
+   * `['Overview', 'Cellular respiration', 'Grouped caption']` and turns this red.
+   */
   const index = await indexOf(await pptxFixture([
     {
       title: 'Cellular respiration',
       body: ['Overview'],
       group: { text: 'Grouped caption', diagram: true, video: true },
+      titleLast: true,
     },
   ]))
 
   expect(index.slides[0]!.unrepresentable).toEqual({ diagrams: 1, charts: 0, media: 1, pictures: 0 })
-  expect(index.slides[0]!.textRuns).toEqual(['Cellular respiration', 'Overview', 'Grouped caption'])
+  expect(index.slides[0]!.textRuns).toEqual(['Overview', 'Grouped caption', 'Cellular respiration'])
 })
 
 test('content inside mc:AlternateContent is counted exactly once, from the branch anydoc renders', async () => {
@@ -186,6 +230,30 @@ test("an ink annotation's fallback picture is recorded, so the page's own image 
   expect(index.slides[0]!.pictureOrigins).toEqual(['ppt/media/image1.png'])
 })
 
+test('a media frame NESTED inside another frame is still counted as a loss', async () => {
+  /*
+   * The loss counters are ANY-DEPTH on purpose, where the text and picture
+   * queries are not. anydoc renders nothing for a media plugin wherever it
+   * sits — including inside another frame, the placement the walk rule refuses
+   * to enter — so counting it here reports a real loss to the reader, while
+   * obeying the walk rule would silently drop a video because of where its
+   * author put it. The walk rule exists to make the index exactly as wide as
+   * anydoc's RENDERING, for the two things the accounts must agree about;
+   * a loss is not one of them.
+   *
+   * The second assertion is the half that keeps this honest: the nested frame
+   * contributes no TEXT and no PICTURE, so the rule it does not obey is still
+   * being obeyed by everything it governs.
+   */
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Cellular respiration', body: ['Overview'], nestedMedia: true },
+  ]))
+
+  expect(index.slides[0]!.unrepresentable).toEqual({ diagrams: 0, charts: 0, media: 1, pictures: 0 })
+  expect(index.slides[0]!.textRuns).toEqual(['Cellular respiration', 'Overview'])
+  expect(index.slides[0]!.pictureOrigins).toEqual([])
+})
+
 test('an odp draw:plugin carrying media is reported lost, with or without a poster frame', async () => {
   /*
    * MEASURED: Impress writes an inserted video as a `draw:plugin` with a media
@@ -226,6 +294,83 @@ test('a mid-word run split inside the notes body still joins correctly (fix-revi
   ]))
 
   expect(index.slides[0]!.notesText).toBe('Mention the thylakoid membrane.')
+})
+
+test.each([
+  // MEASURED against real anydoc 0.2.4, one type per otherwise identical
+  // package, and pinned against anydoc itself in `reconcile.browser.test.ts`.
+  // These three are the ONLY placeholder types anydoc renders nothing for, and
+  // reading their text refused 4 of the 15 distinct real decks on this machine.
+  ['ftr'],
+  ['sldNum'],
+  ['dt'],
+])('a %s placeholder contributes no text, because anydoc renders none of it', async (type) => {
+  const index = await indexOf(await pptxFixture([
+    { title: 'Photosynthesis', body: ['Light reactions'], placeholders: [{ type, text: 'CHROME' }] },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Photosynthesis', 'Light reactions'])
+})
+
+test('a slide-number placeholder holding a CACHED field value still contributes nothing', async () => {
+  // The form PowerPoint really writes: the number is not a run, it is the
+  // `a:fld` cached rendering. It is the SHAPE that is skipped, not the field —
+  // which is why a footer, whose text IS an ordinary run, is skipped too.
+  const index = await indexOf(await pptxFixture([
+    {
+      title: 'Photosynthesis',
+      body: ['Light reactions'],
+      placeholders: [{ type: 'sldNum', text: '27', field: 'slidenum' }],
+    },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Photosynthesis', 'Light reactions'])
+})
+
+test.each([
+  // The other side of the same measurement: these placeholder types ARE
+  // rendered, so their text has to stay in `textRuns` or the deck refuses from
+  // the opposite direction. `hdr` is here deliberately — ODF's `header` class
+  // is NOT rendered, so the two formats' skip sets are not translations of
+  // each other.
+  ['hdr'],
+  ['subTitle'],
+  ['body'],
+])('a %s placeholder DOES contribute its text, because anydoc renders it', async (type) => {
+  const index = await indexOf(await pptxFixture([
+    { title: 'Photosynthesis', body: ['Light reactions'], placeholders: [{ type, text: 'CHROME' }] },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Photosynthesis', 'Light reactions', 'CHROME'])
+})
+
+test("a field INSIDE the notes body contributes its cached text, because anydoc's blockquote does", async () => {
+  /*
+   * `notesBodyText` used to pass `includeFields: false`, on a comment claiming
+   * a field's cached text had to be excluded "even where it sits inside the
+   * body placeholder itself". MEASURED, that is backwards: anydoc renders a
+   * field inside the body placeholder and skips the slide-number SHAPE whole.
+   *
+   * The consequence is the one this module exists to prevent. `notesText` is
+   * compared to anydoc's blockquote by STRICT EQUALITY, so a `notesText` that
+   * omits the date the blockquote shows fails that comparison — and a failed
+   * comparison does not hide the notes, it PUBLISHES them as ordinary content
+   * on any deck whose notes happen to fit the slide's own run accumulation.
+   *
+   * The fixture's notes part carries a separate `sldNum` placeholder with its
+   * own cached `7` at all times, so the second assertion pins that the SHAPE
+   * exclusion — the chrome the old comment was really defending against — is
+   * still doing its job through the body-shape restriction alone.
+   */
+  const index = await indexOf(await pptxFixture([
+    {
+      title: 'Photosynthesis',
+      notesRuns: ['Mention the ', { field: 'datetime1', text: '8/30/26' }, ' deadline.'],
+    },
+  ]))
+
+  expect(index.slides[0]!.notesText).toBe('Mention the 8/30/26 deadline.')
+  expect(index.slides[0]!.notesText).not.toContain('7')
 })
 
 test('a notes placeholder with no type attribute is still the body placeholder (fix-review round-2 Important C)', async () => {
@@ -563,6 +708,47 @@ test('an odp office:annotation (reviewer comment) does not leak into textRuns (f
   ]))
 
   expect(index.slides[0]!.textRuns).toEqual(['Title', 'Body'])
+})
+
+test.each([
+  // MEASURED against real anydoc 0.2.4, one class per otherwise identical
+  // package, all sixteen of ODF's presentation classes tried; pinned against
+  // anydoc itself in `reconcile.browser.test.ts`. These four are the only ones
+  // it renders nothing for.
+  ['page-number' as const],
+  ['footer' as const],
+  ['date-time' as const],
+])('an odp %s chrome frame contributes no text, because anydoc renders none of it', async (presentationClass) => {
+  const index = await odpIndexOf(await odpFixture([
+    {
+      title: 'Photosynthesis',
+      body: ['Light reactions'],
+      chromeFrames: [{ presentationClass, text: 'CHROME' }],
+    },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Photosynthesis', 'Light reactions'])
+})
+
+test('an odp page-number FIELD does not put its literal placeholder into textRuns', async () => {
+  /*
+   * What Impress actually saves: `<text:page-number>&lt;number&gt;</text:page-number>`
+   * — the literal string `<number>`, the placeholder a reader that does not
+   * recompute the field displays. Eight of the fourteen `.odp` files
+   * LibreOffice wrote on this machine carry one, and until the frame was
+   * excluded the index expected the text `<number>` on every page that showed
+   * a slide number, refusing the deck.
+   */
+  const index = await odpIndexOf(await odpFixture([
+    {
+      title: 'Photosynthesis',
+      body: ['Light reactions'],
+      chromeFrames: [{ presentationClass: 'page-number', text: '<number>', field: 'page-number' }],
+    },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Photosynthesis', 'Light reactions'])
+  expect(index.slides[0]!.textRuns.join('')).not.toContain('<number>')
 })
 
 test('an odp text:h heading is found, matching the heading block anydoc emits (fix-review round 4)', async () => {

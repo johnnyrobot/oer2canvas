@@ -311,6 +311,35 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     expectInHtml: ['<section data-slide="1"', '<section data-slide="2"', 'Photosynthesis', '<table'],
   },
   {
+    id: 'pptx-slide-chrome',
+    format: 'pptx',
+    standsInFor: 'A deck carrying the footer, slide number and date PowerPoint\'s Insert ▸ Header & Footer dialog adds — the most common optional feature in PowerPoint, present on 4 of the 15 distinct real decks measured for this issue and on 48 of their 143 slides. anydoc renders none of the three, so before this corpus case existed a single cached slide number refused the whole file and returned the user to the file picker with no page and no explanation.',
+    bytes: () => pptxFixture([
+      {
+        title: 'Photosynthesis',
+        body: ['Light reactions'],
+        placeholders: [
+          { type: 'ftr', text: 'BIOL 101 — Autumn term' },
+          { type: 'sldNum', text: '1', field: 'slidenum' },
+          { type: 'dt', text: '8/30/26', field: 'datetime1' },
+        ],
+      },
+      {
+        title: 'Where it happens',
+        body: ['Stroma'],
+        placeholders: [
+          { type: 'ftr', text: 'BIOL 101 — Autumn term' },
+          { type: 'sldNum', text: '2', field: 'slidenum' },
+        ],
+      },
+    ]),
+    expectInHtml: ['<section data-slide="1"', '<section data-slide="2"', 'Photosynthesis', 'Stroma'],
+    // The chrome is not published either: anydoc never rendered it, so there is
+    // nothing to publish — and asserting the absence is what proves the fix is
+    // "the index stopped expecting it" rather than "the page grew a footer".
+    expectNotInHtml: ['BIOL 101', '8/30/26'],
+  },
+  {
     id: 'pptx-untitled-slide',
     format: 'pptx',
     standsInFor: 'A deck with a slide that carries only a text box — the case where anydoc alone loses the slide boundary entirely and content silently joins the previous slide.',
@@ -423,6 +452,25 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     // its alt text survived (the text that carries it past the accessibility
     // audit's decorative/alt gate into the cartridge at all).
     expectInHtml: ['Diagram slide', '<img', '$IMS-CC-FILEBASE$/oer2canvas/', 'A labelled chloroplast'],
+  },
+  {
+    id: 'odp-page-chrome',
+    format: 'odp',
+    standsInFor: 'The ODF half of the same property, in the shape LibreOffice really writes it: a `presentation:class="page-number"` frame holding `<text:page-number>&lt;number&gt;</text:page-number>`, a footer frame, and the empty `text:p` Impress puts inside every shape that has no text. Eight of the fourteen real `.odp` files measured for this issue carry a page-number frame; eight carry an empty paragraph and one carries 99.',
+    bytes: () => odpFixture([
+      {
+        title: 'Photosynthesis',
+        body: ['Light reactions', '', 'Calvin cycle'],
+        emptyCustomShape: true,
+        chromeFrames: [
+          { presentationClass: 'page-number', text: '<number>', field: 'page-number' },
+          { presentationClass: 'footer', text: 'BIOL 101 — Autumn term' },
+        ],
+      },
+      { title: 'Where it happens', body: ['Stroma'], emptyCustomShape: true },
+    ]),
+    expectInHtml: ['<section data-slide="1"', '<section data-slide="2"', 'Calvin cycle', 'Stroma'],
+    expectNotInHtml: ['BIOL 101', '&lt;number&gt;'],
   },
   {
     id: 'odp-semantic',

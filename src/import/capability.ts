@@ -145,19 +145,24 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
      * mutation; and the shared accessibility and cartridge suites passing with
      * a real packaged picture inside `web_resources/`.
      *
-     * Two residuals are stated rather than closed, and the issue's `## Answer`
-     * carries the reasoning. `walkShapes` enumerates shape kinds instead of
-     * following one stated rule the way the ODP walk now does, so criterion 1
-     * is met by measurement over this corpus and not proven for every deck;
-     * and WHICH INSTANCE of a shared media part lands under which slide still
-     * rests on the index and anydoc agreeing about which shapes produce
-     * blocks, though a picture can never be published under a slide that does
-     * not reference its origin part at all.
+     * Residuals are stated rather than closed, and the issue's `## Answer`
+     * carries the reasoning. The one that reaches a user is A CHART INSERTED IN
+     * POWERPOINT: given the cached values PowerPoint stores with it, anydoc
+     * renders it as a DATA TABLE, the index has no account of that table, and
+     * the deck REFUSES. Measured over 39 real `.pptx` decks on this machine,
+     * every deck carrying a `ppt/charts/chartN.xml` refused and every deck
+     * without one imported. Two more residuals do not reach a user: WHICH
+     * INSTANCE of a shared media part lands under which slide still rests on
+     * the index and anydoc agreeing about which shapes produce blocks (a
+     * picture can never be published under a slide that does not reference its
+     * origin part at all); and criterion 1 is met by measurement over this
+     * corpus plus 39 real decks rather than proven for every deck.
      */
     status: 'enabled',
     limitations: [
       'Speaker notes are not imported; slides that had them are listed so you can add what students need.',
-      'Diagrams, charts, and embedded audio or video are not imported — add them in Canvas afterwards.',
+      'Diagrams and embedded audio or video are not imported — add them in Canvas afterwards.',
+      'A chart inserted in PowerPoint BLOCKS import: the parser turns the chart\'s stored values into a data table, and this importer cannot tell which slide that table belongs to. Delete the chart, or replace it with a picture, to import the rest of the deck.',
       'A slide with no title is titled by its number so you can rename it.',
       'An equation blocks import; equation rendering is not supported yet.',
       'An image not in a format this importer can package (PNG, JPEG, GIF, or WebP) blocks import — a pasted chart, a Visio drawing, or legacy clip art is often saved this way; replace it with one of those formats first.',
