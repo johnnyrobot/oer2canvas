@@ -109,11 +109,31 @@ function shapeParagraphs(shape: Element): string[] {
     .filter((text) => text.length > 0)
 }
 
+/**
+ * A slide's title is the placeholder that SAYS SO ON THE SLIDE — `title`, or
+ * `ctrTitle` for the Title Slide layout PowerPoint hands you for slide 1.
+ *
+ * The type is deliberately NOT resolved through the slide's layout part, and
+ * design fact 9 is why. Over 226 slides in 34 real decks (PowerPoint 16 on
+ * Windows and Mac, plus generator-written decks), every one of the 130 slides
+ * that had a title placeholder wrote the type on the slide itself — 110
+ * `title`, 20 `ctrTitle` — and NOT ONE identified its title by an `idx`
+ * reference into the layout alone. Type-less `<p:ph idx="N"/>` is common (46
+ * slides carried one), but always for a BODY placeholder, where ECMA-376's
+ * schema default of `body` makes it correct — the same default `notesBodyText`
+ * relies on.
+ *
+ * anydoc 0.2.4 draws the line in the same place: a title shape carrying only
+ * `<p:ph idx="0"/>` comes out as a `paragraph`, not a `heading`, even when a
+ * layout part in the package says `title`. So resolving the chain here would
+ * not rescue such a slide — it would manufacture a DISAGREEMENT between the
+ * two accounts on a slide anydoc gives no heading for. The remaining 96
+ * slides carried no placeholder at all: genuinely untitled, which is a
+ * warning with a generated title (design fact 3), never a refusal.
+ */
 function isTitleShape(shape: Element): boolean {
   const placeholder = shape.getElementsByTagNameNS(PML_NS, 'ph')[0]
   const type = placeholder?.getAttribute('type') ?? ''
-  // `title` and `ctrTitle` are the two placeholder types PowerPoint uses for a
-  // slide's title; `ctrTitle` is what a title-layout slide carries.
   return type === 'title' || type === 'ctrTitle'
 }
 

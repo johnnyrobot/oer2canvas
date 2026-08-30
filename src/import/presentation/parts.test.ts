@@ -21,6 +21,13 @@ test('a pptx index wants no media, theme, master, or macro part', () => {
   // A macro-enabled deck (.pptm/.ppsm) carries this. We never read it and
   // never execute it; this pins that it is not even inflated.
   expect(wanted('ppt/vbaProject.bin')).toBe(false)
+  // A slide LAYOUT is the part a reader would need to resolve a placeholder
+  // whose type is inherited rather than written on the slide. Design fact 9
+  // measured 226 real slides and found no title that needed it, so a deck's
+  // layouts are left in the archive rather than inflated per slide. Adding
+  // them is the one change the layout-chain branch would have required.
+  expect(wanted('ppt/slideLayouts/slideLayout1.xml')).toBe(false)
+  expect(wanted('ppt/slideLayouts/_rels/slideLayout1.xml.rels')).toBe(false)
 })
 
 test('an odp index wants only content.xml', () => {

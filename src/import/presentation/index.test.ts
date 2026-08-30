@@ -158,3 +158,31 @@ test('an empty title placeholder no longer marks the slide title out of order (f
   expect(index.slides[0]!.title).toBeUndefined()
   expect(index.slides[0]!.titleOutOfOrder).toBe(false)
 })
+
+test('a ctrTitle placeholder is a title, like the Title Slide layout PowerPoint gives slide 1 (design fact 9)', async () => {
+  // 20 of the 130 titled slides fact 9 surveyed said `ctrTitle` rather than
+  // `title` — a slide-1 title read as untitled would put a warning on the
+  // very first slide of most decks.
+  const index = await indexOf(await pptxFixture([
+    { title: 'Photosynthesis', titlePlaceholderType: 'ctrTitle', body: ['A survey course'] },
+  ]))
+
+  expect(index.slides[0]!.title).toBe('Photosynthesis')
+  expect(index.slides[0]!.titleOutOfOrder).toBe(false)
+})
+
+test('a title placeholder identified only by idx is read as ordinary text, not a title (design fact 9)', async () => {
+  // The layout-chain case, pinned as a DECISION rather than a bug: fact 9
+  // found it zero times in 226 real slides, and anydoc emits a paragraph
+  // rather than a heading for exactly this shape — so resolving it here
+  // would leave the two accounts disagreeing about a slide anydoc gives no
+  // heading for. The text is not lost either way; the slide is simply
+  // untitled, which is the warning design fact 3 already covers.
+  const index = await indexOf(await pptxFixture([
+    { title: 'Photosynthesis', titleIdentifiedOnlyByIdx: true, body: ['Light reactions'] },
+  ]))
+
+  expect(index.slides[0]!.title).toBeUndefined()
+  expect(index.slides[0]!.textRuns).toEqual(['Photosynthesis', 'Light reactions'])
+  expect(index.slides[0]!.titleOutOfOrder).toBe(false)
+})

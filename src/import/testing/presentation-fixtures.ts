@@ -32,6 +32,25 @@ export interface PptxSlideSpec {
    * shape) and round-2 Important A (`a:br` must become a space, not vanish).
    */
   titleRuns?: readonly PptxParagraphSegment[]
+  /**
+   * How the title shape names itself. `title` is what an ordinary content
+   * slide carries; `ctrTitle` is what the Title Slide layout — the one
+   * PowerPoint hands you for slide 1 — carries instead. Design fact 9
+   * measured both on real decks: 110 slides said `title`, 20 said `ctrTitle`,
+   * and nothing else ever named a title.
+   */
+  titlePlaceholderType?: 'title' | 'ctrTitle'
+  /**
+   * Emit the title shape's placeholder as `<p:ph idx="0"/>` — no `type` at
+   * all, the form that would force a reader to resolve the type through the
+   * slide's LAYOUT part. Design fact 9 measured this on 226 real slides and
+   * found it exactly zero times for a title (it is common for BODY
+   * placeholders, where the schema default of `body` makes it correct), and
+   * measured that anydoc emits a plain paragraph rather than a heading for
+   * such a shape. The index therefore does not follow the layout chain, and
+   * this option exists to pin that decision rather than to support it.
+   */
+  titleIdentifiedOnlyByIdx?: boolean
   body?: readonly string[]
   /** Speaker notes — design fact 5. Mutually exclusive with `notesRuns`. */
   notes?: string
@@ -195,12 +214,25 @@ function alternateContentDiagram(): string {
     `</mc:Fallback></mc:AlternateContent>`
 }
 
+/**
+ * The `idx` a type-less title placeholder would carry. A slide layout writes
+ * its title placeholder as `<p:ph type="title"/>` with `idx` OMITTED, and
+ * ECMA-376's schema default for `CT_Placeholder/@idx` is 0 — so 0 is the only
+ * index a slide could use to point at a layout's title.
+ */
+const LAYOUT_TITLE_PLACEHOLDER_INDEX = 0
+
+function titlePlaceholderXml(spec: PptxSlideSpec): string {
+  if (spec.titleIdentifiedOnlyByIdx) return `<p:ph idx="${LAYOUT_TITLE_PLACEHOLDER_INDEX}"/>`
+  return `<p:ph type="${spec.titlePlaceholderType ?? 'title'}"/>`
+}
+
 function slideXml(spec: PptxSlideSpec): string {
   const title = spec.titleRuns
     ? titleShapeWithRuns(spec.titleRuns)
     : spec.title === undefined
       ? ''
-      : textShape(2, 'Title 1', [spec.title], '<p:ph type="title"/>')
+      : textShape(2, 'Title 1', [spec.title], titlePlaceholderXml(spec))
   const body = spec.body?.length
     ? textShape(3, 'Content Placeholder 2', spec.body, '<p:ph type="body" idx="1"/>')
     : ''

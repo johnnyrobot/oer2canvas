@@ -70,6 +70,31 @@ issue builds replaces them). Recorded here so the plan does not re-derive them.
    `alt` is `''` — which `anydoc-html.ts` already treats as undescribed rather than
    decorative. Tables arrive as `kind: 'data'` with `headerRows` set.
 
+9. **A slide names its own title on the slide; the layout chain is not needed.** Measured
+   2026-08-29, and unlike facts 1-8 this one is measured against **real decks**, not
+   synthetic packages: every `.pptx` on this machine — 41 paths, **34 distinct decks, 226
+   slides**, written by PowerPoint 16 for Windows and for Mac plus generators that leave
+   `docProps/app.xml` empty — classified slide by slide from the deck's own XML, resolving
+   each slide's layout part through its `slideLayout` relationship to see whether the layout
+   was ever load-bearing. **It never was.** All **130** slides that had a title placeholder
+   wrote the type on the slide itself — **110 `title`, 20 `ctrTitle`** — and **not one**
+   identified its title only by an `idx` reference into the layout. Type-less `<p:ph idx="N"/>`
+   is common (46 slides carry one) but always for a *body* placeholder, where ECMA-376's
+   `body` default makes it correct — the same default fact 5's notes reading already leans on.
+   anydoc 0.2.4 draws the line in the same place: a title shape carrying only `<p:ph idx="0"/>`
+   comes out a `paragraph`, not a `heading`, **even with a layout part in the package that
+   says `title`**. Following the chain would therefore not rescue such a slide; it would
+   manufacture a disagreement between the two accounts about a slide anydoc gives no heading
+   for. So `isTitleShape` stays as written, `ppt/slideLayouts/**` stays out of
+   `PPTX_PATTERNS`, and an unresolvable title stays a warning.
+
+   The surprise is the other half of the same count. **96 of the 226 slides — 42% — have no
+   title placeholder at all**, 92 of them carrying no `p:ph` whatsoever: whole decks built out
+   of free text boxes, with a headline that only *looks* like a title. Fact 3's untitled slide
+   is not an edge case, it is the common shape of a real deck. That is an argument for the
+   generated title being editable and the warning being per-slide and quiet, not for warning
+   harder — and the corpus should carry a deck like this rather than only well-formed ones.
+
 Facts 3, 5, and 6 are all the same defect wearing three hats: **anydoc's output cannot be
 checked against anything.** That is what the package index exists to fix.
 
@@ -275,7 +300,14 @@ never execute it; the test exists so that stays true.
   truthfully — issue 13's doc-claims test already fails when a user-facing obligation is
   missing.
 
-## Open question for the plan
+## Open question for the plan — SETTLED by fact 9 (2026-08-29)
+
+**Answered: a title is resolvable without following the layout chain, on every real slide
+measured, and anydoc resolves it no further than we do.** The index keeps requiring
+`type="title"` or `type="ctrTitle"` on the slide, `ppt/slideLayouts/**` stays out of
+`PPTX_PATTERNS`, and a title that cannot be resolved is an untitled slide — a warning with
+an editable generated title, never a blocker. The original statement of the question
+follows, unchanged.
 
 Fact 4 was measured on synthetic packages where the title placeholder was unambiguous.
 Real decks inherit placeholders from slide layouts and masters, and a slide may name its
