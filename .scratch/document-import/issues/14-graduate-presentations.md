@@ -4,7 +4,7 @@
 
 **Blocked by:** 04 — Enable EPUB, ODT, and RTF structured imports; 09 — Harden packaged assets across document formats; 10 — Let users approve and edit the proposed page plan.
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The corpus covers PPTX, PPTM, PPSX, PPSM, and ODP with representative titles, text boxes, notes, images, tables, equations, and ambiguous reading order.
 - [ ] Each format receives an evidence-based support status rather than being enabled solely because the parser accepts it.
