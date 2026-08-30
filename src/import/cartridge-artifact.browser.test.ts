@@ -28,16 +28,17 @@ import { writeZip } from '../engine/export/zip'
  * `zip.test.ts` gives: a zip verified only by its own writer is marking its
  * own homework.
  *
- * ONE CASE PER RELEASED FORMAT (ten), NOT THE WHOLE CORPUS (twenty-two) — the
- * cartridge builder in `engine/export/cartridge.ts` is format-agnostic
+ * ONE CASE PER RELEASED FORMAT (ten), NOT THE WHOLE CORPUS (twenty-eight) —
+ * the cartridge builder in `engine/export/cartridge.ts` is format-agnostic
  * downstream of import: by the time `toChapter` hands it a `Chapter`, every
  * format looks the same. Structural variants (merged cells, footnotes,
- * equations, deep headings, …) exercise the IMPORTER, which
- * `corpus.browser.test.ts` already runs across the full twenty-two-case
- * corpus. Running all twenty-two here, twice each for determinism, would be
- * forty-four full compile+audit+zip pipelines that could only ever re-confirm
- * what that file already confirms about parsing — nothing about cartridge
- * shape depends on which structural property a given DOCX or EPUB exercises.
+ * equations, deep headings, presentation notes and unrepresentable content,
+ * …) exercise the IMPORTER, which `corpus.browser.test.ts` already runs
+ * across the full twenty-eight-case corpus. Running all twenty-eight here,
+ * twice each for determinism, would be fifty-six full compile+audit+zip
+ * pipelines that could only ever re-confirm what that file already confirms
+ * about parsing — nothing about cartridge shape depends on which structural
+ * property a given DOCX, EPUB, PPTX or ODP exercises.
  */
 const metadata = {
   title: 'Artifact release check',

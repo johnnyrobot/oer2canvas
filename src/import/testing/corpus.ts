@@ -32,13 +32,22 @@ const utf8 = (value: string) => new TextEncoder().encode(value)
  * normalization path downstream of each parser — `anydoc-html.ts`'s
  * `normalizeAnyDocDocument`, which every non-native format funnels through —
  * not the parser's own format-specific plumbing, so two structurally
- * different carriers are enough evidence without paying for all ten. PPTX
- * and ODP get only the semantic baseline here, not the six structural
- * properties: their own reconciler (`presentation/reconcile.ts`) already has
- * dedicated browser-test coverage for the shapes that matter to a deck
- * specifically (notes, missing titles, reading order, unrepresentable
- * content), which a DOCX-shaped "merged cell" or "footnote" property would
- * not exercise.
+ * different carriers are enough evidence without paying for all ten.
+ *
+ * PPTX and ODP do not repeat that DOCX/EPUB structural set — a
+ * DOCX-shaped "merged cell" or "footnote" property would not exercise
+ * anything a deck actually does — but they are not left at the semantic
+ * baseline either. `presentation/reconcile.ts` is a second reconciliation
+ * pass downstream of anydoc, unique to these two formats, and it has its own
+ * failure modes worth a case each: a slide with no title
+ * (`pptx-untitled-slide`), speaker notes that must not publish
+ * (`pptx-speaker-notes`, `odp-speaker-notes`), and content anydoc drops with
+ * no block at all (`pptx-unrepresentable`). `pptx-slideshow-container` and
+ * `pptx-macro-container` cover the PPTX-family container variants
+ * (`presentation.browser.test.ts` covers the remaining `.ppsm` extension
+ * directly). Every one of these six also asserts `expectFindings`, not just
+ * `expectInHtml`: an importer that silently dropped the finding a construct
+ * is supposed to raise would still pass a check that only looked at the html.
  *
  * The seventh structural property the design considered, a hostile
  * construct, is deliberately NOT reproduced here: `security.browser.test.ts`
@@ -78,6 +87,20 @@ export interface CorpusCase {
    * assertion would simply have been false.
    */
   expectBlockers?: readonly string[]
+  /**
+   * Finding codes this case is EXPECTED to raise at `warning` severity, if any.
+   *
+   * `expectBlockers` alone leaves every `warning`-severity finding
+   * (`presentation-untitled-slide`, `presentation-speaker-notes`,
+   * `presentation-reading-order`, `presentation-unrepresentable`) unchecked by
+   * this corpus: fix-review round 1 proved that gap by deleting the
+   * `presentation-unrepresentable` finding from `reconcile.ts` entirely and
+   * watching the corpus stay green. Asserted the same way as `expectBlockers` —
+   * the exact set, both directions — because the issue's fourth acceptance
+   * criterion is that specific constructs "produce specific findings and
+   * limitations", which an assertion that only checks blockers cannot carry.
+   */
+  expectFindings?: readonly string[]
 }
 
 // Four times the 1,000-paragraph fixture `document.browser.test.ts` already
@@ -234,6 +257,10 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
       { title: 'Third slide' },
     ]),
     expectInHtml: ['<section data-slide="2"', 'Slide 2'],
+    // `reconcile.ts` raises `presentation-untitled-slide` (severity `warning`)
+    // whenever a slide's title is empty — verified empirically for this exact
+    // fixture, which is the only one in the corpus authoring an untitled slide.
+    expectFindings: ['presentation-untitled-slide'],
   },
   {
     id: 'pptx-speaker-notes',
@@ -242,31 +269,71 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     bytes: () => pptxFixture([
       { title: 'Photosynthesis', body: ['Light reactions'], notes: 'Do not read this to the class.' },
     ]),
-    expectInHtml: ['Photosynthesis'],
+    expectInHtml: ['<section data-slide="1"', 'Photosynthesis'],
     expectNotInHtml: ['Do not read this to the class.'],
+    // `reconcile.ts` raises `presentation-speaker-notes` (severity `warning`)
+    // whenever a slide's notes text is present but excluded from the page —
+    // verified empirically for this fixture.
+    expectFindings: ['presentation-speaker-notes'],
   },
   {
     id: 'pptx-unrepresentable',
     format: 'pptx',
-    standsInFor: 'A deck whose slide carries a SmartArt diagram, a chart, and a video — all three of which anydoc drops with no block and no asset, so only the index records that they existed.',
+    // Measured, not assumed (fix-review round 1 caught the first draft
+    // asserting the opposite): the diagram and chart vanish entirely — no
+    // block, no asset, only the index's own record that they existed — but
+    // the video is different. PowerPoint always gives a video a poster frame
+    // (an ordinary embedded picture in the same `p:pic`, see `video` on
+    // `PptxSlideSpec`), and anydoc packages that picture like any other, so
+    // the deck imports a real `<img>` for it. What is actually lost is the
+    // MOTION: the index is the only place recording that a video, not a
+    // still, was ever there.
+    standsInFor: 'A deck whose slide carries a SmartArt diagram, a chart, and a video: the diagram and chart drop with no block and no asset at all, while the video leaves only its still poster frame, so the index is the only account that a video (not a picture) was ever on the slide.',
     bytes: () => pptxFixture([
       { title: 'Process overview', diagram: true, chart: true, video: true },
     ]),
-    expectInHtml: ['Process overview'],
+    // `<img` proves the poster frame's picture survived; verified empirically
+    // against the real reconciler output (see the standsInFor comment above).
+    expectInHtml: ['<section data-slide="1"', 'Process overview', '<img'],
+    // `reconcile.ts` raises `presentation-unrepresentable` (severity
+    // `warning`) whenever the index counts a diagram, chart, or media the
+    // slide's own html does not account for — the video still counts here
+    // even though its poster picture imports, because the MEDIA itself (not
+    // the still) is what anydoc cannot represent. Verified empirically: fix-
+    // review round 1 proved this assertion is load-bearing by deleting the
+    // finding in `reconcile.ts` and confirming the corpus went green without
+    // it, which is exactly the gap `expectFindings` exists to close.
+    expectFindings: ['presentation-unrepresentable'],
   },
   {
     id: 'pptx-slideshow-container',
     format: 'pptx',
-    standsInFor: 'A deck saved as .ppsx, proving the slideshow container detects as the same format the presentation container does rather than being refused at the door.',
+    // `importCorpusCase` always names the file `corpus.pptx` (the first
+    // extension `capability.extensions` lists for the format), so this case
+    // never actually presents a `.ppsx` FILENAME to the importer — extension
+    // acceptance for the real file extension is `presentation.browser.test.ts`'s
+    // job, with a real `.ppsm`. What this case exercises instead is the
+    // slideshow container's own main-part CONTENT TYPE
+    // (`application/vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml`,
+    // written by `pptxFixture`'s `container: 'ppsx'` option) being recognized
+    // by anydoc's own content sniffing as the same `pptx` format the ordinary
+    // presentation container reports.
+    standsInFor: "A deck saved as PowerPoint's slideshow container rather than its presentation container, proving anydoc's own content sniffing recognizes the slideshow main-part content type as the same format, rather than anything about the .ppsx file extension.",
     bytes: () => pptxFixture([{ title: 'Slideshow deck' }], { container: 'ppsx' }),
-    expectInHtml: ['Slideshow deck'],
+    expectInHtml: ['<section data-slide="1"', 'Slideshow deck'],
   },
   {
     id: 'pptx-macro-container',
     format: 'pptx',
     standsInFor: 'A macro-enabled .pptm carrying a vbaProject part, proving a macro deck imports its slides and nothing of its macro.',
     bytes: () => pptxFixture([{ title: 'Macro deck' }], { container: 'pptm', withMacroPart: true }),
-    expectInHtml: ['Macro deck'],
+    expectInHtml: ['<section data-slide="1"', 'Macro deck'],
+    // The half of the claim that actually matters for safety: `pptxFixture`'s
+    // `withMacroPart` writes `ppt/vbaProject.bin` containing this literal
+    // string (see `presentation-fixtures.ts`), so its presence in the
+    // imported html would mean the macro's own bytes reached a published
+    // page rather than merely being carried, unread, inside the zip.
+    expectNotInHtml: ['macro payload placeholder'],
   },
   {
     id: 'odp-semantic',
@@ -281,12 +348,15 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
   {
     id: 'odp-speaker-notes',
     format: 'odp',
-    standsInFor: 'An Impress deck with presenter notes, the ODP form of the leak PPTX notes would cause.',
+    standsInFor: "The same private-notes property as pptx-speaker-notes, but carried in ODF's own `presentation:notes` element instead of a PPTX notes slide — the ODP path through the SAME shared reconciler, exercised independently rather than assumed from the PPTX case.",
     bytes: () => odpFixture([
       { title: 'Photosynthesis', body: ['Light reactions'], notes: 'Do not read this to the class.' },
     ]),
-    expectInHtml: ['Photosynthesis'],
+    expectInHtml: ['<section data-slide="1"', 'Photosynthesis'],
     expectNotInHtml: ['Do not read this to the class.'],
+    // Same `presentation-speaker-notes` warning as `pptx-speaker-notes`,
+    // verified empirically for the ODP path independently.
+    expectFindings: ['presentation-speaker-notes'],
   },
 
   // ===== Structural properties, on DOCX and EPUB only =================

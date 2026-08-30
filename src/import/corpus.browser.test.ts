@@ -47,4 +47,20 @@ test.each(CORPUS_CASES)('$id imports and keeps the structure it stands in for', 
     .map((finding) => finding.code)
     .sort()
   expect(blockerCodes, `${entry.id} blocker codes`).toEqual([...(entry.expectBlockers ?? [])].sort())
+
+  // The exact set of `warning`-severity codes, asserted the same way as the
+  // blocker set above and for the same reason: `expectBlockers` alone left
+  // `presentation-unrepresentable` (and every other warning) unchecked by this
+  // corpus — fix-review round 1 proved that gap by deleting the finding from
+  // `reconcile.ts` and watching this suite stay green. Checking both
+  // directions matters here too: an unexpected warning means this release
+  // makes a claim its own findings contradict, and an expected warning that
+  // stops appearing means a construct this corpus exists to prove "produces a
+  // specific finding" (the issue's fourth acceptance criterion) quietly
+  // stopped doing so.
+  const warningCodes = imported.report.findings
+    .filter((finding) => finding.severity === 'warning')
+    .map((finding) => finding.code)
+    .sort()
+  expect(warningCodes, `${entry.id} warning codes`).toEqual([...(entry.expectFindings ?? [])].sort())
 })
