@@ -1725,6 +1725,70 @@ git commit -m "feat: attribute a deck's blocks to slides, and refuse when they d
 
 ---
 
+### Task 6b: Attribute pictures by identity, not by count
+
+**Added during execution, 2026-08-30.** Task 6 ran its fix loop to the cap, and the last
+review returned an explicit *not converging* verdict. Four rounds each fixed an instance and
+left the class. This task closes the class.
+
+**Files:**
+- Modify: `src/import/parsers/anydoc-html.ts` (tag each emitted picture with its origin)
+- Modify: `src/import/presentation/index.ts` (record each slide's referenced media parts)
+- Modify: `src/import/presentation/reconcile.ts` (join on identity; drop the count budget)
+- Modify: the corresponding tests, including `reconcile.browser.test.ts`
+
+**The class of defect.** The index re-derives, from package XML, two decisions only anydoc
+can answer: *which shapes become a picture block in the HTML*, and *which `mc` branch anydoc
+renders*. Every wrong answer is either a spurious refusal or a silent misattribution.
+Measured instances, one per round: video poster frames; broken embeds; ink `mc:Fallback`
+pictures; OLE preview pictures; and a namespace-keyed `Requires` rule the index modelled as
+a constant.
+
+**Why a fail-closed rule cannot close it.** A silent misattribution needs an
+*uncounted-but-emitted* picture on one slide paid for by a *counted-but-unemitted* picture on
+another. The totals then balance, so neither a per-slide budget nor a whole-document total
+notices. Bracketing picture blocks between text anchors fails the same way: the uncounted
+picture is invisible to every budget-shaped rule, because being uncounted is precisely its
+defect. Identity is required.
+
+**The join that already exists on both sides.** `anydoc-html.ts` knows each image's
+`originPart` (e.g. `ppt/media/image1.png`) — `PackagedAssetRecord` carries it, and the
+unavailable-image path knows the asset it failed on. The index reads each slide's
+`ppt/slides/_rels/slideN.xml.rels`, so it already knows exactly which media parts each slide
+references. The two accounts can therefore be joined on the part path, which neither side has
+to guess.
+
+- [ ] **Step 1: Emit the origin.** In `normalizeAnyDocDocument`, add `data-origin-part` to
+  every emitted `<img>` and to the `[Embedded image]` placeholder span, carrying the asset's
+  `originPart`. This module is shared by DOCX, ODT, RTF and EPUB — the attribute must be
+  inert for them, and their existing tests must not change meaning. Assert that in a test.
+
+- [ ] **Step 2: Record the references.** In `readPresentationIndex`, replace
+  `PresentationSlideIndex.images: number` with the set of media part paths that slide
+  references, resolved through its rels. Keep reporting media loss separately; that part
+  works and is measured.
+
+- [ ] **Step 3: Join on identity.** In `reconcilePresentation`, a picture block belongs to
+  the slide whose referenced parts contain its `data-origin-part`. A picture block whose
+  origin no slide claims is a refusal, and a slide whose referenced part never appeared is a
+  refusal — both named, both honest. Delete the count budget and the
+  `imagesLeft > 0` clause it required.
+
+- [ ] **Step 4: Strip the attribute before publishing.** `data-origin-part` is a join key,
+  not content. Remove it from the emitted section HTML, and assert no `data-origin-part`
+  survives into the cartridge.
+
+- [ ] **Step 5: Re-run every picture case Task 6 measured** — video with and without a
+  poster, audio, linked blips, bare blips, grouped pictures, ink `mc:Fallback`, OLE previews,
+  EMF placeholders, bracketed alt text, and the two adversarial decks that produced silent
+  misattributions — and confirm each is now either correctly attributed or refused by name.
+  These are listed with their measured outcomes in
+  `.superpowers/sdd/14-graduate-presentations-plan/task-6-report.md`.
+
+- [ ] **Step 6: Commit** after `npm run typecheck && npx vitest run` passes.
+
+---
+
 ### Task 7: The plan editor reads slide boundaries
 
 **Files:**
