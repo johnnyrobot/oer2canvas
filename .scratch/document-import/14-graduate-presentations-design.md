@@ -73,9 +73,11 @@ issue builds replaces them). Recorded here so the plan does not re-derive them.
 Facts 3, 5, and 6 are all the same defect wearing three hats: **anydoc's output cannot be
 checked against anything.** That is what the package index exists to fix.
 
-## Where the index is computed, and why it has no choice
+## Where the work happens, and why it splits where it does
 
-`probe.ts` transfers the input buffer into the Worker:
+Two constraints pull in opposite directions, and between them they fix the seam.
+
+**The bytes can only be read in the Worker.** `probe.ts` transfers the input buffer:
 
 ```ts
 worker.postMessage(request, [options.bytes])
@@ -86,17 +88,36 @@ thread afterwards returns 0. So a main-thread reader cannot see the bytes, and c
 them to keep a second view would put two copies of a 16 MiB deck in two heaps while
 synchronous WASM runs, which is exactly what that transfer exists to avoid.
 
-**The index is therefore computed in the anydoc Worker, from the same bytes, and returned
-on `ParserProbeResult`** as a `presentation?` field. This is not a new pattern: the PDF
-path already returns `detection`, `markdown`, and `unmarkedPages` as parser-specific
-fields on the same result type.
+**The XML can only be parsed on the main thread.** A Worker has no `DOMParser` —
+`probe.ts` already says so where it explains why the PDF path carries unsanitized Markdown
+out: *"the main thread splits and sanitizes it, because `sanitizeImportedHtml` needs
+`DOMParser`, which a Worker does not have."* Hand-rolling an OOXML scanner in the Worker to
+dodge that would be a regex parser over hostile input, which is the wrong answer twice.
 
-## The three units
+So the seam is: **the Worker does zip, the main thread does XML.** Selecting which parts to
+extract needs no XML parser — it is path matching over the central directory
+(`ppt/presentation.xml`, `ppt/slides/*.xml`, `ppt/slides/_rels/*.rels`,
+`ppt/notesSlides/*.xml`, or ODP's `content.xml`) — so the Worker inflates exactly those and
+returns them on `ParserProbeResult` as a `presentation?: { kind, parts }` field. That is the
+pattern the PDF path already set with `detection`, `markdown`, and `unmarkedPages`.
 
-### `presentation/package.ts` — what the file says about itself
+Each unit then needs only the runtime capability it actually has, and neither needs the
+other's: the zip reader is testable without a DOM, and the index parser is testable without
+a Worker or any WASM at all.
 
-Reads the deck package and returns a `PresentationIndex`. It does not extract content;
-anydoc does that. It answers only the questions anydoc cannot.
+## The four units
+
+### `zip-read.ts` — named parts out of a package, in the Worker
+
+Enumerates the central directory and inflates only the parts whose paths match, via
+`DecompressionStream('deflate-raw')` — a global in both browsers and Node, which is already
+why the writer's tests run in the fast `unit` project. It reads *named* parts only, never
+the whole archive, so a deck with a thousand media files inflates none of them.
+
+### `presentation/index.ts` — what the file says about itself
+
+Parses those parts with `DOMParser` on the main thread and returns a `PresentationIndex`.
+It does not extract content; anydoc does that. It answers only the questions anydoc cannot.
 
 ```ts
 export interface PresentationSlideIndex {
@@ -120,37 +141,40 @@ export interface PresentationIndex {
 }
 ```
 
-It needs a **zip reader**, which this repository does not have:
+The zip reader is a capability this repository deliberately does not have:
 `src/engine/export/zip.ts` says of itself that it "only ever WRITES", and that this is
 what makes owning it cheaper than a dependency. Adding a reader changes that bargain, so
-the reader is deliberately scoped to what the index needs: enumerate central-directory
-entries, and inflate the named parts via `DecompressionStream('deflate-raw')` — a global
-in both browsers and Node, which is already why the writer's tests run in the fast `unit`
-project. It reads *named* parts only, never the whole archive, so a deck with a thousand
-media files inflates none of them.
+it is scoped to exactly what the index needs and no more.
 
-That new surface takes hostile input, so it inherits issue 09's ceilings rather than
-inventing its own — entry count, per-part inflated size, and total inflated size all
-check against `DOCUMENT_IMPORT_LIMITS` before inflating, and `security.browser.test.ts`
-gains cases for a zip bomb, a part claiming a bogus size, and a traversal-shaped part
+That new surface takes hostile input, so entry count, declared part size, and total
+inflated bytes are all checked *before and during* inflation, never after, and every part's
+CRC is verified against its central-directory record. `security.browser.test.ts` gains
+cases for a zip bomb, a part whose header lies about its size, and a traversal-shaped part
 name. A reader that trusts its own headers is the classic way this goes wrong.
 
 ### `presentation/reconcile.ts` — aligning the two accounts
 
-Pure, no WASM, no DOM. Takes anydoc's `Document` blocks and the `PresentationIndex`,
-walks both **monotonically** — never reordering, never backtracking — and returns each
-top-level block attributed to exactly one slide, plus the findings the disagreements
-imply.
+Pure, no WASM. Takes the normalized HTML's top-level blocks — via `blocksOf` from
+`page-plan.ts`, which is exported precisely so a caller counts blocks the way a plan does
+rather than with a second rule that could disagree — and the `PresentationIndex`, walks
+both **monotonically** (never reordering, never backtracking), and returns each block
+attributed to exactly one slide plus the findings the disagreements imply.
 
 Monotonic matters. The temptation with two lists is to search for the best global
 alignment, which quietly invents an order neither source claimed. A forward-only walk can
 only ever confirm or fail, and failing is the outcome this design wants when the accounts
 disagree.
 
-Notes are identified by matching a `blockQuote`'s text against the slide's `notesText`.
-Where they match, the block is dropped from the output and recorded. Where a `blockQuote`
+Notes are identified by matching a `<blockquote>`'s text against the slide's `notesText`.
+Where they match, the block is dropped from the output and recorded. Where a `<blockquote>`
 does *not* match notes text, it is a real quotation and survives — which is exactly the
 distinction fact 5 says is otherwise impossible.
+
+Its output is one `<section data-slide="N">` per slide, wrapping that slide's blocks with
+the slide's heading first. `section` and `data-*` are both already on the Canvas allowlist
+(`engine/allowlist.ts`), so this survives export unchanged; `h1` is *not* on that
+allowlist, which is a second reason slide titles stay at `h2` where anydoc already puts
+them.
 
 ### Wiring
 
@@ -161,9 +185,17 @@ distinction fact 5 says is otherwise impossible.
   media types, and `odp` is a second.
 - **Findings carry the slide number in `sourcePage`**, which `ImportFinding` already has
   and the PDF path already uses for pages. No new field.
-- **The page plan is untouched.** Per the deck-to-page decision below, a deck proposes one
-  page, which is what `page-plan.ts` already does for a document with no repeated heading
-  level to split on.
+- **The page plan needs one small, general seam.** `proposeRanges` splits at the *minimum
+  repeated heading level*, and every slide title is an `h2` — so without a change a deck
+  would propose one page per slide, which is precisely what the deck-to-page decision below
+  rejects. Wrapping each slide in a `<section>` fixes this by construction: `blocksOf` walks
+  `document.body.childNodes`, so a slide becomes ONE top-level block with no top-level
+  heading left to split on, and the existing "no repeated heading" path already proposes a
+  single page. The only addition is that `blocksOf` honours a `data-plan-label` attribute
+  for a block's summary, so the editor's split points read as slide boundaries instead of
+  `Section: Photosynthesis Light reactions…`. That attribute is deliberately named for the
+  plan, not for slides: it is a block declaring its own label, and nothing in `page-plan.ts`
+  learns what a presentation is.
 
 ## What each situation produces
 
