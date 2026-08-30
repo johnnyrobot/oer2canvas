@@ -58,22 +58,54 @@ function collapse(value: string | null | undefined): string {
 }
 
 /**
- * Text of one shape, ONE ENTRY PER PARAGRAPH (`a:p`). Runs (`a:r`) within a
- * single paragraph are joined with NO separator: PowerPoint routinely splits a
- * run mid-word — at a spell-check mark (`err="1"`), a formatting change, or a
- * language boundary — so `<a:t>Photosynthesi</a:t><a:t>s</a:t>` is the single
- * word `Photosynthesis`, never two words with a space stitched in between. A
- * space belongs only BETWEEN paragraphs, which is why each paragraph is its
- * own array entry instead of one joined string per shape: anydoc emits one
- * block per paragraph, and paragraph-per-entry is what its output is
- * reconciled against. (A joined-shape string could never match a two-bullet
- * body against anydoc's two separate blocks.)
+ * One paragraph's (`a:p`) text, walking its DIRECT children in order so an
+ * `a:br` soft line break (Shift+Enter, still inside the SAME paragraph) can be
+ * told apart from a run boundary:
+ *
+ * - An `a:r` run's `a:t` text is concatenated with NO separator from its
+ *   neighbours. PowerPoint routinely splits a run mid-word — at a spell-check
+ *   mark (`err="1"`), a formatting change, or a language boundary — so
+ *   `<a:r><a:t>Photosynthesi</a:t></a:r><a:r><a:t>s</a:t></a:r>` is the single
+ *   word `Photosynthesis`, never two words with a space stitched in between.
+ * - An `a:br` becomes exactly one space. It is NOT a paragraph break — anydoc
+ *   renders it inline within the same block rather than starting a new
+ *   one — so `<a:r><a:t>First half</a:t></a:r><a:br/><a:r><a:t>second
+ *   half</a:t></a:r>` is `"First half second half"`, one `textRuns` entry,
+ *   not two. (An earlier version of this function joined every run in a
+ *   paragraph with the empty string uniformly, which fixed the mid-word case
+ *   above by breaking this one — the space belongs at `a:br`, not between
+ *   every pair of runs.)
+ * - `includeFields` controls whether an `a:fld` (a field such as the notes
+ *   slide-number placeholder's cached `slidenum` text) contributes its own
+ *   `a:t`. The slide path leaves this on — a deferred minor, `a:fld` text
+ *   still enters a slide's `textRuns` — but the notes-body path (see
+ *   `notesBodyText`) turns it off, since a field's cached text is page
+ *   chrome, not the presenter's authored words.
+ */
+function paragraphText(paragraph: Element, { includeFields }: { includeFields: boolean }): string {
+  const parts: string[] = []
+  for (const child of paragraph.children) {
+    if (child.namespaceURI === DRAWING_NS && child.localName === 'br') {
+      parts.push(' ')
+      continue
+    }
+    if (child.namespaceURI === DRAWING_NS && child.localName === 'fld' && !includeFields) {
+      continue
+    }
+    parts.push([...child.getElementsByTagNameNS(DRAWING_NS, 't')].map((run) => run.textContent ?? '').join(''))
+  }
+  return collapse(parts.join(''))
+}
+
+/**
+ * Text of one shape, ONE ENTRY PER PARAGRAPH (`a:p`): anydoc emits one block
+ * per paragraph, and paragraph-per-entry is what its output is reconciled
+ * against — joining a whole SHAPE into one string could never match a
+ * two-bullet body against anydoc's two separate blocks.
  */
 function shapeParagraphs(shape: Element): string[] {
   return [...shape.getElementsByTagNameNS(DRAWING_NS, 'p')]
-    .map((paragraph) => collapse(
-      [...paragraph.getElementsByTagNameNS(DRAWING_NS, 't')].map((run) => run.textContent ?? '').join(''),
-    ))
+    .map((paragraph) => paragraphText(paragraph, { includeFields: true }))
     .filter((text) => text.length > 0)
 }
 
@@ -109,21 +141,38 @@ function resolveFromSlides(target: string): string {
  * as trailing text — and `notesText` is exactly the string a later
  * reconciliation step compares the deck's own blockquote against, so that
  * comparison silently fails and the speaker notes get published as body text.
- * Only the BODY placeholder (`p:ph[@type="body"]`) holds authored notes text.
+ * Only the BODY placeholder holds authored notes text — and per ECMA-376,
+ * `CT_Placeholder/@type`'s schema default IS `body`, so `<p:ph idx="1"/>`
+ * with NO `type` attribute at all is legitimately the body placeholder too.
+ * Requiring an explicit `type="body"` (an earlier version of this function
+ * did) makes that deck's notes text invisible, and the reconciliation then
+ * treats the notes blockquote as ordinary content and publishes it with no
+ * speaker-notes warning — the same leak, through a different door.
+ *
+ * Paragraph text is built with `paragraphText` — the SAME per-run,
+ * per-`a:br` logic `shapeParagraphs` uses on the slide path, with
+ * `includeFields: false` so the slide-number field's cached text is excluded
+ * even where it sits inside the body placeholder itself. Maintaining a
+ * second, different joining rule here is exactly what let a routine mid-word
+ * run split (`"Photosynthesi" + "s"`) reach `notesText` as two words with a
+ * space wrongly stitched in between, breaking the exact-string comparison
+ * the later reconciliation relies on.
  */
 function notesBodyText(notesDocument: Document): string | undefined {
   const bodyShape = [...notesDocument.getElementsByTagNameNS(PML_NS, 'sp')].find((shape) => {
     const placeholder = shape.getElementsByTagNameNS(PML_NS, 'ph')[0]
-    return placeholder?.getAttribute('type') === 'body'
+    return placeholder !== undefined && (placeholder.getAttribute('type') ?? 'body') === 'body'
   })
   if (!bodyShape) return undefined
-  // `a:fld` (a field, such as the slide-number placeholder's `slidenum`)
-  // carries a cached `a:t` of its own for a reader that does not recompute
-  // fields — even inside the body placeholder that is not the presenter's
-  // text, so only `a:t` parented by an ordinary run (`a:r`) counts.
-  const runs = [...bodyShape.getElementsByTagNameNS(DRAWING_NS, 't')]
-    .filter((run) => run.parentElement?.localName === 'r')
-  return collapse(runs.map((run) => run.textContent ?? '').join(' ')) || undefined
+  const paragraphs = [...bodyShape.getElementsByTagNameNS(DRAWING_NS, 'p')]
+    .map((paragraph) => paragraphText(paragraph, { includeFields: false }))
+    .filter((text) => text.length > 0)
+  // Paragraphs join with a single space rather than concatenating: unlike
+  // `textRuns` (one array entry per paragraph, matching anydoc's
+  // block-per-paragraph output), `notesText` is ONE string compared by
+  // strict equality against a single blockquote, and two authored notes
+  // paragraphs are never mid-word the way two runs inside one paragraph can be.
+  return collapse(paragraphs.join(' ')) || undefined
 }
 
 interface ShapeWalkState {
@@ -132,6 +181,16 @@ interface ShapeWalkState {
   titleIndex: number
   unrepresentable: { diagrams: number; charts: number; media: number }
 }
+
+/**
+ * REASONED, not measured — like `PRESENTATION_PACKAGE_LIMITS` in `zip-read.ts`.
+ * No real deck's authored `p:grpSp` nesting comes close to 32 levels; this
+ * exists only to refuse a package engineered to overflow the call stack via
+ * nested groups (or nested `mc:AlternateContent`) with a named
+ * `PresentationIndexError`, instead of letting a raw `RangeError` escape the
+ * module the way an unbounded recursion did before this cap existed.
+ */
+const MAX_GROUP_NESTING_DEPTH = 32
 
 /**
  * Walks one container's shapes — `spTree` itself, or a `p:grpSp` reached by
@@ -157,7 +216,12 @@ interface ShapeWalkState {
  *   the first `mc:Choice` when one exists, or `mc:Fallback` otherwise, and
  *   never both, is what keeps a single diagram from being counted twice.
  */
-function walkShapes(container: Element, state: ShapeWalkState): void {
+function walkShapes(container: Element, state: ShapeWalkState, depth = 0): void {
+  if (depth > MAX_GROUP_NESTING_DEPTH) {
+    throw new PresentationIndexError(
+      `This slide nests groups more than ${MAX_GROUP_NESTING_DEPTH} levels deep.`,
+    )
+  }
   for (const shape of container.children) {
     if (shape.namespaceURI === PML_NS && shape.localName === 'sp') {
       const paragraphs = shapeParagraphs(shape)
@@ -195,7 +259,7 @@ function walkShapes(container: Element, state: ShapeWalkState): void {
       continue
     }
     if (shape.namespaceURI === PML_NS && shape.localName === 'grpSp') {
-      walkShapes(shape, state)
+      walkShapes(shape, state, depth + 1)
       continue
     }
     if (shape.namespaceURI === MC_NS && shape.localName === 'AlternateContent') {
@@ -203,7 +267,7 @@ function walkShapes(container: Element, state: ShapeWalkState): void {
       const choice = children.find((child) => child.namespaceURI === MC_NS && child.localName === 'Choice')
       const fallback = children.find((child) => child.namespaceURI === MC_NS && child.localName === 'Fallback')
       const chosen = choice ?? fallback
-      if (chosen) walkShapes(chosen, state)
+      if (chosen) walkShapes(chosen, state, depth + 1)
       continue
     }
   }

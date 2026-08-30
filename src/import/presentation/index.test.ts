@@ -1,7 +1,7 @@
 import { readZipParts } from '../zip-read'
 import { pptxFixture } from '../testing/presentation-fixtures'
 import { wantedPresentationPart } from './parts'
-import { readPresentationIndex } from './index'
+import { readPresentationIndex, PresentationIndexError } from './index'
 
 async function indexOf(bytes: Uint8Array) {
   const parts = await readZipParts(bytes, (path) => wantedPresentationPart('pptx', path))
@@ -108,4 +108,53 @@ test('a diagram inside mc:AlternateContent is counted exactly once, from mc:Choi
   ]))
 
   expect(index.slides[0]!.unrepresentable).toEqual({ diagrams: 1, charts: 0, media: 0 })
+})
+
+test('a run split mid-word AND a soft line break in the same paragraph are both handled correctly (fix-review round-2 Important A)', async () => {
+  // `a:br` (Shift+Enter) stays inside ONE paragraph and becomes a single
+  // space; a run split mid-word joins with no separator at all. Neither
+  // behaviour may regress the other.
+  const index = await indexOf(await pptxFixture([
+    { titleRuns: ['Photosynthesi', 's', { break: true }, 'occurs in chloroplasts'] },
+  ]))
+
+  expect(index.slides[0]!.title).toBe('Photosynthesis occurs in chloroplasts')
+})
+
+test('a mid-word run split inside the notes body still joins correctly (fix-review round-2 Important B)', async () => {
+  // The notes path must use the SAME per-run joining rule as the slide path,
+  // not a second rule a routine mid-word split defeats.
+  const index = await indexOf(await pptxFixture([
+    { title: 'Photosynthesis', notesRuns: ['Mention the thylakoid membran', 'e.'] },
+  ]))
+
+  expect(index.slides[0]!.notesText).toBe('Mention the thylakoid membrane.')
+})
+
+test('a notes placeholder with no type attribute is still the body placeholder (fix-review round-2 Important C)', async () => {
+  // ECMA-376's schema default for `CT_Placeholder/@type` IS `body`.
+  const index = await indexOf(await pptxFixture([
+    { title: 'Photosynthesis', notes: 'Mention the thylakoid membrane.', notesOmitPlaceholderType: true },
+  ]))
+
+  expect(index.slides[0]!.notesText).toBe('Mention the thylakoid membrane.')
+})
+
+test('groups nested past the depth cap are refused with a named error, not a raw RangeError (fix-review round-2 Minor D)', async () => {
+  await expect(indexOf(await pptxFixture([
+    { title: 'Adversarial nesting', nestedGroupDepth: 40 },
+  ]))).rejects.toThrow(PresentationIndexError)
+})
+
+test('an empty title placeholder no longer marks the slide title out of order (fix-review round-2 E)', async () => {
+  // Round 1's restructure changed this deferred Minor by accident: an empty
+  // title placeholder produces no paragraphs at all now, so it never claims a
+  // `titleIndex` and can no longer be "out of order" — pinned here since it
+  // was previously reported as untouched.
+  const index = await indexOf(await pptxFixture([
+    { title: '', body: ['Body first, then an empty title placeholder'], titleLast: true },
+  ]))
+
+  expect(index.slides[0]!.title).toBeUndefined()
+  expect(index.slides[0]!.titleOutOfOrder).toBe(false)
 })

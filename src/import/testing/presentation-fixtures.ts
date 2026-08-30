@@ -10,21 +10,46 @@ const xmlEscape = (value: string) =>
 /** The same Canvas-proven PNG every other format's fixture embeds. */
 const EMBEDDED_IMAGE_PNG = RASTER_FIXTURES.png.bytes
 
+/**
+ * One paragraph segment: a run's text, or `{ break: true }` for an `a:br`
+ * soft line break (Shift+Enter) — still inside the SAME paragraph, not a new
+ * one. Lets a fixture author a run split mid-word AND a soft break in the
+ * SAME paragraph, so the index's `a:br` handling (fix-review round-2
+ * Important A) can be tested independently of its run-joining rule.
+ */
+export type PptxParagraphSegment = string | { break: true }
+
 export interface PptxSlideSpec {
   /** Omitted means the slide has NO title placeholder — design fact 3. */
   title?: string
   /**
-   * The title authored as multiple runs within ONE paragraph, as PowerPoint
-   * does at a spell-check (`err="1"`), formatting, or language boundary — e.g.
-   * `['Photosynthesi', 's']` is the same single word `Photosynthesis` split
-   * mid-word. Mutually exclusive with `title`; exercises the task-3 fix-review
-   * Important 1 (`shapeText` must join runs within a paragraph with NO
-   * separator, not one string per shape).
+   * The title authored as multiple paragraph segments within ONE paragraph,
+   * as PowerPoint does at a spell-check (`err="1"`), formatting, or language
+   * boundary, or at a Shift+Enter soft break — e.g. `['Photosynthesi', 's']`
+   * is the same single word `Photosynthesis` split mid-word. Mutually
+   * exclusive with `title`; exercises fix-review Important 1 (`shapeText`
+   * must join runs within a paragraph with NO separator, not one string per
+   * shape) and round-2 Important A (`a:br` must become a space, not vanish).
    */
-  titleRuns?: readonly string[]
+  titleRuns?: readonly PptxParagraphSegment[]
   body?: readonly string[]
-  /** Speaker notes — design fact 5. */
+  /** Speaker notes — design fact 5. Mutually exclusive with `notesRuns`. */
   notes?: string
+  /**
+   * Speaker notes authored as multiple paragraph segments within ONE
+   * paragraph — the notes-body analogue of `titleRuns`, proving the notes
+   * path uses the SAME per-run, per-`a:br` joining rule as the slide path
+   * (fix-review round-2 Important B) rather than a second rule a routine
+   * mid-word split defeats.
+   */
+  notesRuns?: readonly PptxParagraphSegment[]
+  /**
+   * Emit the notes body placeholder as `<p:ph idx="1"/>` with NO `type`
+   * attribute at all. Under ECMA-376, `CT_Placeholder/@type`'s schema default
+   * IS `body`, so this is legitimately the body placeholder too (fix-review
+   * round-2 Important C).
+   */
+  notesOmitPlaceholderType?: boolean
   /** Emit the title placeholder LAST in `spTree` — design fact 4. */
   titleLast?: boolean
   /** A picture, with `descr` as its alt text (omit for an undescribed image). */
@@ -50,6 +75,13 @@ export interface PptxSlideSpec {
    * the diagram (fix-review Important 3).
    */
   diagramInAlternateContent?: boolean
+  /**
+   * N levels of `p:grpSp` nested inside each other, wrapping a plain shape at
+   * the bottom. Proves the recursion depth cap (fix-review round-2 Minor D)
+   * refuses a package engineered to overflow the call stack with a named
+   * `PresentationIndexError`, rather than crashing with a raw `RangeError`.
+   */
+  nestedGroupDepth?: number
 }
 
 const DIAGRAM_URI = 'http://schemas.openxmlformats.org/drawingml/2006/diagram'
@@ -74,18 +106,45 @@ function graphicFrame(id: number, name: string, uri: string, payload: string): s
 }
 
 /**
- * A title paragraph split across multiple runs (see `titleRuns` on
- * `PptxSlideSpec`) — ONE `a:p`, several `a:r` children, no whitespace between
- * their `a:t` text, exactly as PowerPoint authors a spell-check or formatting
- * boundary mid-word.
+ * One paragraph's `a:r` runs and `a:br` soft breaks, in order (see
+ * `PptxParagraphSegment`). Shared by the title-run and notes-run fixtures so
+ * both exercise the SAME paragraph shape the index has to read.
  */
-function titleShapeWithRuns(runs: readonly string[]): string {
+function paragraphSegmentsXml(segments: readonly PptxParagraphSegment[]): string {
+  return segments.map((segment) =>
+    typeof segment === 'string'
+      ? `<a:r><a:rPr lang="en-US"/><a:t>${xmlEscape(segment)}</a:t></a:r>`
+      : '<a:br/>',
+  ).join('')
+}
+
+/**
+ * A title paragraph split across multiple segments (see `titleRuns` on
+ * `PptxSlideSpec`) — ONE `a:p`, several `a:r`/`a:br` children, no whitespace
+ * between adjacent runs' `a:t` text, exactly as PowerPoint authors a
+ * spell-check or formatting boundary mid-word (and a real `a:br` where one is
+ * requested).
+ */
+function titleShapeWithRuns(segments: readonly PptxParagraphSegment[]): string {
   return `<p:sp><p:nvSpPr><p:cNvPr id="2" name="Title 1"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>` +
     `<p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>` +
     `<p:spPr><a:xfrm><a:off x="838200" y="365125"/><a:ext cx="7772400" cy="1325563"/></a:xfrm></p:spPr>` +
-    `<p:txBody><a:bodyPr/><a:lstStyle/><a:p>` +
-    runs.map((text) => `<a:r><a:rPr lang="en-US"/><a:t>${xmlEscape(text)}</a:t></a:r>`).join('') +
-    `</a:p></p:txBody></p:sp>`
+    `<p:txBody><a:bodyPr/><a:lstStyle/><a:p>${paragraphSegmentsXml(segments)}</a:p></p:txBody></p:sp>`
+}
+
+/**
+ * `depth` levels of `p:grpSp` nested inside each other, wrapping a plain
+ * shape at the bottom — see `nestedGroupDepth` on `PptxSlideSpec`.
+ */
+function nestedGroups(depth: number): string {
+  let xml = `<p:sp><p:nvSpPr><p:cNvPr id="30" name="Deeply Nested"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+    `<p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/>` +
+    `<a:t>Bottom</a:t></a:r></a:p></p:txBody></p:sp>`
+  for (let level = 0; level < depth; level += 1) {
+    xml = `<p:grpSp><p:nvGrpSpPr><p:cNvPr id="${31 + level}" name="Nested Group ${level}"/>` +
+      `<p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>${xml}</p:grpSp>`
+  }
+  return xml
 }
 
 /**
@@ -182,10 +241,11 @@ function slideXml(spec: PptxSlideSpec): string {
 
   const group = spec.group ? groupShape(spec.group) : ''
   const alternateContent = spec.diagramInAlternateContent ? alternateContentDiagram() : ''
+  const nested = spec.nestedGroupDepth ? nestedGroups(spec.nestedGroupDepth) : ''
 
   const shapes = spec.titleLast
-    ? `${body}${image}${diagram}${chart}${video}${table}${group}${alternateContent}${title}`
-    : `${title}${body}${image}${diagram}${chart}${video}${table}${group}${alternateContent}`
+    ? `${body}${image}${diagram}${chart}${video}${table}${group}${alternateContent}${nested}${title}`
+    : `${title}${body}${image}${diagram}${chart}${video}${table}${group}${alternateContent}${nested}`
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -207,10 +267,21 @@ function slideXml(spec: PptxSlideSpec): string {
  * `a:t` in the part, which hid that that approach folds the slide number into
  * the presenter's own notes on a real deck (fix-review Important 4).
  */
-function notesXml(text: string): string {
+function notesXml(
+  segments: readonly PptxParagraphSegment[],
+  { omitPlaceholderType = false }: { omitPlaceholderType?: boolean } = {},
+): string {
   const slideImagePlaceholder = `<p:sp><p:nvSpPr><p:cNvPr id="3" name="Slide Image Placeholder 3"/>` +
     `<p:cNvSpPr><a:spLocks noGrp="1" noRot="1" noChangeAspect="1"/></p:cNvSpPr>` +
     `<p:nvPr><p:ph type="sldImg"/></p:nvPr></p:nvSpPr><p:spPr/></p:sp>`
+  // `<p:ph idx="1"/>` with no `type` attribute at all is legitimately the body
+  // placeholder too — `CT_Placeholder/@type`'s schema default (ECMA-376) IS
+  // `body` — which is exactly what `omitPlaceholderType` exercises.
+  const bodyPlaceholder = omitPlaceholderType ? '<p:ph idx="1"/>' : '<p:ph type="body" idx="1"/>'
+  const notesBody = `<p:sp><p:nvSpPr><p:cNvPr id="2" name="Notes Placeholder 2"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>` +
+    `<p:nvPr>${bodyPlaceholder}</p:nvPr></p:nvSpPr>` +
+    `<p:spPr><a:xfrm><a:off x="838200" y="365125"/><a:ext cx="7772400" cy="1325563"/></a:xfrm></p:spPr>` +
+    `<p:txBody><a:bodyPr/><a:lstStyle/><a:p>${paragraphSegmentsXml(segments)}</a:p></p:txBody></p:sp>`
   const slideNumberPlaceholder = `<p:sp><p:nvSpPr><p:cNvPr id="4" name="Slide Number Placeholder 4"/>` +
     `<p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="sldNum" idx="1"/></p:nvPr></p:nvSpPr>` +
     `<p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p>` +
@@ -223,9 +294,18 @@ function notesXml(text: string): string {
   <p:cSld><p:spTree>
     <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>
     ${slideImagePlaceholder}
-    ${textShape(2, 'Notes Placeholder 2', [text], '<p:ph type="body" idx="1"/>')}
+    ${notesBody}
     ${slideNumberPlaceholder}
   </p:spTree></p:cSld></p:notes>`
+}
+
+/** `slide.notes` (a single run) or `slide.notesRuns` (multiple segments in one
+ * paragraph) as the segments `notesXml` needs — the two options are mutually
+ * exclusive ways to author the SAME body placeholder. */
+function notesSegments(slide: PptxSlideSpec): readonly PptxParagraphSegment[] | undefined {
+  if (slide.notesRuns) return slide.notesRuns
+  if (slide.notes !== undefined) return [slide.notes]
+  return undefined
 }
 
 /** The main-part content type each PPTX-family extension carries (design fact 1). */
@@ -246,7 +326,7 @@ export async function pptxFixture(
 ): Promise<Uint8Array<ArrayBuffer>> {
   const overrides = slides.map((_unused, index) =>
     `<Override PartName="/ppt/slides/slide${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`).join('')
-  const notesOverrides = slides.map((slide, index) => slide.notes
+  const notesOverrides = slides.map((slide, index) => notesSegments(slide)
     ? `<Override PartName="/ppt/notesSlides/notesSlide${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml"/>`
     : '').join('')
   const slideRels = slides.map((_unused, index) =>
@@ -283,9 +363,13 @@ export async function pptxFixture(
   slides.forEach((slide, index) => {
     entries.push({ name: `ppt/slides/slide${index + 1}.xml`, data: utf8(slideXml(slide)) })
     const rels: string[] = []
-    if (slide.notes) {
+    const segments = notesSegments(slide)
+    if (segments) {
       rels.push(`<Relationship Id="rIdNotes" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide" Target="../notesSlides/notesSlide${index + 1}.xml"/>`)
-      entries.push({ name: `ppt/notesSlides/notesSlide${index + 1}.xml`, data: utf8(notesXml(slide.notes)) })
+      entries.push({
+        name: `ppt/notesSlides/notesSlide${index + 1}.xml`,
+        data: utf8(notesXml(segments, { omitPlaceholderType: slide.notesOmitPlaceholderType })),
+      })
     }
     if (slide.image) {
       rels.push('<Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>')
