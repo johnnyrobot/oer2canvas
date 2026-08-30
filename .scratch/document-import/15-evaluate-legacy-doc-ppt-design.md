@@ -91,17 +91,16 @@ Recorded here so the plan does not re-derive them, and so the verdict is checkab
    hung, none returned a partial document. The disable verdict below is NOT a verdict about
    parser fragility.
 
-6. **DOC silently drops text-box content — measured on a real Word file.** `confr
-   attendance rpt.doc` (34,816 bytes, written by Microsoft Office Word): LibreOffice reads
-   14 non-empty text lines from it, anydoc reads 11, and the three anydoc is missing are the
-   form's ANSWERS — "The information obtained was for future multimedia content creation
-   using relevant popular culture in the gaming industry…", "In the form of video and
-   brochures.", and "Yes. Specifically to faculty for art installations and staff for
-   recruitment." All three live in Word text frames (`w:txbxContent` in the read-back;
-   `wps:txbx` with a `txBox="1"` shape). **442 of 1,250
-   characters, 35% of the document's text, is absent from the import with no finding, no
-   placeholder, and no visible gap.** The same content in DOCX form imports: anydoc reads
-   text boxes there. It is the DOC reader, not the construct.
+6. **DOC silently drops text-box content — measured on a real Word file.** A one-page
+   conference-attendance report (34,816 bytes, `Name of Creating Application: Microsoft
+   Office Word`; the file is a private institutional document, so it is described rather
+   than named or quoted here): LibreOffice reads 14 non-empty text lines from it, anydoc
+   reads 11, and the three anydoc is missing are the form's ANSWERS — the three paragraphs
+   the report exists to carry. All three live in Word text frames (`w:txbxContent` in the
+   read-back, inside a `wps:txbx` on a `txBox="1"` shape). **442 of 1,250 characters, 35%
+   of the document's text, is absent from the import with no finding, no placeholder, and
+   no visible gap.** The same content in DOCX form imports: anydoc reads text boxes there.
+   It is the DOC reader, not the construct.
 
 7. **DOC publishes tracked-change DELETED text as body text.** A document carrying one
    deletion, one insertion, one comment and one hidden run, written by LibreOffice to both
@@ -148,11 +147,13 @@ Recorded here so the plan does not re-derive them, and so the verdict is checkab
     reconciler identifies them against `ppt/notesSlides/` and drops them. For PPT there is
     nothing to match against. Measured through `normalizeAnyDocDocument`, a deck's imported
     HTML contains `<blockquote><p>PRIVATE NOTE remind the class the quiz is
-    Friday</p></blockquote>`. Across the 27 real decks, **5 decks (18.5%) publish 20 note
-    blocks totalling 5,641 characters** of text an author typed for themselves — including
-    "ADA Title I covers employment…" and "16945/132 => 128 students per GPU…". Issue 14
-    called this class of leak "the most serious finding" and refused to ship a labelled
-    version of it; here it cannot even be labelled.
+    Friday</p></blockquote>` — a note authored in this issue's own fixture, quoted here
+    because it is the one note in the measurement that belongs to nobody. Across the 27 real
+    decks, **5 decks (18.5%) publish 20 note blocks totalling 5,641 characters** of text an
+    author typed for themselves: presenter reminders, a legal-obligation crib for a training
+    session, and arithmetic worked out off-slide. Those are private documents, so they are
+    counted rather than quoted. Issue 14 called this class of leak "the most serious
+    finding" and refused to ship a labelled version of it; here it cannot even be labelled.
 
 12. **A legacy deck has no slide boundaries to recover.** 23 heading blocks across 27 decks
     (against 114 in the same decks' PPTX form). The read-back agrees at 23, so the title

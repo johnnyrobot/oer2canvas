@@ -242,11 +242,12 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
      * design's fact 13).
      *
      * OMISSION, measured on a real Microsoft-Word-written file: text inside
-     * Word text frames is not read at all. `confr attendance rpt.doc` imports
-     * 442 of its 1,250 characters short — 35% — because the form's three
-     * answers live in text boxes. LibreOffice reads them from the same bytes,
-     * and anydoc reads them from the DOCX form of the same content, so it is
-     * the DOC reader and not the construct.
+     * Word text frames is not read at all. A one-page conference report
+     * written by Microsoft Office Word imports 442 of its 1,250 characters
+     * short — 35% — because the form's three answers live in text boxes.
+     * LibreOffice reads them from the same bytes, and anydoc reads them from
+     * the DOCX form of the same content, so it is the DOC reader and not the
+     * construct.
      *
      * ADDITION: a tracked-change DELETION is published as ordinary body text.
      * The same document written to DOCX excludes it, and LibreOffice reading

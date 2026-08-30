@@ -109,6 +109,16 @@ PowerPoint splits that case in two. A chart or diagram inserted in PowerPoint it
 same way. One **pasted in** from Excel or Visio is not: it blocks on its preview picture, and
 nothing says what the object was. OpenDocument names both.
 
+**Legacy `.doc`, `.ppt`, `.pps` and `.pot` files are not imported.** Open one in Word,
+PowerPoint or LibreOffice, save it as `.docx` or `.pptx`, and import that; choosing a legacy
+file says so by name rather than listing extensions at you. The formats were measured
+against the same parser and refused on what they do quietly: a legacy Word file can drop
+text held in text boxes and can publish a sentence that was deleted with tracked changes,
+with nothing to say either happened, and a legacy deck loses every picture and every table
+from the page while publishing the presenter's speaker notes as ordinary quotations. A deck
+in `.pptx` form has its own package to check the parser against, which is what lets notes be
+recognised and removed; an OLE2 file has nothing to check against.
+
 A failed or cancelled import says what went wrong, the form stays usable, and nothing from
 the interrupted attempt is kept, so you can correct the input and try again.
 
