@@ -131,6 +131,15 @@ export const RELEASED_SOURCES: readonly ReleasedSource[] = [
     maximumBytes: DOCUMENT_IMPORT_LIMITS.maximumInputBytes,
     limitations: capabilityFor('odp').limitations,
   },
+  // The legacy OLE2 formats have NO row here, and their absence is a decision
+  // rather than an omission. Issue 15 measured `.doc` and `.ppt` against real
+  // anydoc 0.2.4 on 2026-08-30 and disabled both — a legacy Word file can drop
+  // text-box content and publish tracked-change deletions with no finding
+  // either way, and a legacy deck loses every picture and publishes the
+  // presenter's speaker notes. They sit in `DOCUMENT_FORMAT_CAPABILITIES` as
+  // `probe-only`, which `releaseEnabledFormats()` filters out, so the
+  // reconciliation test in `released-sources.test.ts` stays satisfied without a
+  // row being added or removed here.
   {
     format: 'web',
     kind: 'url',

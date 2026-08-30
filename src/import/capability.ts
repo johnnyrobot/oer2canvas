@@ -217,6 +217,95 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
     ],
     probe: parserProbe('anydoc', 'odp'),
   },
+  /*
+   * The two legacy OLE2 formats, PARKED rather than shipped. anydoc 0.2.4
+   * accepts both (`formatFromExtension` maps `doc`→`doc` and `ppt`/`pps`/`pot`
+   * →`ppt`, and `formatFromBytes` identifies both from their OLE2 stream
+   * names), so nothing outside this table refuses them. Issue 15 measured them
+   * on 2026-08-30 and disabled both; the design carries the numbers and the
+   * issue's `## Answer` carries the reasoning.
+   *
+   * NO `probe` is attached. A probe is a lazy import of the Worker client for a
+   * format `importStructuredDocument` will not route there, and an entry that
+   * offers one invites a caller to use it.
+   */
+  {
+    format: 'doc',
+    label: 'Word 97–2003 document',
+    extensions: ['.doc'],
+    mediaTypes: ['application/msword'],
+    parser: 'anydoc',
+    /*
+     * DISABLED on two SILENT failures, in opposite directions, neither of which
+     * carries a finding and neither of which can be detected in this browser
+     * (there is no second account of a `.doc` to detect it with — see the
+     * design's fact 13).
+     *
+     * OMISSION, measured on a real Microsoft-Word-written file: text inside
+     * Word text frames is not read at all. `confr attendance rpt.doc` imports
+     * 442 of its 1,250 characters short — 35% — because the form's three
+     * answers live in text boxes. LibreOffice reads them from the same bytes,
+     * and anydoc reads them from the DOCX form of the same content, so it is
+     * the DOC reader and not the construct.
+     *
+     * ADDITION: a tracked-change DELETION is published as ordinary body text.
+     * The same document written to DOCX excludes it, and LibreOffice reading
+     * the same `.doc` writes it as `<w:delText>` — so the revision mark is in
+     * the file and this reader ignores it. Frequency unmeasured: 0 of the 7
+     * real `.doc` files on the measuring machine carried a deletion.
+     *
+     * NOT the reasons: reading order (0 inversions over 474 shared lines),
+     * malformed input (24 of 24 damaged OLE2 variants refused as `malformed`
+     * in ≤6 ms), or budgets. Ordinary structure survives well — over 30 real
+     * documents, headings 265/270, tables 60/60, text 99.1%.
+     */
+    status: 'probe-only',
+    limitations: [
+      'Not imported. Open the file in Word or LibreOffice, save it as .docx, and import that.',
+      'A legacy .doc can lose text held in text boxes, and can publish text that was deleted with tracked changes, in both cases with nothing to say it happened — which is why this importer refuses the format rather than importing it with a warning.',
+    ],
+  },
+  {
+    format: 'ppt',
+    label: 'PowerPoint 97–2003 presentation',
+    /*
+     * ONE entry for three extensions, for the reason the PPTX entry above is
+     * one for four: `formatFromExtension` maps `pps` and `pot` to `ppt`, so
+     * they are one parser path and would be one capability if they were ever
+     * enabled.
+     */
+    extensions: ['.ppt', '.pps', '.pot'],
+    mediaTypes: ['application/vnd.ms-powerpoint'],
+    parser: 'anydoc',
+    /*
+     * DISABLED under issue 14's own bar, which PPTX and ODP passed one issue
+     * ago on exactly these axes.
+     *
+     * NOTES LEAK (bar criterion 3): speaker notes arrive as an ordinary
+     * `blockQuote`, exactly as they do for PPTX — but a PPTX's notes are
+     * identified against `ppt/notesSlides/` and dropped, and a `.ppt` has no
+     * package to match against. Measured over 27 real decks converted to the
+     * legacy format: 5 of them publish 20 quote blocks holding 5,641
+     * characters of text the author wrote for themselves.
+     *
+     * EVERY PICTURE VANISHES (bar criterion 2): 0 image inlines across those
+     * 27 decks, against 267 image payloads anydoc still extracts and 214
+     * pictures LibreOffice reads from the same bytes. The only signal is
+     * `anydoc-html.ts`'s generic `unreferenced-asset` WARNING. Tables flatten
+     * the same way: 0 against LibreOffice's 8.
+     *
+     * NO SLIDES TO ATTRIBUTE TO (bar criterion 1): 23 heading blocks across 27
+     * decks, against 114 in the same decks' PPTX form, and no `sldIdLst` to
+     * count slides from. `presentation/reconcile.ts` has no second account to
+     * walk, so `<section data-slide="N">`, the `Slide N` titles and the refusal
+     * on unattributable content are all unreachable.
+     */
+    status: 'probe-only',
+    limitations: [
+      'Not imported. Open the file in PowerPoint or LibreOffice, save it as .pptx, and import that.',
+      "A legacy .ppt loses every picture and every table from the page, and publishes the presenter's speaker notes as ordinary quotations — this importer cannot tell a note from a quotation without the deck's own package, which this format does not have.",
+    ],
+  },
 ] as const
 
 const plainText = DOCUMENT_FORMAT_CAPABILITIES.find((entry) => entry.format === 'text')!
