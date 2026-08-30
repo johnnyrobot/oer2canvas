@@ -483,6 +483,15 @@ export interface OdpPageSpec {
   notes?: string
   /** Speaker notes authored as multiple `text:span`/`text:line-break` segments in ONE paragraph — the notes analogue of `bodyRuns`. */
   notesRuns?: readonly OdpParagraphSegment[]
+  /**
+   * A `text:h` heading authored BEFORE the notes body, inside speaker notes.
+   * Fix-review round 5 measured that anydoc's OWN blockquote rendering of
+   * the notes includes the heading's text (`"Notes heading Notes body."`),
+   * while `odfParagraphs` (feeding `notesText`) queried `text:p` only and
+   * silently dropped it — the half of the round-2 `text:h` fix that landed
+   * on the page query but not the notes query, on the safety-critical path.
+   */
+  notesHeadingText?: string
   /** Emit the title frame LAST in the page — ODP's form of design fact 4. */
   titleLast?: boolean
   image?: { alt?: string }
@@ -607,11 +616,16 @@ function odpHeading(text: string): string {
   return `<text:h text:outline-level="1">${xmlEscape(text)}</text:h>`
 }
 
-/** `page.notes` (a single run) or `page.notesRuns` (multiple segments in one paragraph) as one `text:p`. */
+/**
+ * An optional `text:h` (see `notesHeadingText`), followed by `page.notes`
+ * (a single run) or `page.notesRuns` (multiple segments in one paragraph) as
+ * one `text:p`.
+ */
 function odpNotesContentXml(page: OdpPageSpec): string {
-  if (page.notesRuns) return `<text:p>${odpParagraphSegmentsXml(page.notesRuns)}</text:p>`
-  if (page.notes !== undefined) return `<text:p>${xmlEscape(page.notes)}</text:p>`
-  return ''
+  const heading = page.notesHeadingText ? odpHeading(page.notesHeadingText) : ''
+  if (page.notesRuns) return `${heading}<text:p>${odpParagraphSegmentsXml(page.notesRuns)}</text:p>`
+  if (page.notes !== undefined) return `${heading}<text:p>${xmlEscape(page.notes)}</text:p>`
+  return heading
 }
 
 export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Array<ArrayBuffer>> {

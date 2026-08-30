@@ -132,12 +132,15 @@ function joinParagraphText(
      * `text:a` (a hyperlink), `text:date`, `text:page-number`,
      * `text:bookmark-ref`, `text:meta`, `text:ruby-base`, and more. Fix-review
      * round 4 measured what an ALLOWLIST of "the ODF elements known to carry
-     * text" costs against a real .odp: a `text:a` hyperlink mid-sentence
-     * dropped its own text and the "and everything after it up to the next
-     * plain run — turning `"Mention the lab before class."` into
-     * `"Mention before class."`, silently truncating both body text and,
-     * worse, `notesText`, which is compared by strict equality downstream.
-     * An allowlist of ODF inline elements is a losing, ever-growing list;
+     * text" costs against a real .odp: with `<text:span>Mention the
+     * </text:span><text:a>lab</text:a><text:span> before class.</text:span>`,
+     * `text:a` dropped only ITS OWN text — the enclosing `text:p` and
+     * `text:span` were still carriers, so nothing after the link was
+     * truncated — turning `"Mention the lab before class."` into `"Mention
+     * the before class."`. That alone is enough to fail the strict-equality
+     * comparison `notesText` is checked against downstream, publishing the
+     * notes. An allowlist of ODF inline elements is a losing, ever-growing
+     * list regardless of how far a single dropped element's damage spreads;
      * "everything except the space-producing elements above carries text" is
      * the honest, exhaustive shape, so ODF passes no `isTextCarrier` at all.
      *
@@ -479,19 +482,33 @@ function pptxIndex(parts: Record<string, string>): PresentationIndex {
 
 /**
  * Text of one ODP container (a `draw:frame`, or the whole page), ONE ENTRY
- * PER PARAGRAPH (`text:p`) — the ODF analogue of `shapeParagraphs`, and for
- * the same reason: anydoc emits one block per paragraph, and paragraph-per-
- * entry is what its output is reconciled against. `getElementsByTagNameNS`
- * finds a `text:p` at ANY depth under `container`, which is exactly what is
- * needed for Impress's bulleted body — `text:list > text:list-item > text:p`
- * — where a paragraph is nested two levels below the frame it belongs to,
- * not a direct child of it. Collapsing a whole FRAME's `textContent` into one
- * string instead (the ORIGINAL form of this module's ODP stub) merges every
- * bullet into a single run, which anydoc's own per-paragraph blocks never
- * do, and which the later reconciliation cannot match against.
+ * PER PARAGRAPH (`text:p` or `text:h`) — the ODF analogue of
+ * `shapeParagraphs`, and for the same reason: anydoc emits one block per
+ * paragraph, and paragraph-per-entry is what its output is reconciled
+ * against. `text:h` (a heading) is queried alongside `text:p` for the same
+ * reason the page-level query in `odpIndex` does: fix-review round 5
+ * measured that a `text:h` inside speaker notes made anydoc's own rendering
+ * of the notes blockquote read `"Notes heading Notes body."` while this
+ * function, `text:p`-only, produced `"Notes body."` alone — a failed
+ * strict-equality comparison that publishes the notes, the exact failure
+ * this module exists to prevent. The two element kinds are queried
+ * separately (`getElementsByTagNameNS` takes one name at a time) and merged
+ * back into document order with `documentOrder`, the same merge the page
+ * query already does. `getElementsByTagNameNS` finds a match at ANY depth
+ * under `container`, which is exactly what is needed for Impress's bulleted
+ * body — `text:list > text:list-item > text:p` — where a paragraph is
+ * nested two levels below the frame it belongs to, not a direct child of
+ * it. Collapsing a whole FRAME's `textContent` into one string instead (the
+ * ORIGINAL form of this module's ODP stub) merges every bullet into a
+ * single run, which anydoc's own per-paragraph blocks never do, and which
+ * the later reconciliation cannot match against.
  */
 function odfParagraphs(container: Element): string[] {
-  return [...container.getElementsByTagNameNS(ODF_TEXT_NS, 'p')]
+  return [
+    ...container.getElementsByTagNameNS(ODF_TEXT_NS, 'p'),
+    ...container.getElementsByTagNameNS(ODF_TEXT_NS, 'h'),
+  ]
+    .sort(documentOrder)
     .map((paragraph) => odfParagraphText(paragraph))
     .filter((text) => text.length > 0)
 }

@@ -418,3 +418,17 @@ test('an odp text:h heading is found, matching the heading block anydoc emits (f
 
   expect(index.slides[0]!.textRuns).toEqual(['Title', 'A heading paragraph'])
 })
+
+test('a text:h heading inside speaker notes is not dropped from notesText (fix-review round 5 Important)', async () => {
+  // Round 2 added text:h to the PAGE query but not the query odfParagraphs
+  // (feeding notesText) uses. Measured: anydoc's own blockquote rendering of
+  // these notes reads "Notes heading Notes body.", so notesText must match
+  // that exactly or the strict-equality comparison fails and the notes get
+  // published.
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Title', body: ['Body'], notesHeadingText: 'Notes heading', notes: 'Notes body.' },
+  ]))
+
+  expect(index.slides[0]!.notesText).toBe('Notes heading Notes body.')
+  expect(index.slides[0]!.textRuns).toEqual(['Title', 'Body'])
+})
