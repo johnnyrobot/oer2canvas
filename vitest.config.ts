@@ -22,21 +22,36 @@ import { playwright } from '@vitest/browser-playwright'
  * genuinely need the mode belong there, and the file itself opens by asserting the
  * mode is on, so it can never quietly pass while measuring ordinary rendering.
  */
+/**
+ * The fail-closed build constants, spelled out PER PROJECT.
+ *
+ * Measured 2026-08-30: a `define` declared at the root of this file does not
+ * reach its projects. A probe test in the `unit` project read
+ * `typeof __OER2CANVAS_SELF_HOSTED_CANVAS_ORIGIN__` as `'undefined'` while the
+ * root `define` set it to `''` — so the root entry this replaced had never
+ * actually configured anything, and the app's `typeof` guards were doing all
+ * the work. Repeating it on each project is what makes the comment below true
+ * rather than aspirational; the guards stay, because they are the reason that
+ * discrepancy was harmless rather than a bug for a year.
+ *
+ * Public values here, deliberately: the suite tests the same fail-closed
+ * configuration the public build ships. Opted-in Canvas presentation is covered
+ * through the components' injected props. The opted-in EXTRACTOR cannot be
+ * covered that way — the whole point of it is that the public bundle does not
+ * contain the branch, and a prop would keep the branch alive and carry the
+ * extractor's endpoint into that bundle, which `scripts/smoke-dist.mjs`
+ * refuses. So it gets a project of its own instead.
+ */
+const PUBLIC_BUILD_DEFINES = {
+  __OER2CANVAS_SELF_HOSTED_CANVAS_ORIGIN__: JSON.stringify(''),
+  __OER2CANVAS_SELF_HOSTED_EXTRACTOR_ORIGIN__: JSON.stringify(''),
+}
+
 export default defineConfig({
-  // Test the same fail-closed configuration as the public build. Opted-in
-  // Canvas presentation is covered through the components' injected props.
-  //
-  // The extractor origin CANNOT be covered that way, because the whole point of
-  // it is that the public bundle does not contain the branch — a prop would keep
-  // the branch alive and put the extractor's endpoint in the public build, which
-  // `scripts/smoke-dist.mjs` refuses. So it gets a project of its own below.
-  define: {
-    __OER2CANVAS_SELF_HOSTED_CANVAS_ORIGIN__: JSON.stringify(''),
-    __OER2CANVAS_SELF_HOSTED_EXTRACTOR_ORIGIN__: JSON.stringify(''),
-  },
   test: {
     projects: [
       {
+        define: PUBLIC_BUILD_DEFINES,
         test: {
           name: 'unit',
           globals: true,
@@ -95,6 +110,7 @@ export default defineConfig({
          * up, and that the key UI is absent rather than hidden.
          */
         define: {
+          ...PUBLIC_BUILD_DEFINES,
           __OER2CANVAS_SELF_HOSTED_EXTRACTOR_ORIGIN__: JSON.stringify('https://extract.example.edu'),
         },
         test: {
@@ -106,6 +122,7 @@ export default defineConfig({
         },
       },
       {
+        define: PUBLIC_BUILD_DEFINES,
         test: {
           name: 'browser',
           globals: true,
@@ -131,6 +148,7 @@ export default defineConfig({
         },
       },
       {
+        define: PUBLIC_BUILD_DEFINES,
         test: {
           name: 'browser-forced-colors',
           globals: true,

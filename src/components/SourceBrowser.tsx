@@ -16,6 +16,19 @@ import { messageOf } from '../errors'
 type SourceTab = 'openstax' | 'libretexts' | 'pressbooks' | 'document' | 'text' | 'web'
 type CatalogTab = Extract<SourceTab, 'libretexts' | 'pressbooks'>
 
+/**
+ * Read through a `typeof` guard, like every other consumer of a build define in
+ * this app, and not because the guard is decorative: measured 2026-08-30, a
+ * `define` declared at the ROOT of `vitest.config.ts` does not reach its
+ * projects — both build constants read `undefined` inside the `unit` project
+ * until the same `define` is repeated on the project itself. The guard is what
+ * has been making that harmless, and it stays.
+ */
+const SELF_HOSTED_EXTRACTOR_ORIGIN =
+  typeof __OER2CANVAS_SELF_HOSTED_EXTRACTOR_ORIGIN__ === 'string'
+    ? __OER2CANVAS_SELF_HOSTED_EXTRACTOR_ORIGIN__
+    : ''
+
 const BASE_TABS = ['openstax', 'libretexts', 'pressbooks'] as const
 const TAB_LABELS: Readonly<Record<SourceTab, string>> = {
   openstax: 'OpenStax',
@@ -120,7 +133,15 @@ export function SourceBrowser({
       <p className="mt-1 text-sm text-neutral-700 dark:text-neutral-300">
         Search an OER publisher, upload a document, or import text, Markdown, or HTML in this
         browser. One web page at a time can also be imported, which is the only source here that
-        is fetched by a third party rather than by this browser alone.
+        {/*
+          "A third party" is FALSE on a build whose operator runs the extraction
+          service themselves — there, the fetcher is the operator's own machine.
+          The sentence is a truth claim about where a user's address goes, not
+          decoration, which is why it is conditional rather than left alone.
+        */}
+        {SELF_HOSTED_EXTRACTOR_ORIGIN
+          ? ' is fetched by this deployment’s own extraction service rather than by this browser alone.'
+          : ' is fetched by a third party rather than by this browser alone.'}
       </p>
       <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Content source">
         {[
