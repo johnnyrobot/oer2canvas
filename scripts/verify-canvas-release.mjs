@@ -268,7 +268,10 @@ async function pushFromSelfHostedApp(scopedToken, courseName) {
       timeout: 60_000,
     })
 
-    await page.getByRole('button', { name: /^Chapters(?:\s|$)/ }).click()
+    // The workflow step is called "Content", not "Chapters". This script had
+    // never been run end to end (RELEASE-ACCEPTANCE §1 had zero rows), so its
+    // selectors rotted silently as the nav was renamed.
+    await page.getByRole('button', { name: /^Content(?:\s|$)/ }).click()
     await page.getByRole('tab', { name: 'LibreTexts' }).click()
     const search = page.getByLabel('Search books')
     await search.waitFor({ state: 'visible', timeout: 60_000 })
