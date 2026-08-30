@@ -295,3 +295,87 @@ test('odp notes text survives a mid-word text:span split and stays out of page t
   expect(index.slides[0]!.notesText).toBe('Mention the thylakoid membrane.')
   expect(index.slides[0]!.textRuns).toEqual(['Photosynthesis', 'Light reactions', 'Dark reactions'])
 })
+
+test('pretty-printed indentation between runs does not become content or a separator (fix-review round 3 Important 1)', async () => {
+  // A formatter, repair tool, or indenting generator inserts a whitespace
+  // text node BETWEEN sibling <a:r> elements inside <a:p>; PowerPoint's own
+  // minified XML never has these, so the fixture must emit one deliberately
+  // to catch a walker that (wrongly) treats every text node as content
+  // rather than only the ones inside <a:t>.
+  const index = await indexOf(await pptxFixture([
+    { titleRuns: ['Photosynthesi', { indent: true }, 's'] },
+  ]))
+
+  expect(index.slides[0]!.title).toBe('Photosynthesis')
+})
+
+test('pretty-printed indentation between notes runs does not corrupt notesText (fix-review round 3 Important 1)', async () => {
+  // `notesText` is compared by STRICT EQUALITY downstream; indentation
+  // reaching it as a wrongly-inserted mid-word space breaks that comparison.
+  const index = await indexOf(await pptxFixture([
+    { title: 'Photosynthesis', notesRuns: ['Mention the thylakoid membran', { indent: true }, 'e.'] },
+  ]))
+
+  expect(index.slides[0]!.notesText).toBe('Mention the thylakoid membrane.')
+})
+
+test('runs/spans nested past the paragraph depth cap are refused with a named error, not a raw RangeError (fix-review round 3 Important 2)', async () => {
+  // `joinParagraphText`'s own recursion has no other cap; fix-review round 3
+  // measured that 5,000 levels of nested `text:span` throw a raw, unnamed
+  // `RangeError` that escapes this module.
+  await expect(odpIndexOf(await odpFixture([
+    { title: 'Adversarial nesting', nestedSpanDepth: 40 },
+  ]))).rejects.toThrow(PresentationIndexError)
+})
+
+test('an odp draw:custom-shape with typed text is not invisible to textRuns (fix-review round 3 Important 3)', async () => {
+  // Impress writes a shape drawn from the toolbar (rectangle, callout,
+  // arrow, connector) as draw:custom-shape containing text:p DIRECTLY, not
+  // wrapped in a draw:frame. anydoc emits a block for it; a query that only
+  // looks at draw:frame does not know it exists, raising a false
+  // unattributed-content blocker downstream.
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Title D', customShapeText: 'Text in a drawn rectangle' },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Title D', 'Text in a drawn rectangle'])
+})
+
+test('an odp draw:custom-shape wrapped in a draw:g group is still found (fix-review round 3 Important 3)', async () => {
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Title', groupedCustomShapeText: 'Grouped drawn text' },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Title', 'Grouped drawn text'])
+})
+
+test('a draw:frame nested inside another draw:frame contributes its text exactly once (fix-review round 3 Important 3)', async () => {
+  // Widening the shape-kind allowlist (rather than querying text:p directly)
+  // would double-count a frame nested inside a frame: the OUTER frame's own
+  // descendant query would find the SAME text:p the inner frame also finds.
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Title', nestedFrameText: 'Text in a frame inside a frame' },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Title', 'Text in a frame inside a frame'])
+})
+
+test('an odp text:tab becomes one space so notesText matches anydoc (fix-review round 3 Important 4)', async () => {
+  // `notesText` is compared by STRICT EQUALITY downstream; anydoc renders a
+  // tab as a space, so dropping text:tab entirely produces "TermDefinition"
+  // instead of "Term Definition" and the comparison fails, publishing the
+  // notes as body text.
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Title', body: ['Body'], notesRuns: ['Term', { tab: true }, 'Definition'] },
+  ]))
+
+  expect(index.slides[0]!.notesText).toBe('Term Definition')
+})
+
+test('an odp text:s encoded run of spaces does not merge adjacent words (fix-review round 3 Important 4)', async () => {
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Title', bodyRuns: ['First', { spaces: 3 }, 'second'] },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Title', 'First second'])
+})

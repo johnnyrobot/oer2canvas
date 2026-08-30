@@ -11,13 +11,17 @@ const xmlEscape = (value: string) =>
 const EMBEDDED_IMAGE_PNG = RASTER_FIXTURES.png.bytes
 
 /**
- * One paragraph segment: a run's text, or `{ break: true }` for an `a:br`
- * soft line break (Shift+Enter) — still inside the SAME paragraph, not a new
- * one. Lets a fixture author a run split mid-word AND a soft break in the
- * SAME paragraph, so the index's `a:br` handling (fix-review round-2
- * Important A) can be tested independently of its run-joining rule.
+ * One paragraph segment: a run's text, `{ break: true }` for an `a:br` soft
+ * line break (Shift+Enter) — still inside the SAME paragraph, not a new
+ * one — or `{ indent: true }` for raw whitespace text a formatter, repair
+ * tool, or indenting generator inserts BETWEEN sibling `<a:r>` elements.
+ * PowerPoint's own XML is minified and never has this, but fix-review round
+ * 3 measured that a walker treating every text node as content turns such
+ * indentation into a wrongly-inserted space mid-word — `{ indent: true }`
+ * lets a fixture reproduce that indentation deliberately, independent of the
+ * run-joining and soft-break rules `break` and plain strings already cover.
  */
-export type PptxParagraphSegment = string | { break: true }
+export type PptxParagraphSegment = string | { break: true } | { indent: true }
 
 export interface PptxSlideSpec {
   /** Omitted means the slide has NO title placeholder — design fact 3. */
@@ -130,11 +134,14 @@ function graphicFrame(id: number, name: string, uri: string, payload: string): s
  * both exercise the SAME paragraph shape the index has to read.
  */
 function paragraphSegmentsXml(segments: readonly PptxParagraphSegment[]): string {
-  return segments.map((segment) =>
-    typeof segment === 'string'
-      ? `<a:r><a:rPr lang="en-US"/><a:t>${xmlEscape(segment)}</a:t></a:r>`
-      : '<a:br/>',
-  ).join('')
+  return segments.map((segment) => {
+    if (typeof segment === 'string') return `<a:r><a:rPr lang="en-US"/><a:t>${xmlEscape(segment)}</a:t></a:r>`
+    if ('break' in segment) return '<a:br/>'
+    // A literal newline-and-indent text node between sibling `<a:r>`
+    // elements, exactly as a pretty-printer would insert — never itself a
+    // run's `<a:t>` content, and never a break.
+    return '\n      '
+  }).join('')
 }
 
 /**
@@ -435,13 +442,15 @@ const ODP_NS = {
 }
 
 /**
- * One paragraph segment: a `text:span` run's text, or `{ break: true }` for a
- * `text:line-break` — still inside the SAME paragraph, not a new one. The ODF
- * analogue of `PptxParagraphSegment`, letting a fixture author a `text:span`
- * split mid-word AND a line break in the SAME paragraph, matching the rule
- * `paragraphText`/its ODF counterpart apply on the index side.
+ * One paragraph segment: a `text:span` run's text, `{ break: true }` for a
+ * `text:line-break`, `{ tab: true }` for a `text:tab`, or `{ spaces: n }` for
+ * a `text:s` encoded run of `n` spaces — none of them a paragraph break. The
+ * ODF analogue of `PptxParagraphSegment`, letting a fixture author a
+ * `text:span` split mid-word alongside any of ODF's space-producing elements
+ * in the SAME paragraph, matching the rule `paragraphText`/its ODF
+ * counterpart apply on the index side.
  */
-export type OdpParagraphSegment = string | { break: true }
+export type OdpParagraphSegment = string | { break: true } | { tab: true } | { spaces: number }
 
 export interface OdpPageSpec {
   title?: string
@@ -468,6 +477,32 @@ export interface OdpPageSpec {
   /** Emit the title frame LAST in the page — ODP's form of design fact 4. */
   titleLast?: boolean
   image?: { alt?: string }
+  /**
+   * A shape drawn from the toolbar (rectangle, callout, arrow, connector) —
+   * `draw:custom-shape` — holding typed text as a DIRECT `text:p` child, with
+   * NO enclosing `draw:frame` at all. Exercises fix-review round 3 Important
+   * 3: a query that only looks at `draw:frame` cannot see this shape's text,
+   * which anydoc still emits a block for.
+   */
+  customShapeText?: string
+  /** The above, wrapped in a `draw:g` (Impress's own "Group" command), proving the flat `text:p` query passes through a group for free. */
+  groupedCustomShapeText?: string
+  /**
+   * A `draw:frame` nested inside the body `draw:frame`, both `draw:frame`
+   * elements. Proves the flat `text:p` query counts the inner frame's text
+   * exactly ONCE, where a per-shape walk over every `draw:frame` would find
+   * the same paragraph twice: once via the outer frame's own descendant
+   * query, once via the inner frame directly.
+   */
+  nestedFrameText?: string
+  /**
+   * N levels of `text:span` nested inside each other, wrapping plain text —
+   * the paragraph-internal analogue of `nestedGroupDepth` on the PPTX side,
+   * proving the recursion depth cap on `joinParagraphText` refuses a
+   * package engineered to overflow the call stack with a named
+   * `PresentationIndexError`, rather than crashing with a raw `RangeError`.
+   */
+  nestedSpanDepth?: number
 }
 
 /**
@@ -476,9 +511,12 @@ export interface OdpPageSpec {
  * both exercise the SAME paragraph shape the index has to read.
  */
 function odpParagraphSegmentsXml(segments: readonly OdpParagraphSegment[]): string {
-  return segments.map((segment) =>
-    typeof segment === 'string' ? `<text:span>${xmlEscape(segment)}</text:span>` : '<text:line-break/>',
-  ).join('')
+  return segments.map((segment) => {
+    if (typeof segment === 'string') return `<text:span>${xmlEscape(segment)}</text:span>`
+    if ('break' in segment) return '<text:line-break/>'
+    if ('tab' in segment) return '<text:tab/>'
+    return `<text:s text:c="${segment.spaces}"/>`
+  }).join('')
 }
 
 /** Plain one-string-per-bullet paragraphs, plus an optional run-built paragraph (see `bodyRuns`). */
@@ -501,6 +539,34 @@ function odpFrame(name: string, presentationClass: string, contentXml: string): 
     `</draw:frame>`
 }
 
+/** A `draw:custom-shape` with typed text as a direct `text:p` child — see `customShapeText` on `OdpPageSpec`. */
+function odpCustomShape(name: string, text: string): string {
+  return `<draw:custom-shape draw:name="${name}" svg:width="5cm" svg:height="2cm" svg:x="2cm" svg:y="6cm">` +
+    `<text:p>${xmlEscape(text)}</text:p>` +
+    `</draw:custom-shape>`
+}
+
+/** `contentXml` wrapped in a `draw:g` group — Impress's own "Group" command. */
+function odpGroup(name: string, contentXml: string): string {
+  return `<draw:g draw:name="${name}">${contentXml}</draw:g>`
+}
+
+/** A `draw:frame` nested inside another `draw:frame` — see `nestedFrameText` on `OdpPageSpec`. */
+function odpNestedFrame(outerName: string, innerName: string, text: string): string {
+  return `<draw:frame draw:name="${outerName}" svg:width="10cm" svg:height="3cm" svg:x="2cm" svg:y="9cm">` +
+    odpFrame(innerName, '', `<text:p>${xmlEscape(text)}</text:p>`) +
+    `</draw:frame>`
+}
+
+/** `depth` levels of `text:span` nested inside each other, wrapping plain text — see `nestedSpanDepth` on `OdpPageSpec`. */
+function odpNestedSpans(depth: number, text: string): string {
+  let xml: string = xmlEscape(text)
+  for (let level = 0; level < depth; level += 1) {
+    xml = `<text:span>${xml}</text:span>`
+  }
+  return `<text:p>${xml}</text:p>`
+}
+
 /** `page.notes` (a single run) or `page.notesRuns` (multiple segments in one paragraph) as one `text:p`. */
 function odpNotesContentXml(page: OdpPageSpec): string {
   if (page.notesRuns) return `<text:p>${odpParagraphSegmentsXml(page.notesRuns)}</text:p>`
@@ -513,7 +579,8 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
     const title = page.title === undefined
       ? ''
       : odpFrame(`Title ${index + 1}`, 'title', `<text:p>${xmlEscape(page.title)}</text:p>`)
-    const outlineContent = `${odpParagraphsXml(page)}${page.bulletList ? odpBulletListXml(page.bulletList) : ''}`
+    const outlineContent = `${odpParagraphsXml(page)}${page.bulletList ? odpBulletListXml(page.bulletList) : ''}` +
+      (page.nestedSpanDepth ? odpNestedSpans(page.nestedSpanDepth, 'Deeply nested') : '')
     const outline = outlineContent ? odpFrame(`Body ${index + 1}`, 'outline', outlineContent) : ''
     const image = page.image
       ? `<draw:frame draw:name="Diagram ${index + 1}" svg:width="1cm" svg:height="1cm">` +
@@ -521,11 +588,19 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
         (page.image.alt === undefined ? '' : `<svg:desc>${xmlEscape(page.image.alt)}</svg:desc>`) +
         `</draw:frame>`
       : ''
+    const customShape = page.customShapeText ? odpCustomShape(`Custom Shape ${index + 1}`, page.customShapeText) : ''
+    const groupedCustomShape = page.groupedCustomShapeText
+      ? odpGroup(`Group ${index + 1}`, odpCustomShape(`Grouped Custom Shape ${index + 1}`, page.groupedCustomShapeText))
+      : ''
+    const nestedFrame = page.nestedFrameText
+      ? odpNestedFrame(`Outer Frame ${index + 1}`, `Inner Frame ${index + 1}`, page.nestedFrameText)
+      : ''
     const notesContent = odpNotesContentXml(page)
     const notes = notesContent
       ? `<presentation:notes>${odpFrame(`Notes ${index + 1}`, 'notes', notesContent)}</presentation:notes>`
       : ''
-    const frames = page.titleLast ? `${outline}${image}${title}` : `${title}${outline}${image}`
+    const extras = `${customShape}${groupedCustomShape}${nestedFrame}`
+    const frames = page.titleLast ? `${outline}${image}${extras}${title}` : `${title}${outline}${image}${extras}`
     return `<draw:page draw:name="Slide ${index + 1}" draw:master-page-name="Default">${frames}${notes}</draw:page>`
   }).join('')
 

@@ -62,14 +62,30 @@ function collapse(value: string | null | undefined): string {
 }
 
 /**
+ * REASONED, not measured — like `MAX_GROUP_NESTING_DEPTH` elsewhere in this
+ * module, and for the same purpose, one level down: `joinParagraphText`'s own
+ * recursion (below) has no other cap, and fix-review round 3 measured that
+ * 5,000 levels of nested `text:span` throws a raw, unnamed `RangeError` that
+ * escapes this module — the same failure `MAX_GROUP_NESTING_DEPTH` exists to
+ * prevent for shape groups, just inside a single paragraph's runs/spans
+ * rather than across a slide's shapes. No real run or span nests anywhere
+ * near 32 levels deep (bold-inside-italic-inside-a-hyperlink is 2 or 3); this
+ * refuses an adversarial package with a named `PresentationIndexError`
+ * instead of letting a raw `RangeError` escape.
+ */
+const MAX_PARAGRAPH_NESTING_DEPTH = 32
+
+/**
  * ONE shared definition of "how runs become a paragraph string", walking a
- * paragraph's (or a run's) children RECURSIVELY — text nodes contribute their
- * data directly, an element matching `{ breakNamespace, breakLocalName }`
- * contributes exactly one space, an excluded element contributes nothing, and
- * any other element (a run, a formatting wrapper, a nested span) is walked
- * the same way. PPTX (`a:r`/`a:br`) and ODF (`text:span`/`text:line-break`)
- * differ only in which element names carry text and which one is a break —
- * both share this rule rather than each carrying a parallel definition of it:
+ * paragraph's (or a run's) children RECURSIVELY — a text node contributes its
+ * data ONLY when its immediate parent is a text carrier (see `isTextCarrier`
+ * below), an element matching `isSpace` contributes exactly one space, an
+ * excluded element contributes nothing, and any other element (a run, a
+ * formatting wrapper, a nested span) is walked the same way. PPTX
+ * (`a:r`/`a:t`/`a:br`) and ODF (`text:span`/`text:line-break`/`text:tab`/
+ * `text:s`) differ only in which element names carry text and which ones are
+ * a space — both share this rule rather than each carrying a parallel
+ * definition of it:
  *
  * - Two adjacent text-bearing elements are concatenated with NO separator.
  *   PowerPoint routinely splits a run mid-word — at a spell-check mark
@@ -77,42 +93,83 @@ function collapse(value: string | null | undefined): string {
  *   does the same with `text:span`, so `<a:r><a:t>Photosynthesi</a:t></a:r>
  *   <a:r><a:t>s</a:t></a:r>` (or the ODF equivalent) is the single word
  *   `Photosynthesis`, never two words with a space stitched in between.
- * - A break becomes exactly one space. It is NOT a paragraph break — anydoc
- *   renders it inline within the same block rather than starting a new
- *   one — so `<a:r><a:t>First half</a:t></a:r><a:br/><a:r><a:t>second
- *   half</a:t></a:r>` is `"First half second half"`, one `textRuns` entry,
- *   not two. (An earlier version of this function joined every run in a
- *   paragraph with the empty string uniformly, which fixed the mid-word case
- *   above by breaking this one — the space belongs at the break, not between
- *   every pair of runs.)
+ * - A space-producing element becomes exactly one space. It is NOT a
+ *   paragraph break — anydoc renders it inline within the same block rather
+ *   than starting a new one — so `<a:r><a:t>First half</a:t></a:r><a:br/>
+ *   <a:r><a:t>second half</a:t></a:r>` is `"First half second half"`, one
+ *   `textRuns` entry, not two. (An earlier version of this function joined
+ *   every run in a paragraph with the empty string uniformly, which fixed
+ *   the mid-word case above by breaking this one — the space belongs at the
+ *   space-producing element, not between every pair of runs.)
+ * - Depth is capped at `MAX_PARAGRAPH_NESTING_DEPTH` (see above), the same
+ *   defence `MAX_GROUP_NESTING_DEPTH` gives `walkShapes`.
  */
 function joinParagraphText(
   paragraph: Element,
-  { breakNamespace, breakLocalName, exclude }: {
-    breakNamespace: string
-    breakLocalName: string
+  { isSpace, isTextCarrier, exclude }: {
+    /**
+     * True for an element that stands in for one or more space characters
+     * within the paragraph — never itself a paragraph break, since anydoc
+     * renders all of these inline in the same block: `a:br`/`text:line-break`
+     * (a soft line break), and for ODF also `text:tab` and `text:s` (an
+     * encoded run of one or more spaces via an optional `text:c` count).
+     * `text:s`'s exact count does not need to be read: `collapse` squashes
+     * any run of whitespace to a single space regardless, so contributing
+     * one space for it is enough — the count would be "mostly benign"
+     * either way, but dropping `text:s` entirely (treating it as neither a
+     * space nor a text carrier) would wrongly concatenate the words on
+     * either side of it with none.
+     */
+    isSpace: (element: Element) => boolean
+    /**
+     * True for an element whose OWN direct text-node children are paragraph
+     * CONTENT, as opposed to incidental whitespace a formatter, repair tool,
+     * or indenting generator inserted between sibling elements. OOXML
+     * isolates all real text inside `a:t` leaves, so only `a:t` qualifies —
+     * a text node found anywhere else (directly inside `a:p` or `a:r`) is
+     * pretty-print indentation, not content. Fix-review round 3 measured
+     * that treating EVERY text node as content (an earlier version of this
+     * function did, checking only for a break and nothing else) turns
+     * `<a:r><a:t>Photosynthesi</a:t></a:r>\n  <a:r><a:t>s</a:t></a:r>` — the
+     * indentation a formatter inserted between the runs — into
+     * `"Photosynthesi s"`: the exact mid-word defect two earlier rounds
+     * removed, reintroduced through a text node the ORIGINAL direct-children
+     * implementation could never see in the first place, and it reaches
+     * `notesText`, which is compared by strict equality downstream. PPTX
+     * itself is minified and rarely hits this, but any deck that has passed
+     * through a formatter, a repair tool, or an indenting generator has. ODF
+     * has no such isolation: `text:p` and `text:span` hold bare text
+     * directly as children, so both qualify as carriers.
+     */
+    isTextCarrier: (element: Element) => boolean
     exclude?: (element: Element) => boolean
   },
 ): string {
-  const walk = (node: Node): string => {
+  const walk = (node: Node, depth: number): string => {
+    if (depth > MAX_PARAGRAPH_NESTING_DEPTH) {
+      throw new PresentationIndexError(
+        `This paragraph nests runs more than ${MAX_PARAGRAPH_NESTING_DEPTH} levels deep.`,
+      )
+    }
     let text = ''
+    const carrier = node.nodeType === Node.ELEMENT_NODE && isTextCarrier(node as Element)
     for (const child of node.childNodes) {
       if (child.nodeType === Node.TEXT_NODE) {
-        text += child.nodeValue ?? ''
+        if (carrier) text += child.nodeValue ?? ''
         continue
       }
       if (child.nodeType !== Node.ELEMENT_NODE) continue
       const element = child as Element
-      if (element.namespaceURI === breakNamespace && element.localName === breakLocalName) {
+      if (isSpace(element)) {
         text += ' '
         continue
       }
       if (exclude?.(element)) continue
-      text += walk(element)
+      text += walk(element, depth + 1)
     }
     return text
   }
-  return collapse(walk(paragraph))
+  return collapse(walk(paragraph, 0))
 }
 
 /**
@@ -125,19 +182,25 @@ function joinParagraphText(
  */
 function paragraphText(paragraph: Element, { includeFields }: { includeFields: boolean }): string {
   return joinParagraphText(paragraph, {
-    breakNamespace: DRAWING_NS,
-    breakLocalName: 'br',
+    isSpace: (element) => element.namespaceURI === DRAWING_NS && element.localName === 'br',
+    isTextCarrier: (element) => element.namespaceURI === DRAWING_NS && element.localName === 't',
     exclude: includeFields ? undefined : (element) => element.namespaceURI === DRAWING_NS && element.localName === 'fld',
   })
 }
 
 /**
  * One ODF paragraph's (`text:p`) text — the same rule as `paragraphText`,
- * with `text:span` standing in for `a:r` and `text:line-break` for `a:br`.
- * ODF has no field-chrome equivalent to exclude here.
+ * with `text:span` standing in for `a:r`, and `text:line-break`/`text:tab`/
+ * `text:s` all standing in for `a:br`. ODF has no field-chrome equivalent to
+ * exclude here.
  */
 function odfParagraphText(paragraph: Element): string {
-  return joinParagraphText(paragraph, { breakNamespace: ODF_TEXT_NS, breakLocalName: 'line-break' })
+  return joinParagraphText(paragraph, {
+    isSpace: (element) => element.namespaceURI === ODF_TEXT_NS &&
+      (element.localName === 'line-break' || element.localName === 'tab' || element.localName === 's'),
+    isTextCarrier: (element) => element.namespaceURI === ODF_TEXT_NS &&
+      (element.localName === 'p' || element.localName === 'span'),
+  })
 }
 
 /**
@@ -447,34 +510,55 @@ function odpIndex(parts: Record<string, string>): PresentationIndex {
   const slides = [...presentation.getElementsByTagNameNS(ODF_DRAW_NS, 'page')].map((page, position) => {
     const notesElement = page.getElementsByTagNameNS(ODF_PRESENTATION_NS, 'notes')[0]
     const notesText = notesElement ? odfNotesText(notesElement) : undefined
-    // Notes live INSIDE the page element, so every text query below must exclude
-    // that subtree — otherwise a note would be read as page text, which is the
-    // exact confusion this index exists to prevent. `draw:g` (Impress's own
-    // "Group" command) needs no explicit recursion here the way PPTX's
-    // `p:grpSp` does in `walkShapes`: both this frame query and `odfParagraphs`
-    // above use `getElementsByTagNameNS`, which already finds a match at ANY
-    // depth in one call, so a frame or paragraph nested inside a group is found
-    // exactly as if it were not grouped, with no risk of the stack-depth
-    // exhaustion `MAX_GROUP_NESTING_DEPTH` guards against on the PPTX side —
-    // there is no recursive function of THIS module's own to overflow.
-    const frames = [...page.getElementsByTagNameNS(ODF_DRAW_NS, 'frame')]
-      .filter((frame) => !notesElement?.contains(frame))
 
-    const textRuns: string[] = []
-    let title: string | undefined
-    let titleIndex = -1
-    for (const frame of frames) {
-      const paragraphs = odfParagraphs(frame)
-      // The title is the FIRST paragraph of the FIRST title frame encountered,
-      // matching `walkShapes`'s "first wins" rule on the PPTX side — any
-      // further paragraph in that same frame is ordinary text, and any later
-      // frame that also claims to be a title is treated as ordinary text too.
-      if (frame.getAttributeNS(ODF_PRESENTATION_NS, 'class') === 'title' && title === undefined && paragraphs.length > 0) {
-        title = paragraphs[0]
-        titleIndex = textRuns.length
-      }
-      textRuns.push(...paragraphs)
-    }
+    /*
+     * Every `text:p` in the page, in document order, wherever it lives —
+     * inside a `draw:frame`, inside a shape drawn from the toolbar
+     * (`draw:custom-shape`, `draw:rect`, `draw:caption`, ... — Impress puts
+     * typed text directly inside one of these, with no enclosing frame at
+     * all), inside a `draw:g` group, or inside a frame nested inside another
+     * frame — EXCEPT the notes subtree, via the same deep `contains()` check
+     * the earlier frame-only version used (fix-review round 3 confirmed this
+     * exclusion is airtight even for a paragraph nested several levels
+     * inside the notes element).
+     *
+     * This is deliberately ONE flat query, not a per-shape walk that widens
+     * a shape-kind allowlist (`draw:frame` plus `draw:custom-shape` plus
+     * ...): fix-review round 3 measured that a per-shape walk double-counts
+     * a frame nested inside another frame, because the OUTER frame's own
+     * descendant query finds the SAME `text:p` the inner frame also finds —
+     * three copies once a title frame is also present. Querying `text:p`
+     * once, directly against the page, counts each physical paragraph
+     * exactly once no matter what — or how much — wraps it. It also means
+     * `draw:g` (Impress's own "Group" command) needs no explicit recursion
+     * the way PPTX's `p:grpSp` does in `walkShapes`: `getElementsByTagNameNS`
+     * finds a match at ANY depth in a single call, so a paragraph inside a
+     * group is found exactly as if it were not grouped. That single
+     * browser-native call has no recursion of ITS OWN to overflow — the
+     * recursion that DOES exist in this module, `joinParagraphText`'s
+     * per-paragraph run/span walk, is capped separately by
+     * `MAX_PARAGRAPH_NESTING_DEPTH`.
+     */
+    const paragraphs = [...page.getElementsByTagNameNS(ODF_TEXT_NS, 'p')]
+      .filter((paragraph) => !notesElement?.contains(paragraph))
+      .map((paragraph) => ({ element: paragraph, text: odfParagraphText(paragraph) }))
+      .filter((paragraph) => paragraph.text.length > 0)
+
+    /*
+     * Title identification is unchanged from the frame-only version: the
+     * first `draw:frame` carrying `presentation:class="title"`, first
+     * non-empty paragraph inside it, wins — matching `walkShapes`'s "first
+     * wins" rule on the PPTX side. `findIndex` locates that exact paragraph
+     * in the FLAT list above by DOM identity (`contains`), not by string
+     * value, so the hoist below splices out the one paragraph that really
+     * was the title, never a different paragraph that happens to share its
+     * text.
+     */
+    const titleFrame = [...page.getElementsByTagNameNS(ODF_DRAW_NS, 'frame')]
+      .find((frame) => frame.getAttributeNS(ODF_PRESENTATION_NS, 'class') === 'title' && !notesElement?.contains(frame))
+    const titleIndex = titleFrame ? paragraphs.findIndex((paragraph) => titleFrame.contains(paragraph.element)) : -1
+    const title = titleIndex >= 0 ? paragraphs[titleIndex]!.text : undefined
+    const textRuns = paragraphs.map((paragraph) => paragraph.text)
 
     /*
      * ODP hoists a title frame to the top of its page regardless of where it
@@ -482,9 +566,10 @@ function odpIndex(parts: Record<string, string>): PresentationIndex {
      * out of order downstream. Reporting the AUTHORED position here would
      * raise a warning about a disagreement the reader never sees. The runs
      * are reordered to match, title first — spliced out by INDEX
-     * (`titleIndex`, recorded above) rather than by re-filtering for a value
-     * equal to the title string, so a body paragraph that happens to repeat
-     * the title's exact text is never also removed.
+     * (`titleIndex`, resolved by DOM identity above) rather than by
+     * re-filtering for a value equal to the title string, so a body
+     * paragraph that happens to repeat the title's exact text is never also
+     * removed.
      */
     const ordered = title === undefined
       ? textRuns
