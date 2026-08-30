@@ -21,9 +21,14 @@
 | [15 — Evaluate legacy DOC/PPT](issues/15-evaluate-legacy-doc-ppt.md) | ready-for-agent | 13, 14 |
 | [16 — Decide spreadsheet imports](issues/16-decide-spreadsheet-imports.md) | ready-for-agent | 13 |
 | [17 — Extract web articles self-hosted](issues/17-extract-web-articles-self-hosted.md) | ready-for-agent | 12 |
+| [18 — Attribute imported charts](issues/18-attribute-imported-charts.md) | ready-for-agent | 14 |
+| [19 — Commit the real-deck harness](issues/19-commit-real-deck-harness.md) | ready-for-agent | 14 |
+| [20 — One account of refusal](issues/20-one-account-of-refusal.md) | ready-for-agent | 13, 14 |
 
-**Carried forward from 14, with no issue of its own yet.** A deck refused for an unpackageable
-image lands in the plan editor with a disabled Prepare button, while a deck refused by the
-reconciler throws back to the file picker — two different screens for "this file cannot be
-imported", not explained to the user anywhere. It became more visible in 14, because a real
-Impress chart takes exactly the first path (its GDI metafile preview cannot be packaged).
+**What 14 left behind, now filed.** Issue 18 carries its largest remaining refusal — an
+inserted chart — and commits to the identity join rather than to predicting anydoc's
+rendering, which is the class of rule that produced eleven silent misattributions there.
+Issue 19 commits the harness that found 14's two worst defects after 1,537 synthetic tests
+had passed; it is the least reproducible thing that issue learned. Issue 20 promotes what was
+a dangling note here into work: a refused import currently gets two unrelated screens
+depending on which layer refused it.
