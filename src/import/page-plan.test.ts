@@ -266,6 +266,19 @@ test('a block may declare its own plan label', () => {
   expect(blocks[0]!.summary).toBe('Slide 2: Photosynthesis')
 })
 
+test('a declared plan label is excerpted like every other summary', () => {
+  // A slide title is author-controlled and carries no length limit of its
+  // own; PlanBlock.summary documents itself as "kind plus an excerpt", and
+  // every OTHER summary is capped by excerpt() — a declared label must be
+  // too, or one long title becomes the one split-point option that breaks
+  // that invariant.
+  const longTitle = 'Slide 3: '.padEnd(80, 'x')
+  const blocks = blocksOf(`<section data-plan-label="${longTitle}"><h2>Long</h2></section>`)
+
+  expect(blocks[0]!.summary.length).toBeLessThanOrEqual(60)
+  expect(blocks[0]!.summary.endsWith('…')).toBe(true)
+})
+
 test('a deck of sections proposes one page, not one page per slide', () => {
   // Every slide title is an `h2`, so WITHOUT the section wrapper `proposeRanges`
   // would split at the minimum repeated heading level and propose one page per

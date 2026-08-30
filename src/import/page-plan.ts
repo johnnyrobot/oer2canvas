@@ -117,21 +117,27 @@ export function blocksOf(html: string): PlanBlock[] {
       // A block may name itself. The presentation importer uses this so split
       // points read as slide boundaries; nothing here knows what a slide is,
       // which is the point of naming the attribute for the plan rather than for
-      // the format that happens to set it.
+      // the format that happens to set it. Run through `excerpt()` like every
+      // other summary: `PlanBlock.summary` documents itself as "kind plus an
+      // excerpt", and a slide title is author-controlled text with no length
+      // limit of its own — leaving it untruncated would make one long title
+      // the one summary in the split-point picker that breaks the invariant
+      // every other block honours.
       const declared = element.getAttribute('data-plan-label')?.trim()
+      const declaredSummary = declared ? excerpt(declared) : undefined
       const level = HEADING_LEVEL[tag]
       const text = collapse(element.textContent)
       if (level) {
         blocks.push({
           html: element.outerHTML,
           heading: { level, text },
-          summary: declared || `Heading: ${excerpt(text)}`,
+          summary: declaredSummary || `Heading: ${excerpt(text)}`,
         })
       } else {
         const kind = KIND_LABEL[tag] ?? `<${tag}>`
         blocks.push({
           html: element.outerHTML,
-          summary: declared || (text ? `${kind}: ${excerpt(text)}` : kind),
+          summary: declaredSummary || (text ? `${kind}: ${excerpt(text)}` : kind),
         })
       }
     } else if (node.nodeType === Node.TEXT_NODE && collapse(node.textContent)) {

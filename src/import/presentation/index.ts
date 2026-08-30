@@ -541,50 +541,10 @@ function rendersChoiceBranch(choice: Element): boolean {
 }
 
 /**
- * The FIRST `a:blip` reachable inside `container`, in document order — walking
- * through `mc:AlternateContent` the same way `walkShapes` does, resolving ONE
- * branch via `rendersChoiceBranch` rather than both.
- *
- * `mc:AlternateContent` (OOXML markup compatibility) is legal at ANY element
- * position, not only where `walkShapes` itself meets it on the shape tree, so
- * a fill's own blip can be wrapped in one too: a converter can write it even
- * though PowerPoint never does. Reading it without the same branch discipline
- * would collect a blip from a branch anydoc never renders.
- *
- * Bounded by `MAX_GROUP_NESTING_DEPTH`, the same recursion cap `walkShapes`
- * uses and for the same reason: a package engineered to nest
- * `mc:AlternateContent` inside a fill must refuse with a named error rather
- * than overflow the call stack.
- */
-function firstBlip(container: Element, depth = 0): Element | undefined {
-  if (depth > MAX_GROUP_NESTING_DEPTH) {
-    throw new PresentationIndexError(
-      `This presentation nests markup compatibility more than ${MAX_GROUP_NESTING_DEPTH} levels deep.`,
-    )
-  }
-  for (const child of container.children) {
-    if (child.namespaceURI === DRAWING_NS && child.localName === 'blip') return child
-    if (child.namespaceURI === MC_NS && child.localName === 'AlternateContent') {
-      const kids = [...child.children]
-      const choices = kids.filter((kid) => kid.namespaceURI === MC_NS && kid.localName === 'Choice')
-      const fallback = kids.find((kid) => kid.namespaceURI === MC_NS && kid.localName === 'Fallback')
-      const chosen = choices.find(rendersChoiceBranch) ?? fallback
-      const found = chosen ? firstBlip(chosen, depth + 1) : undefined
-      if (found) return found
-      continue
-    }
-    const found = firstBlip(child, depth + 1)
-    if (found) return found
-  }
-  return undefined
-}
-
-/**
- * WHERE A PICTURE SHAPE'S BYTES COME FROM: the ONE `a:blip` under a
- * `p:blipFill` beneath `shape` that anydoc would actually render, resolved
- * through the slide's own relationships and recorded on `state` — as an
- * origin when it resolves, and as a reported loss (`unrepresentable.pictures`)
- * when it does not.
+ * WHERE A PICTURE SHAPE'S BYTES COME FROM: the FIRST `a:blip` in document
+ * order under a `p:blipFill` beneath `shape`, resolved through the slide's
+ * own relationships and recorded on `state` — as an origin when it resolves,
+ * and as a reported loss (`unrepresentable.pictures`) when it does not.
  *
  * The scoping that matters is being INSIDE A `p:pic` — the element that IS a
  * picture — not the namespace of its fill. This is only ever called with a
@@ -606,17 +566,33 @@ function firstBlip(container: Element, depth = 0): Element | undefined {
  * decorative one would otherwise make the index expect two pictures where
  * anydoc emits one.
  *
- * ONE BLIP within that fill, too, and specifically the FIRST one `firstBlip`
- * (above) finds — an earlier version of this function collected every
- * `a:blip` at ANY DEPTH inside the chosen fill instead. A second blip is
- * reachable within one fill more easily than it looks: two siblings written
- * directly under one `p:blipFill`, an `mc:AlternateContent` *inside* the
- * blipFill with a blip in each branch (schema-legal — markup compatibility may
- * appear at any element position), or a blip parked in an `a:extLst`. Measured
- * against real anydoc: collecting all of them let slide 1's second picture
- * publish under slide 2's heading with no findings at all, because the
- * sole-referencer rule saw two origins for one slide and handed the surplus to
- * a neighbour that looked like the sole claimant.
+ * ONE BLIP within that fill, too — the first one in DOCUMENT ORDER, found with
+ * `getElementsByTagNameNS(...)[0]` rather than any manual walk. An earlier
+ * version of this function collected every `a:blip` at ANY DEPTH inside the
+ * chosen fill instead, and a second blip is reachable within one fill more
+ * easily than it looks: two siblings written directly under one `p:blipFill`,
+ * or a blip parked in an `a:extLst`. Measured against real anydoc: collecting
+ * all of them let slide 1's second picture publish under slide 2's heading
+ * with no findings at all, because the sole-referencer rule saw two origins
+ * for one slide and handed the surplus to a neighbour that looked like the
+ * sole claimant.
+ *
+ * NO BRANCH RESOLUTION FOR `mc:AlternateContent` HERE, unlike `walkShapes` on
+ * the shape tree — and that absence is MEASURED, not an oversight. A `p:pic`
+ * whose `p:blipFill` wraps two blips in `mc:AlternateContent`
+ * (`Choice Requires="p14"` naming one relationship, `Fallback` naming
+ * another, BOTH declared) renders the CHOICE's blip with real anydoc 0.2.4,
+ * even though `rendersChoiceBranch` would pick the Fallback for `p14` at the
+ * shape-tree level. Authoring the same package with the Fallback element
+ * written FIRST instead makes anydoc render the Fallback's blip — so this is
+ * document order, not branch selection, and inside a fill anydoc appears not
+ * to evaluate markup compatibility at all. An earlier version of this
+ * function routed through `rendersChoiceBranch` to "inherit" `walkShapes`'s
+ * discipline; measured, that read the Fallback's blip where the Choice's was
+ * correct, and on a two-slide deck built to expose it, silently swapped which
+ * slide claimed which picture with no finding — a regression this docstring
+ * exists to keep from being reintroduced. `rendersChoiceBranch` stays scoped
+ * to `walkShapes` and the shape tree, where it was actually measured.
  *
  * `r:embed` wins over `r:link` when a blip carries both — REASONED, not
  * measured: bytes present in the package are what a renderer prefers, and
@@ -631,7 +607,7 @@ function readBlipOrigins(shape: Element, state: ShapeWalkState): void {
   const fill = shape.getElementsByTagNameNS(PML_NS, 'blipFill')[0]
     ?? shape.getElementsByTagNameNS(DRAWING_NS, 'blipFill')[0]
   if (!fill) return
-  const blip = firstBlip(fill)
+  const blip = fill.getElementsByTagNameNS(DRAWING_NS, 'blip')[0]
   if (!blip) return
   const relationshipId = blip.getAttributeNS(R_NS, 'embed') ?? blip.getAttributeNS(R_NS, 'link')
   // A blip naming NO relationship references no image data at all, so

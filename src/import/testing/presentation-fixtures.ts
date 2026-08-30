@@ -156,17 +156,51 @@ export interface PptxSlideSpec {
    */
   drawingmlBlipFill?: { inSpPr?: boolean }
   /**
-   * A `p:pic` whose `p:blipFill` wraps its blip in `mc:AlternateContent` —
-   * legal at any element position under OOXML markup compatibility, not only
-   * where `walkShapes` meets it on the shape tree. The `mc:Choice` requires
-   * `p14`, which anydoc renders the `mc:Fallback` for (see
-   * `MC_REQUIRES_NAMESPACES`), so the picture anydoc actually renders is named
-   * by the Fallback's relationship — and the Choice's blip names a
-   * relationship the package never declares, so a reader that visited it
-   * regardless of the branch would also misreport a lost picture that was
-   * never really lost.
+   * A SECOND, independent embedded picture, on its OWN relationship
+   * (`rIdImage2`) naming a DIFFERENT media part than `rIdImage`. Unlike
+   * `secondImage` — which reuses `image`'s own relationship because it exists
+   * to prove a picture COUNT rather than to give a shape a picture identity of
+   * its own — this exists so a fixture can name two real pictures
+   * unambiguously by which relationship (and therefore which part) each
+   * shape's blip carries. See `secondImagePartName` on `pptxFixture`.
    */
-  blipFillAlternateContent?: boolean
+  image2?: { alt?: string }
+  /**
+   * A `p:pic` whose `p:blipFill` writes TWO `a:blip` elements as SIBLINGS —
+   * a shape PowerPoint itself never authors, but a converter or a hand-edited
+   * package can. The first names `rIdImage` (`image`'s part), the second
+   * `rIdImage2` (`image2`'s part, a DIFFERENT declared relationship), so a
+   * test can tell which one a reader took. MEASURED: anydoc renders ONE
+   * `<img>`, from the FIRST blip.
+   */
+  siblingBlipsInFill?: boolean
+  /**
+   * A `p:pic` whose blip carries a SECOND, complete `a:blip` nested inside its
+   * own `a:extLst` — the extension-list element OOXML allows on a blip for
+   * vendor-specific data (`a14:useLocalDpi` and similar), engineered here to
+   * hold a second blip rather than an ordinary extension. Schema-legal as XML,
+   * and a reader that walks every `a:blip` at any depth would find it; one
+   * that takes the FIRST blip in document order returns the outer blip and
+   * never descends into it.
+   */
+  blipInExtLst?: boolean
+  /**
+   * A `p:pic` whose `p:blipFill` wraps its blip in `mc:AlternateContent`, with
+   * BOTH branches naming a REAL, DECLARED relationship: `choice` and
+   * `fallback` each pick which of `image`'s part (`rIdImage`) or `image2`'s
+   * part (`rIdImage2`) that branch's blip carries. Requires is fixed at
+   * `p14` — the value `rendersChoiceBranch` would (WRONGLY, if applied here)
+   * make prefer the Fallback at the shape-tree level.
+   *
+   * MEASURED with real anydoc 0.2.4: `walkShapes`'s `mc:AlternateContent`
+   * handling does NOT extend inside a blipFill. Anydoc does not evaluate
+   * `Requires` there at all — it renders whichever blip is written FIRST in
+   * document order (the Choice, since it is always written before the
+   * Fallback), and authoring the same package with the Fallback element
+   * written first instead flips which one anydoc renders. That is document
+   * order, not branch selection — see `readBlipOrigins`.
+   */
+  blipFillChoiceFallback?: { choice: 'image' | 'image2'; fallback: 'image' | 'image2' }
   /**
    * A pasted Excel worksheet: `p:graphicFrame` → `graphicData uri=…/ole` →
    * `p:oleObj` → a preview `p:pic`. The preview is the only part of it anydoc
@@ -569,15 +603,42 @@ function slideXml(spec: PptxSlideSpec): string {
           `<p:spPr/>`) +
       `</p:pic>`
     : ''
-  const blipFillAlternateContent = spec.blipFillAlternateContent
-    ? `<p:pic><p:nvPicPr><p:cNvPr id="30" name="AlternateContent Fill 30" descr="AC fill"/>` +
+  const image2 = spec.image2
+    ? `<p:pic><p:nvPicPr><p:cNvPr id="31" name="Picture 31"` +
+      `${spec.image2.alt === undefined ? '' : ` descr="${xmlEscape(spec.image2.alt)}"`}/>` +
       `<p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
-      `<p:blipFill><mc:AlternateContent xmlns:mc="${MC_NS}">` +
-      `<mc:Choice xmlns:p14="${MC_REQUIRES_NAMESPACES.p14}" Requires="p14">` +
-      `<a:blip r:embed="rIdNeverDeclared"/></mc:Choice>` +
-      `<mc:Fallback><a:blip r:embed="rIdFallbackBlip"/></mc:Fallback>` +
-      `</mc:AlternateContent><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+      `<p:blipFill><a:blip r:embed="rIdImage2"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
       `<p:spPr/></p:pic>`
+    : ''
+  const siblingBlipsInFill = spec.siblingBlipsInFill
+    ? `<p:pic><p:nvPicPr><p:cNvPr id="33" name="Sibling Blips 33" descr="Sibling blips"/>` +
+      `<p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+      `<p:blipFill><a:blip r:embed="rIdImage"/><a:blip r:embed="rIdImage2"/>` +
+      `<a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+      `<p:spPr/></p:pic>`
+    : ''
+  const blipInExtLst = spec.blipInExtLst
+    ? `<p:pic><p:nvPicPr><p:cNvPr id="34" name="Blip In ExtLst 34" descr="Blip in extLst"/>` +
+      `<p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+      `<p:blipFill><a:blip r:embed="rIdImage">` +
+      `<a:extLst><a:ext uri="{28A0092B-C50C-407E-A947-70E740481C1C}">` +
+      `<a:blip r:embed="rIdImage2"/></a:ext></a:extLst></a:blip>` +
+      `<a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+      `<p:spPr/></p:pic>`
+    : ''
+  const blipFillChoiceFallback = spec.blipFillChoiceFallback
+    ? (() => {
+        const relFor = (which: 'image' | 'image2') => (which === 'image' ? 'rIdImage' : 'rIdImage2')
+        const { choice, fallback } = spec.blipFillChoiceFallback!
+        return `<p:pic><p:nvPicPr><p:cNvPr id="32" name="Choice Fallback Fill 32" descr="Choice fallback fill"/>` +
+          `<p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+          `<p:blipFill><mc:AlternateContent xmlns:mc="${MC_NS}">` +
+          `<mc:Choice xmlns:p14="${MC_REQUIRES_NAMESPACES.p14}" Requires="p14">` +
+          `<a:blip r:embed="${relFor(choice)}"/></mc:Choice>` +
+          `<mc:Fallback><a:blip r:embed="${relFor(fallback)}"/></mc:Fallback>` +
+          `</mc:AlternateContent><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+          `<p:spPr/></p:pic>`
+      })()
     : ''
   const brokenImage = spec.brokenImage
     ? `<p:pic><p:nvPicPr><p:cNvPr id="11" name="Broken Picture 11"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
@@ -619,8 +680,9 @@ function slideXml(spec: PptxSlideSpec): string {
     (spec.pictureInChoiceOnlyAlternateContent ? choiceOnlyAlternateContentPicture() : '')
   const nested = spec.nestedGroupDepth ? nestedGroups(spec.nestedGroupDepth) : ''
 
-  const pictures = `${image}${secondImage}${linkedImage}${brokenImage}${blipWithoutReference}` +
-    `${missingMediaImage}${unpackageableImage}${drawingmlBlipFill}${blipFillAlternateContent}`
+  const pictures = `${image}${image2}${secondImage}${linkedImage}${brokenImage}${blipWithoutReference}` +
+    `${missingMediaImage}${unpackageableImage}${drawingmlBlipFill}` +
+    `${siblingBlipsInFill}${blipInExtLst}${blipFillChoiceFallback}`
   const shapes = spec.titleLast
     ? `${body}${pictures}${diagram}${chart}${video}${audio}${table}${oleObject}${group}${alternateContent}${nested}${title}`
     : `${title}${body}${pictures}${diagram}${chart}${video}${audio}${table}${oleObject}${group}${alternateContent}${nested}`
@@ -696,7 +758,8 @@ export const PPTX_CONTENT_TYPES = {
 
 export async function pptxFixture(
   slides: readonly PptxSlideSpec[],
-  { container = 'pptx', withMacroPart = false, imagePartName = 'image1.png' }: {
+  { container = 'pptx', withMacroPart = false, imagePartName = 'image1.png',
+    secondImagePartName = 'image-second.png' }: {
     container?: keyof typeof PPTX_CONTENT_TYPES
     /** Adds `ppt/vbaProject.bin`, as a real .pptm/.ppsm does. Never executed. */
     withMacroPart?: boolean
@@ -710,6 +773,14 @@ export async function pptxFixture(
      * package carries the author's own filename through.
      */
     imagePartName?: string
+    /**
+     * The BASENAME of a SECOND, independent embedded picture part, named by
+     * `image2`, `siblingBlipsInFill`, `blipInExtLst` and
+     * `blipFillChoiceFallback` on `PptxSlideSpec` — a part genuinely different
+     * from `imagePartName`'s, so a test can tell the two apart by which one an
+     * origin names.
+     */
+    secondImagePartName?: string
   } = {},
 ): Promise<Uint8Array<ArrayBuffer>> {
   const overrides = slides.map((_unused, index) =>
@@ -773,9 +844,13 @@ export async function pptxFixture(
       rels.push('<Relationship Id="rIdAudio" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio" Target="../media/audio1.m4a" TargetMode="External"/>')
     }
     if (slide.image || slide.secondImage || slide.video || slide.audio || slide.group?.image ||
-      slide.inkInAlternateContent || slide.pictureInChoiceOnlyAlternateContent || slide.drawingmlBlipFill) {
+      slide.inkInAlternateContent || slide.pictureInChoiceOnlyAlternateContent || slide.drawingmlBlipFill ||
+      slide.siblingBlipsInFill || slide.blipInExtLst || slide.blipFillChoiceFallback) {
       const target = slide.imageTargetOverride ?? `../media/${encodeURIComponent(imagePartName)}`
       rels.push(`<Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="${target}"/>`)
+    }
+    if (slide.image2 || slide.siblingBlipsInFill || slide.blipInExtLst || slide.blipFillChoiceFallback) {
+      rels.push(`<Relationship Id="rIdImage2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${encodeURIComponent(secondImagePartName)}"/>`)
     }
     if (slide.missingMediaImage) {
       // Declared, and pointing at a part deliberately never written below.
@@ -783,12 +858,6 @@ export async function pptxFixture(
     }
     if (slide.linkedImage) {
       rels.push('<Relationship Id="rIdLinkedImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="https://example.edu/cell.png" TargetMode="External"/>')
-    }
-    if (slide.blipFillAlternateContent) {
-      // `rIdNeverDeclared` — the Choice branch's own relationship — is
-      // deliberately absent: the Choice must never be visited at all, so
-      // nothing ever tries to resolve it.
-      rels.push('<Relationship Id="rIdFallbackBlip" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/imageFallback.png"/>')
     }
     if (rels.length > 0) {
       entries.push({ name: `ppt/slides/_rels/slide${index + 1}.xml.rels`, data: utf8(
@@ -799,14 +868,15 @@ export async function pptxFixture(
 
   if (slides.some((slide) => slide.image || slide.secondImage || slide.video || slide.audio ||
     slide.group?.image || slide.inkInAlternateContent || slide.pictureInChoiceOnlyAlternateContent ||
-    slide.drawingmlBlipFill)) {
+    slide.drawingmlBlipFill || slide.siblingBlipsInFill || slide.blipInExtLst || slide.blipFillChoiceFallback)) {
     entries.push({ name: `ppt/media/${imagePartName}`, data: EMBEDDED_IMAGE_PNG })
   }
   if (slides.some((slide) => slide.unpackageableImage || slide.oleObject)) {
     entries.push({ name: 'ppt/media/image2.emf', data: EMF_BYTES })
   }
-  if (slides.some((slide) => slide.blipFillAlternateContent)) {
-    entries.push({ name: 'ppt/media/imageFallback.png', data: EMBEDDED_IMAGE_PNG })
+  if (slides.some((slide) => slide.image2 || slide.siblingBlipsInFill || slide.blipInExtLst ||
+    slide.blipFillChoiceFallback)) {
+    entries.push({ name: `ppt/media/${secondImagePartName}`, data: EMBEDDED_IMAGE_PNG })
   }
   if (slides.some((slide) => slide.oleObject)) {
     // The worksheet itself: anydoc never renders it, but a real package always

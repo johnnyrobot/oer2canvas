@@ -585,6 +585,86 @@ test.each([
 })
 
 
+test('sibling a:blip elements in one p:blipFill: the FIRST is the picture, not both', async () => {
+  /*
+   * PowerPoint never authors two `a:blip` siblings in one fill; a converter
+   * can. MEASURED: anydoc renders ONE `<img>`, from the FIRST blip. An
+   * earlier version of the index collected every `a:blip` at any depth inside
+   * the chosen fill instead, which would have made this ONE shape's picture
+   * look like a reference to two different parts.
+   */
+  const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', siblingBlipsInFill: true },
+  ]))
+
+  expect(anydocHtml.match(/<img/g)).toHaveLength(1)
+  expect(index.slides[0]!.pictureOrigins).toEqual(['ppt/media/image1.png'])
+  expect(result.findings).toEqual([])
+})
+
+test('a second a:blip nested in an extLst does not double the picture', async () => {
+  /*
+   * Schema-legal: `a:extLst` holds vendor extensions, engineered here to hold
+   * a second, complete `a:blip` instead of an ordinary one. MEASURED: anydoc
+   * renders ONE `<img>`, from the OUTER blip. Walking every `a:blip` at any
+   * depth inside the chosen fill (an earlier version of the index) would find
+   * this nested one too.
+   */
+  const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', blipInExtLst: true },
+  ]))
+
+  expect(anydocHtml.match(/<img/g)).toHaveLength(1)
+  expect(index.slides[0]!.pictureOrigins).toEqual(['ppt/media/image1.png'])
+  expect(result.findings).toEqual([])
+})
+
+test('inside a blipFill, anydoc renders the FIRST blip written, not the branch Requires would pick', async () => {
+  /*
+   * MEASURED with real anydoc 0.2.4: unlike `walkShapes` on the shape tree,
+   * anydoc does not evaluate `mc:AlternateContent`'s `Requires` inside a
+   * blipFill at all — it renders whichever blip is written FIRST in document
+   * order. `Requires="p14"` would make `rendersChoiceBranch` prefer the
+   * Fallback at the shape-tree level; here the Choice (always written first)
+   * is what anydoc renders instead. An earlier version of this fix routed
+   * `readBlipOrigins` through `rendersChoiceBranch` to "inherit" that
+   * discipline, which read the FALLBACK's part here — the wrong one.
+   */
+  const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', blipFillChoiceFallback: { choice: 'image', fallback: 'image2' } },
+  ]))
+
+  expect(anydocHtml.match(/<img/g)).toHaveLength(1)
+  expect(index.slides[0]!.pictureOrigins).toEqual(['ppt/media/image1.png'])
+  expect(result.findings).toEqual([])
+})
+
+test('the motivating misattribution deck: a plain picture beside an mc:AlternateContent fill keeps its own picture', async () => {
+  /*
+   * Slide 1 carries a plain picture on the SECOND real image plus a
+   * `p:blipFill` wrapping `mc:AlternateContent` whose Choice names the FIRST
+   * real image and whose Fallback names the second. Slide 2 carries a plain
+   * picture on the first real image alone. An earlier version of this fix
+   * routed the blipFill's blip through `rendersChoiceBranch`, which prefers
+   * the Fallback for `Requires="p14"` — reading the SECOND image for slide
+   * 1's AC pic where anydoc renders the FIRST. MEASURED: that silently
+   * swapped which slide's heading each picture published under, with no
+   * finding at all — this pins the deck that exposed it.
+   */
+  const { anydocHtml, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', image2: { alt: 'Plain B' }, blipFillChoiceFallback: { choice: 'image', fallback: 'image2' } },
+    { title: 'Two', image: { alt: 'Plain A' } },
+  ]))
+
+  expect(anydocHtml.match(/<img/g)).toHaveLength(3)
+  const sections = sectionsOf(result.html)
+  expect(sections).toHaveLength(2)
+  expect([...sections[0]!.querySelectorAll('img')].map((image) => image.alt)).toContain('Plain B')
+  expect([...sections[0]!.querySelectorAll('img')].map((image) => image.alt)).not.toContain('Plain A')
+  expect([...sections[1]!.querySelectorAll('img')].map((image) => image.alt)).toEqual(['Plain A'])
+  expect(result.findings).toEqual([])
+})
+
 test("a choice-only mc:AlternateContent does not steal an earlier slide's picture", async () => {
   /*
    * THE SEVENTH COUNTEREXAMPLE, and the same SHAPE as the sixth: the index
