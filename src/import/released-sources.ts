@@ -131,6 +131,11 @@ export const RELEASED_SOURCES: readonly ReleasedSource[] = [
     maximumBytes: DOCUMENT_IMPORT_LIMITS.maximumInputBytes,
     limitations: capabilityFor('odp').limitations,
   },
+  // NO SPREADSHEET ROW, and that absence is a decision rather than an
+  // oversight. Issue 16 measured `xlsx`, `xls`, `ods` and `csv` against anydoc
+  // 0.2.4 on 2026-08-30 and left all four `probe-only` in the capability table;
+  // `probe-only` is not `enabled`, so the reconciliation test below still
+  // agrees with a table that now has four more entries than this list.
   {
     format: 'web',
     kind: 'url',

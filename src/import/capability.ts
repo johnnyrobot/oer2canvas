@@ -217,6 +217,108 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
     ],
     probe: parserProbe('anydoc', 'odp'),
   },
+  /*
+   * ===== SPREADSHEETS: PROBE-ONLY, by issue 16's measurement ==============
+   *
+   * These four entries add NO import path. `enabledCapabilityFor` in
+   * `document.ts` refuses any capability whose `status !== 'enabled'`, so they
+   * exist to put an accurate explanation in front of a user who selects one —
+   * which is what issue 16's sixth criterion asks for when the answer is no.
+   *
+   * The measurement, 2026-08-30 against anydoc 0.2.4, is in
+   * `.scratch/document-import/16-decide-spreadsheet-imports-design.md` and
+   * pinned by `spreadsheet-evidence.browser.test.ts`. The one fact that decides
+   * all four: `Table.headerRows` is a HEURISTIC on the shape of row 1, not a
+   * fact any spreadsheet format records. It comes back 0 for 94 of 104 real
+   * `.xlsx` worksheets and for 141 of 141 real legacy `.xls` worksheets, so the
+   * table reaches `engine/compile/steps/tables.ts` with no `<th>` at all; and
+   * it comes back 1 for a data row that merely happens to be text, marking data
+   * up as headers with nothing queued and nothing able to notice. The first
+   * failure is then unfixable in this workflow rather than merely inconvenient:
+   * a merged group header is a `rowspan`, ragged CSV and ODS rows are unequal
+   * widths, and `refusalToPromote` refuses BOTH — so the instructor gets a card
+   * that stays queued whatever they answer.
+   *
+   * Enabling any of these needs the bar in that design's "The bar, committed
+   * before the corpus is built", not a fresh judgement call.
+   */
+  {
+    format: 'xlsx',
+    label: 'Excel workbook',
+    /*
+     * `.xlsm` rides this entry for the reason the pptx entry gives above:
+     * `formatFromExtension` maps `xls`, `xlsm` and `xlsb` all onto `xlsx`
+     * (design fact 1), and a real macro-enabled workbook reports `xlsx` from
+     * its own content.
+     */
+    extensions: ['.xlsx', '.xlsm'],
+    mediaTypes: [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel.sheet.macroEnabled.12',
+    ],
+    parser: 'anydoc',
+    status: 'probe-only',
+    limitations: [
+      'Spreadsheets are not imported in this release. Copy the rows you need into a Word document, or paste them into the Markdown tab, and import that instead.',
+      'The parser cannot tell which row of a worksheet is its header, so a worksheet becomes a table a screen reader cannot navigate — and a header that spans two rows, or a table whose top-left cell is blank, gets no header at all.',
+      'A chart or picture on a worksheet is not imported and is not reported; hidden rows, columns, and sheets are dropped without being reported either.',
+      'A large workbook can be well under the 16 MiB limit and still use several times the memory this browser workflow budgets for a parse.',
+    ],
+    probe: parserProbe('anydoc', 'xlsx'),
+  },
+  {
+    format: 'xls',
+    label: 'Excel 97-2003 workbook',
+    /*
+     * A SEPARATE entry from `xlsx` even though anydoc has no `xls` format and
+     * reports `xlsx` for every real legacy file (design fact 2: 37 of 37 OLE2
+     * workbooks on the measuring machine). The pptx entry folds its family onto
+     * one row because those extensions SHARE a verdict and a released import
+     * path; this one is split because `.xls` has its own row in the README and
+     * its own evidence — every one of its 141 measured worksheets produced a
+     * table with no header cell, which is worse than the modern format, not
+     * merely equal to it. Nothing routes a parse through this entry, so the
+     * format collapse costs nothing here.
+     */
+    extensions: ['.xls'],
+    mediaTypes: ['application/vnd.ms-excel'],
+    parser: 'anydoc',
+    status: 'probe-only',
+    limitations: [
+      'Spreadsheets are not imported in this release, and this older Excel format is no better supported than the current one.',
+      'Every legacy workbook measured produced tables with no header row at all, so nothing in them could be published as an accessible table.',
+      'Open the file in Excel or LibreOffice, save the part you need as a Word document, and import that instead.',
+    ],
+    probe: parserProbe('anydoc', 'xls'),
+  },
+  {
+    format: 'ods',
+    label: 'OpenDocument spreadsheet',
+    extensions: ['.ods'],
+    mediaTypes: ['application/vnd.oasis.opendocument.spreadsheet'],
+    parser: 'anydoc',
+    status: 'probe-only',
+    limitations: [
+      'Spreadsheets are not imported in this release.',
+      'This format additionally PUBLISHES content you hid: a hidden sheet, a hidden row, and a hidden column all reach the page, which Excel workbooks do not do. That alone would block it.',
+      'Worksheets with merged header cells arrive with no header row, and rows of differing width, neither of which can be published as an accessible table.',
+    ],
+    probe: parserProbe('anydoc', 'ods'),
+  },
+  {
+    format: 'csv',
+    label: 'CSV data file',
+    extensions: ['.csv'],
+    mediaTypes: ['text/csv'],
+    parser: 'anydoc',
+    status: 'probe-only',
+    limitations: [
+      'Data files are not imported in this release. Paste the rows into the Markdown tab as a Markdown table, where you can mark the header row yourself.',
+      'A CSV that starts with a title line above its header — which is what most reporting tools export — is read as a single-column table for that line and a two-column table below it, so the whole file arrives misaligned.',
+      'A CSV carries no signature in its bytes, so unlike every other format here its identity would rest entirely on the file name.',
+    ],
+    probe: parserProbe('anydoc', 'csv'),
+  },
 ] as const
 
 const plainText = DOCUMENT_FORMAT_CAPABILITIES.find((entry) => entry.format === 'text')!
