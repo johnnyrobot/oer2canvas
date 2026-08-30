@@ -25,6 +25,13 @@ test.each(CORPUS_CASES)('$id imports and keeps the structure it stands in for', 
   for (const fragment of entry.expectInHtml) {
     expect(html, `${entry.id} lost ${fragment}`).toContain(fragment)
   }
+  // `expectInHtml` can only prove presence. The speaker-notes cases exist
+  // precisely to prove an ABSENCE — that the author's private notes did not
+  // reach the page — and a case that only asserted `expectInHtml` would pass
+  // while still leaking the note.
+  for (const fragment of entry.expectNotInHtml ?? []) {
+    expect(html, `${entry.id} leaked ${fragment}`).not.toContain(fragment)
+  }
 
   // Assert the EXACT set of blocker codes this case produces, not merely
   // "no blockers anywhere": `docx-footnote`, `docx-equation`, and

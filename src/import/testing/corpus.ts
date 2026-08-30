@@ -62,6 +62,12 @@ export interface CorpusCase {
   /** Substrings the imported html must contain, proving the structure survived. */
   expectInHtml: readonly string[]
   /**
+   * Substrings the imported html must NOT contain. Presence is not enough for a
+   * case whose whole point is that something was excluded: a notes case would
+   * pass `expectInHtml` while still leaking the note.
+   */
+  expectNotInHtml?: readonly string[]
+  /**
    * Finding codes this case is EXPECTED to block on, if any.
    *
    * Declared per case rather than asserting no case blocks, because some
@@ -219,6 +225,50 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     expectInHtml: ['<section data-slide="1"', '<section data-slide="2"', 'Photosynthesis', '<table'],
   },
   {
+    id: 'pptx-untitled-slide',
+    format: 'pptx',
+    standsInFor: 'A deck with a slide that carries only a text box — the case where anydoc alone loses the slide boundary entirely and content silently joins the previous slide.',
+    bytes: () => pptxFixture([
+      { title: 'First slide' },
+      { body: ['Body of an untitled slide'] },
+      { title: 'Third slide' },
+    ]),
+    expectInHtml: ['<section data-slide="2"', 'Slide 2'],
+  },
+  {
+    id: 'pptx-speaker-notes',
+    format: 'pptx',
+    standsInFor: "A deck whose author wrote private presenter reminders — the case where importing anydoc's output verbatim would publish them to students.",
+    bytes: () => pptxFixture([
+      { title: 'Photosynthesis', body: ['Light reactions'], notes: 'Do not read this to the class.' },
+    ]),
+    expectInHtml: ['Photosynthesis'],
+    expectNotInHtml: ['Do not read this to the class.'],
+  },
+  {
+    id: 'pptx-unrepresentable',
+    format: 'pptx',
+    standsInFor: 'A deck whose slide carries a SmartArt diagram, a chart, and a video — all three of which anydoc drops with no block and no asset, so only the index records that they existed.',
+    bytes: () => pptxFixture([
+      { title: 'Process overview', diagram: true, chart: true, video: true },
+    ]),
+    expectInHtml: ['Process overview'],
+  },
+  {
+    id: 'pptx-slideshow-container',
+    format: 'pptx',
+    standsInFor: 'A deck saved as .ppsx, proving the slideshow container detects as the same format the presentation container does rather than being refused at the door.',
+    bytes: () => pptxFixture([{ title: 'Slideshow deck' }], { container: 'ppsx' }),
+    expectInHtml: ['Slideshow deck'],
+  },
+  {
+    id: 'pptx-macro-container',
+    format: 'pptx',
+    standsInFor: 'A macro-enabled .pptm carrying a vbaProject part, proving a macro deck imports its slides and nothing of its macro.',
+    bytes: () => pptxFixture([{ title: 'Macro deck' }], { container: 'pptm', withMacroPart: true }),
+    expectInHtml: ['Macro deck'],
+  },
+  {
     id: 'odp-semantic',
     format: 'odp',
     standsInFor: 'The same ordinary lecture deck, authored in Impress and saved as OpenDocument Presentation instead of PowerPoint\'s OOXML — a titled page with bulleted body text and a second page carrying a data table, proving the reconciler\'s ODF path reaches the same per-page sections.',
@@ -227,6 +277,16 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
       { title: 'Where it happens', table: true },
     ]),
     expectInHtml: ['<section data-slide="1"', '<section data-slide="2"', 'Photosynthesis', '<table'],
+  },
+  {
+    id: 'odp-speaker-notes',
+    format: 'odp',
+    standsInFor: 'An Impress deck with presenter notes, the ODP form of the leak PPTX notes would cause.',
+    bytes: () => odpFixture([
+      { title: 'Photosynthesis', body: ['Light reactions'], notes: 'Do not read this to the class.' },
+    ]),
+    expectInHtml: ['Photosynthesis'],
+    expectNotInHtml: ['Do not read this to the class.'],
   },
 
   // ===== Structural properties, on DOCX and EPUB only =================
