@@ -23,6 +23,7 @@ import { mergeQueues } from './engine/compile/index'
 import { TABLE_REFUSAL } from './engine/compile/steps/tables'
 import type { CompiledChapter, CompiledSection, QueueItem } from './contracts/index'
 import { semanticDocxFixture } from './import/testing/docx-fixture'
+import { pptxFixture } from './import/testing/presentation-fixtures'
 // The screens under audit are styled by App.css — it is what carries the WCAG 2.2
 // SC 2.5.8 target sizes. Imported explicitly rather than relying on `App` pulling
 // it in, so that auditing a component in isolation still sees the real styling.
@@ -267,6 +268,59 @@ test('screen 1c — the document form and its page plan have no accessibility vi
   await screen.findByRole('heading', { name: 'Page plan: accessible' })
   fireEvent.click(screen.getByText('Preview accessible'))
   await screen.findByText('Stores DNA')
+
+  expect(await violationsIn(container)).toEqual([])
+  expect(duplicateIds(container)).toEqual([])
+})
+
+/**
+ * A deck is a DocumentImporter case, not a second import path: shaped exactly
+ * like screen 1c above, through the same `ImportFlow` harness, the same
+ * `DocumentImporter` form, and the same "Inspect document" → page plan →
+ * "Preview" sequence a user actually drives. What differs is the property
+ * worth pinning once a deck is on screen: `presentation/reconcile.ts` emits
+ * one `<section data-slide="N">` per slide, and each carries an `<h2>` slide
+ * title (`section`/`data-*` are Canvas-allowlisted; `h1` is not, which is why
+ * the title is an `h2`) — so a screen-reader user can move from slide to slide
+ * with heading navigation instead of reading one undifferentiated page.
+ *
+ * THREE slides, not two, and the middle one deliberately untitled — the same
+ * shape `testing/corpus.ts`'s `pptx-untitled-slide` case uses. A titled slide
+ * gets its heading id from anydoc itself (WASM this repo does not control, so
+ * mutating it to prove this test catches a regression is not possible from
+ * here); an untitled slide's heading id is `reconcile.ts`'s OWN fallback
+ * (`id="slide-${slide.number}"`, written only when anydoc produced no id of
+ * its own) — a real first-party code path this test CAN and does prove is
+ * load-bearing (see the mutation note in the task report). `#slide-N` is
+ * therefore correct for the untitled slide, but is NOT a general-purpose
+ * per-slide anchor: asserting a `slide-` prefix on every heading would wrongly
+ * pin a fallback the two ordinarily-titled slides never take. What actually
+ * makes a heading a valid in-page target is that it carries SOME id, which is
+ * asserted directly below rather than assumed for any particular slide.
+ */
+test('screen 1c-deck — an imported deck exposes each slide as a labelled, reachable section', async () => {
+  const { container } = render(<ImportFlow form={(onImported) => <DocumentImporter onImported={onImported} />} />)
+
+  const file = new File([await pptxFixture([
+    { title: 'Cell structure', body: ['The nucleus stores DNA.'] },
+    { body: ['A slide with only a text box, and so no title placeholder at all.'] },
+    { title: 'Cell function', body: ['Mitochondria produce energy.'] },
+  ])], 'cells.pptx', {
+    type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  })
+  fireEvent.change(screen.getByLabelText('Document file'), { target: { files: [file] } })
+  fireEvent.click(screen.getByRole('radio', { name: 'I created or own this content' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: /I am responsible for rights/i }))
+  fireEvent.click(screen.getByRole('button', { name: 'Inspect document' }))
+  await screen.findByRole('heading', { name: 'Page plan: cells' })
+  fireEvent.click(screen.getByText('Preview cells'))
+  await screen.findByText('Mitochondria produce energy.')
+
+  const headings = [...container.querySelectorAll('section[data-slide] > h2')]
+  // Slide 2's own title is empty, so `reconcile.ts` names it by number — the
+  // same "Slide 2" text `pptx-untitled-slide` measures in `testing/corpus.ts`.
+  expect(headings.map((heading) => heading.textContent)).toEqual(['Cell structure', 'Slide 2', 'Cell function'])
+  expect(headings.every((heading) => heading.id.length > 0)).toBe(true)
 
   expect(await violationsIn(container)).toEqual([])
   expect(duplicateIds(container)).toEqual([])

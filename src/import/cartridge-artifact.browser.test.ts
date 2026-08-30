@@ -28,17 +28,28 @@ import { writeZip } from '../engine/export/zip'
  * `zip.test.ts` gives: a zip verified only by its own writer is marking its
  * own homework.
  *
- * ONE CASE PER RELEASED FORMAT (ten), NOT THE WHOLE CORPUS (twenty-eight) —
+ * ONE CASE PER RELEASED FORMAT (ten), NOT THE WHOLE CORPUS (twenty-nine) —
  * the cartridge builder in `engine/export/cartridge.ts` is format-agnostic
  * downstream of import: by the time `toChapter` hands it a `Chapter`, every
  * format looks the same. Structural variants (merged cells, footnotes,
  * equations, deep headings, presentation notes and unrepresentable content,
  * …) exercise the IMPORTER, which `corpus.browser.test.ts` already runs
- * across the full twenty-eight-case corpus. Running all twenty-eight here,
- * twice each for determinism, would be fifty-six full compile+audit+zip
+ * across the full twenty-nine-case corpus. Running all twenty-nine here,
+ * twice each for determinism, would be fifty-eight full compile+audit+zip
  * pipelines that could only ever re-confirm what that file already confirms
  * about parsing — nothing about cartridge shape depends on which structural
  * property a given DOCX, EPUB, PPTX or ODP exercises.
+ *
+ * ONE EXCEPTION: whether the page carries a packaged asset at all. That IS
+ * something cartridge shape can differ on — a `web_resources/` entry and a
+ * manifest `<file>` reference either exist or they don't — and no case for
+ * ANY format used to put an image on the page this suite actually exports.
+ * `engine/export/cartridge.test.ts` already unit-tests that packaging against
+ * a synthetic, hand-built asset, but never proves the real path (anydoc parse
+ * → `presentation/reconcile.ts` → compile → `buildCartridge` → a real zip)
+ * carries a slide's own picture into an archive a real `unzip` can open. That
+ * is why `testing/corpus.ts` puts `pptx-packaged-image`, not `pptx-semantic`,
+ * first among the PPTX cases: it becomes this file's PPTX entry below.
  */
 const metadata = {
   title: 'Artifact release check',
@@ -48,15 +59,13 @@ const metadata = {
 
 /*
  * `CORPUS_CASES` (testing/corpus.ts) lists its per-format baseline case —
- * `*-semantic` for every format except PDF, whose baseline is
- * `pdf-text-multipage` — BEFORE any structural variant, and its own module
- * comment says so explicitly: "Every one of the ten released file formats
- * … gets its own semantic case" ahead of "Beyond that baseline, six
- * structural properties … are exercised on TWO formats only". Taking the
- * FIRST case seen for each format, rather than matching on an id suffix like
- * `-semantic`, is what makes this selection correct for PDF too without a
- * special case, and keeps this file from needing its own hard-coded id list
- * that could drift from the corpus's actual contents.
+ * `*-semantic` for every format except PDF (`pdf-text-multipage`) and PPTX
+ * (`pptx-packaged-image`, deliberately placed ahead of `pptx-semantic` — see
+ * the module comment above) — BEFORE any other case for that format. Taking
+ * the FIRST case seen for each format, rather than matching on an id suffix
+ * like `-semantic`, is what makes this selection correct for PDF and PPTX too
+ * without a special case, and keeps this file from needing its own
+ * hard-coded id list that could drift from the corpus's actual contents.
  */
 const RELEASED_FORMAT_CASES: readonly CorpusCase[] = (() => {
   const seen = new Set<CorpusCase['format']>()

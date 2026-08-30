@@ -49,6 +49,15 @@ const utf8 = (value: string) => new TextEncoder().encode(value)
  * `expectInHtml`: an importer that silently dropped the finding a construct
  * is supposed to raise would still pass a check that only looked at the html.
  *
+ * `pptx-packaged-image` is the eighth PPTX case, and it is placed FIRST
+ * among them rather than after `pptx-semantic` for a reason specific to
+ * `cartridge-artifact.browser.test.ts`: that suite runs the real export
+ * pipeline and a real `unzip` against only the FIRST case per format, so a
+ * described image has to lead the PPTX cases for the real
+ * parse-compile-cartridge-zip path to ever package a slide's own picture, not
+ * merely the synthetic asset `engine/export/cartridge.test.ts` already
+ * unit-tests. See that suite's own module comment for the full reasoning.
+ *
  * The seventh structural property the design considered, a hostile
  * construct, is deliberately NOT reproduced here: `security.browser.test.ts`
  * already pins the archive-bomb and active-content refusals this release
@@ -236,6 +245,26 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     standsInFor: 'A multi-page text-based PDF chapter: the case PDF import exists for, where page markers drive the split and every page must produce text.',
     bytes: async () => pdfFixture(3, 'Corpus'),
     expectInHtml: ['Corpus page 1', 'Corpus page 3'],
+  },
+  {
+    /*
+     * Placed BEFORE `pptx-semantic` deliberately, not appended after it:
+     * `cartridge-artifact.browser.test.ts` takes the FIRST case seen per
+     * format as its one real-export-and-`unzip` case for that format, and no
+     * other case in this corpus (for ANY format) puts an image on the page
+     * that first case exports. `engine/export/cartridge.test.ts` already
+     * unit-tests `web_resources/` packaging against a synthetic, hand-built
+     * asset, but that never proves the real path — anydoc parse →
+     * `presentation/reconcile.ts` → compile → `buildCartridge` → a real
+     * zip — actually carries a slide's own picture into the archive a real
+     * `unzip` can open. Putting this case first is what makes that path a
+     * cartridge-artifact case at all, for pptx or any other format.
+     */
+    id: 'pptx-packaged-image',
+    format: 'pptx',
+    standsInFor: 'A deck with a described image, proving slide media packages into web_resources like every other format — exercised end to end (real parse, real compile, real cartridge, real unzip) rather than only at the unit level `cartridge.test.ts` already covers with a synthetic asset.',
+    bytes: () => pptxFixture([{ title: 'Diagram slide', image: { alt: 'A labelled chloroplast' } }]),
+    expectInHtml: ['Diagram slide', '<img'],
   },
   {
     id: 'pptx-semantic',

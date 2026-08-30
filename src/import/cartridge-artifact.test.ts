@@ -79,12 +79,48 @@ test.each(releaseEnabledFormats())(
     // The shape issue 07 measured Canvas accepting, and the same two
     // substrings `packaged-cartridge.browser.test.ts` already asserts against
     // the in-memory manifest string: a real `<manifest>` root, and at least
-    // one `type="webcontent"` resource (the page itself, since every released
-    // format here is a single-page, no-embedded-asset case).
+    // one `type="webcontent"` resource — the page itself, for every format
+    // except PPTX, whose baseline case now also carries a packaged image (see
+    // the dedicated test below).
     expect(manifest).toContain('<manifest')
     expect(manifest).toContain('type="webcontent"')
   },
 )
+
+/**
+ * PPTX ALONE, because `testing/corpus.ts` deliberately puts a case with a
+ * described image first among its PPTX cases (see that module's own comment)
+ * so THIS format's one baseline case, of all ten, actually carries a
+ * packaged asset through the real pipeline. Every other format's baseline
+ * case is still the no-embedded-asset shape the loop above's comment
+ * describes — this is the one place that a `web_resources/` entry surviving
+ * real parse → compile → `buildCartridge` → zip is checked against a REAL
+ * `unzip`, closing the gap `engine/export/cartridge.test.ts`'s synthetic
+ * asset cannot: that unit test proves `buildCartridge` packages an asset it
+ * is HANDED, never that a real deck's own picture reaches one.
+ */
+test('the pptx cartridge packages its slide image into web_resources, verified by a real unzip', () => {
+  const path = cartridgeArtifactPath('pptx')
+  if (!existsSync(path)) {
+    throw new Error(`${path} does not exist. Run '${PRODUCE_ARTIFACTS_COMMAND}' to build it, then re-run.`)
+  }
+  const archive = unzipped(path)
+  // `prepareAssets` (`import/assets.ts`) names a PNG asset `image1-<hash>.png`
+  // and `engine/export/cartridge.ts` archives it under `oer2canvas/` inside
+  // `web_resources/` — the exact shape `cartridge.test.ts` pins with a
+  // synthetic asset, matched here by pattern because the hash is the real
+  // image's own content hash, not a value this test controls.
+  expect(archive.list).toMatch(/web_resources\/oer2canvas\/image1-[0-9a-f]+\.png/)
+
+  const manifest = archive.read('imsmanifest.xml')
+  const webcontentResources = manifest.match(/type="webcontent"/g) ?? []
+  // TWO: one `<resource>` for the page itself (every format's manifest has
+  // this one), and a SECOND for the packaged image — the count that proves
+  // the asset has its own manifest resource rather than merely sitting in the
+  // zip unreferenced, which Canvas would then have no reason to import.
+  expect(webcontentResources).toHaveLength(2)
+  expect(manifest).toMatch(/<file href="web_resources\/oer2canvas\/image1-[0-9a-f]+\.png"\/>/)
+})
 
 /**
  * A REAL unzip, because our own reader agreeing with our own writer proves
