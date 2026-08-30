@@ -32,17 +32,37 @@ import type { PresentationIndex, PresentationSlideIndex } from './index'
  * which slide it came from. That used to be answered by a per-slide COUNT the
  * index predicted from the deck's XML, and five review rounds each found a
  * shape the prediction got wrong — a video's poster frame, a broken embed, an
- * ink `mc:Fallback`, an OLE preview, a namespace-keyed `mc` branch rule. A
- * count cannot close that class: a silent misattribution needs an
+ * ink `mc:Fallback`, an OLE preview, a namespace-keyed `mc` branch rule. Under
+ * a count, ANY picture could be published under ANY slide: an
  * uncounted-but-emitted picture on one slide paid for by a
- * counted-but-unemitted picture on another, and the totals then balance. Being
- * uncounted is precisely the defect, so no counting rule can see it.
+ * counted-but-unemitted picture on another leaves the totals balanced, and
+ * being uncounted is precisely the defect, so no counting rule can see it.
  *
  * Both accounts already hold an identity instead. `parsers/anydoc-html.ts` tags
  * every picture it emits with the package part its bytes came from (or, for a
  * picture linked from outside the package, that URL) in
  * `data-origin-part`; the index records, per slide, the set of those same parts
  * the slide's own shapes reference. `claimPictures` below joins the two.
+ *
+ * WHAT THE JOIN GUARANTEES, AND WHAT IT DOES NOT. Both halves are load-bearing
+ * and the difference is the difference between two defects:
+ *
+ * - GUARANTEED, unconditionally, whether or not any finding fires: a picture
+ *   block is never published under a slide that does not reference its origin
+ *   part. `claimPictures` returns false for an unreferenced part and the block
+ *   ends the slide, so the BYTES under a heading are always bytes that slide's
+ *   own shapes point at. That is what a count could never promise.
+ * - NOT GUARANTEED: WHICH INSTANCE of a part shared by several slides lands
+ *   under which of them. That still rests on the index and anydoc agreeing
+ *   about how many blocks each slide produces for that part, which is a
+ *   prediction about anydoc's shape selection of exactly the kind the join was
+ *   meant to retire. An over-collected reference on one slide paid for by an
+ *   over-emitted block on another still balances and still misattributes — one
+ *   such shape (ODF `draw:frame` alternatives) was measured doing it after this
+ *   join landed, and the fix was in the index's collection rule, not here.
+ *
+ * The honest summary: the bytes under a heading are guaranteed to be that
+ * slide's, the instance is not.
  *
  * So a slide's expected text is its runs CONCATENATED, and blocks are consumed
  * while the text accumulated so far remains a PREFIX of it. The slide is
@@ -296,6 +316,11 @@ function countPhrase(counts: PresentationSlideIndex['unrepresentable']): string 
     counts.charts > 0 ? `${counts.charts} chart${counts.charts === 1 ? '' : 's'}` : '',
     // "media" is already both singular and plural; a count is enough.
     counts.media > 0 ? `${counts.media} media` : '',
+    // A picture the DECK points at and the package does not contain. Nothing
+    // else records it: anydoc emits no block and raises no finding, and the
+    // index resolves the reference to no part, so the deck would otherwise
+    // import with nothing anywhere saying a picture had been there.
+    counts.pictures > 0 ? `${counts.pictures} picture${counts.pictures === 1 ? '' : 's'}` : '',
   ].filter(Boolean).join(', ')
 }
 
@@ -359,7 +384,7 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
   const lossy: number[] = []
   const missingText: number[] = []
   const missingPictures: number[] = []
-  const lostTotals = { diagrams: 0, charts: 0, media: 0 }
+  const lostTotals = { diagrams: 0, charts: 0, media: 0, pictures: 0 }
 
   for (const slide of slides) {
     const expected = squeeze(slide.textRuns.join(''))
@@ -487,6 +512,7 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
       lostTotals.diagrams += slide.unrepresentable.diagrams
       lostTotals.charts += slide.unrepresentable.charts
       lostTotals.media += slide.unrepresentable.media
+      lostTotals.pictures += slide.unrepresentable.pictures
     }
 
     /*

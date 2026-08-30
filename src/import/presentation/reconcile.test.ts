@@ -28,7 +28,7 @@ const slide = (
   textRuns: [],
   pictureOrigins: [],
   titleOutOfOrder: false,
-  unrepresentable: { diagrams: 0, charts: 0, media: 0 },
+  unrepresentable: { diagrams: 0, charts: 0, media: 0, pictures: 0 },
   ...overrides,
 })
 
@@ -173,13 +173,13 @@ test('notes on several slides produce ONE warning naming every slide', () => {
   expect(result.html).not.toContain('Note for')
 })
 
-test('a diagram, chart, or media is named on its own slide', () => {
+test('a diagram, chart, medium, or missing picture is named on its own slide', () => {
   const result = reconcilePresentation({
     html: '<h2>Process overview</h2>',
     index: index([slide(1, {
       title: 'Process overview',
       textRuns: ['Process overview'],
-      unrepresentable: { diagrams: 1, charts: 1, media: 2 },
+      unrepresentable: { diagrams: 1, charts: 1, media: 2, pictures: 1 },
     })]),
     sourceLabel: 'PPTX',
   })
@@ -187,16 +187,40 @@ test('a diagram, chart, or media is named on its own slide', () => {
   const finding = only(result, 'presentation-unrepresentable')
   expect(finding.severity).toBe('warning')
   expect(finding.sourcePage).toBe(1)
-  expect(finding.message).toMatch(/1 diagram, 1 chart, 2 media/)
+  expect(finding.message).toMatch(/1 diagram, 1 chart, 2 media, 1 picture/)
+})
+
+test('a picture the package does not contain is reported rather than vanishing', () => {
+  /*
+   * A blip naming a relationship the package never declared. anydoc emits no
+   * block and raises no finding, and the index resolves the reference to no
+   * part — the two accounts agree exactly, so nothing here refuses, and without
+   * this count the deck would import with nothing anywhere saying a picture had
+   * been there. It is a loss to report, not a disagreement to block on.
+   */
+  const result = reconcilePresentation({
+    html: '<h2>One</h2>',
+    index: index([slide(1, {
+      title: 'One',
+      textRuns: ['One'],
+      unrepresentable: { diagrams: 0, charts: 0, media: 0, pictures: 1 },
+    })]),
+    sourceLabel: 'PPTX',
+  })
+
+  const finding = only(result, 'presentation-unrepresentable')
+  expect(finding.severity).toBe('warning')
+  expect(finding.message).toContain('Slide 1 contains 1 picture that could not be imported')
+  expect(codes(result)).not.toContain('presentation-unattributed-content')
 })
 
 test('unrepresentable content on several slides is summed into ONE warning', () => {
   const result = reconcilePresentation({
     html: '<h2>One</h2><h2>Two</h2><h2>Three</h2>',
     index: index([
-      slide(1, { title: 'One', textRuns: ['One'], unrepresentable: { diagrams: 1, charts: 0, media: 0 } }),
+      slide(1, { title: 'One', textRuns: ['One'], unrepresentable: { diagrams: 1, charts: 0, media: 0, pictures: 0 } }),
       slide(2, { title: 'Two', textRuns: ['Two'] }),
-      slide(3, { title: 'Three', textRuns: ['Three'], unrepresentable: { diagrams: 2, charts: 1, media: 0 } }),
+      slide(3, { title: 'Three', textRuns: ['Three'], unrepresentable: { diagrams: 2, charts: 1, media: 0, pictures: 0 } }),
     ]),
     sourceLabel: 'PPTX',
   })

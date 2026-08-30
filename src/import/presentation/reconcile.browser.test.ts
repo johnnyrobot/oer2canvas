@@ -206,7 +206,13 @@ test("a broken embed no longer costs the next slide its picture", async () => {
   expect(sections[0]!.querySelector('img')).toBeNull()
   expect(sections[1]!.querySelector('img')).not.toBeNull()
   expect(sections[2]!.querySelector('img')).toBeNull()
-  expect(result.findings.map((finding) => finding.code)).toEqual(['presentation-untitled-slide'])
+  // The broken reference is REPORTED, not silent: anydoc emits no block and
+  // raises no finding for it, and the index resolves it to no part, so without
+  // this count the deck would import with nothing saying a picture had been
+  // there. It is a loss to name, not a disagreement to block on.
+  expect(result.findings.map((finding) => finding.code))
+    .toEqual(['presentation-untitled-slide', 'presentation-unrepresentable'])
+  expect(result.findings[1]!.message).toContain('Slide 1 contains 1 picture')
 })
 
 test.each([
@@ -386,7 +392,10 @@ test('the deck that used to refuse for a broken embed now attributes every pictu
     { title: 'Two', body: ['Body two'], oleObject: true },
   ]))
 
-  expect(result.findings).toEqual([])
+  // Only the broken reference on slide 1 is reported, and as a LOSS rather than
+  // a refusal: both slides' pictures are attributed correctly.
+  expect(result.findings.map((finding) => finding.code)).toEqual(['presentation-unrepresentable'])
+  expect(result.findings[0]!.message).toContain('Slide 1 contains 1 picture')
   const sections = sectionsOf(result.html)
   expect(sections[0]!.textContent).not.toContain('Body two')
   expect(sections[0]!.textContent).not.toContain('[Embedded image')
@@ -496,4 +505,81 @@ test('no join key survives into the html this module publishes', async () => {
   expect(result.html).toContain('<img')
   expect(result.html).toContain('[Embedded image')
   expect(result.findings.map((finding) => finding.code)).toEqual([])
+})
+
+
+
+test('an odp frame\'s alternative pictures do not steal another slide\'s picture', async () => {
+  /*
+   * THE SIXTH COUNTEREXAMPLE, and the one that shows what the join does and
+   * does not guarantee. ODF 1.3 §10.4.2 makes a `draw:frame`'s children
+   * ALTERNATIVE representations of one object; the index collected all of them.
+   *
+   * Page 1 shows one picture twice (`Pictures/image1.png`), page 2 has a single
+   * frame whose alternatives are `Pictures/image2.gif` then that same
+   * `Pictures/image1.png`. The over-collected reference made `image1.png` look
+   * like two slides' part, the sole-referencer rule then capped page 1 — its
+   * true and ONLY owner — at one block and handed page 2 a claim on the
+   * surplus, and the balance still came out even because the part page 2
+   * over-claimed is exactly the part it over-collected. Page 1's second picture
+   * published inside `<section data-slide="2">` with NO findings at all.
+   *
+   * Taking only the first child restores the agreement: anydoc renders the
+   * first alternative, and so does the index.
+   */
+  const { anydocHtml, index, result } = await reconcileFixture([
+    { title: 'One', image: { alt: 'First' }, secondImage: { alt: 'Second' } },
+    { title: 'Two', alternateImages: true },
+  ])
+
+  // anydoc renders the FIRST alternative and nothing else — three blocks, not four.
+  expect(anydocHtml.match(/<img/g)).toHaveLength(3)
+
+  // The misattribution itself is asserted FIRST, so a regression fails on the
+  // published sections rather than on the index reading that produced them.
+  const sections = sectionsOf(result.html)
+  expect([...sections[0]!.querySelectorAll('img')].map((image) => image.alt)).toEqual(['First', 'Second'])
+  expect([...sections[1]!.querySelectorAll('img')].map((image) => image.alt)).toEqual([''])
+  expect(result.findings).toEqual([])
+  expect(index.slides[1]!.pictureOrigins).toEqual(['Pictures/image2.gif'])
+})
+
+test('an odp frame carrying only alternatives imports instead of refusing', async () => {
+  // The benign half of the same defect: on its own, a frame with two
+  // alternative children made the index expect two pictures where anydoc emits
+  // one, so any converter-produced deck using alternative representations was
+  // unimportable — "slide 1 is missing a picture the deck says it carries".
+  const { anydocHtml, result } = await reconcileFixture([
+    { title: 'One', alternateImages: true },
+  ])
+
+  expect(anydocHtml.match(/<img/g)).toHaveLength(1)
+  expect(result.findings).toEqual([])
+  expect(sectionsOf(result.html)[0]!.querySelector('img')).not.toBeNull()
+})
+
+test.each([
+  ['a space', 'image 1.png'],
+  ['a reserved character', 'image#2.png'],
+] as const)('a media part whose name contains %s still joins', async (_name, imagePartName) => {
+  /*
+   * An OPC relationship `Target` is a URI reference, so `image 1.png` is
+   * written `../media/image%201.png` while the ZIP entry keeps the literal
+   * name. The index resolved that target by string surgery — `ppt/` plus the
+   * target with a leading `../` removed — which percent-decoded nothing:
+   * MEASURED, it produced `ppt/media/image%201.png` while anydoc reported
+   * `ppt/media/image 1.png`, and a media file with a space in its name refused
+   * the whole deck. That resolution only located a notes part before pictures
+   * were joined on it, so the exposure was new.
+   */
+  const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture(
+    [{ title: 'One', body: ['Body one'], image: { alt: 'A cell' } }],
+    { imagePartName },
+  ))
+
+  // The two accounts agree on the DECODED name, which is the ZIP entry's own.
+  expect(anydocHtml).toContain(`data-origin-part="ppt/media/${imagePartName}"`)
+  expect(index.slides[0]!.pictureOrigins).toEqual([`ppt/media/${imagePartName}`])
+  expect(result.findings).toEqual([])
+  expect(sectionsOf(result.html)[0]!.querySelector('img')).not.toBeNull()
 })

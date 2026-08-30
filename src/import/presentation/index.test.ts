@@ -61,13 +61,13 @@ test('diagrams, charts, and media are counted per slide (design fact 6)', async 
     { title: 'Process overview', diagram: true, chart: true, video: true },
   ]))
 
-  expect(index.slides[0]!.unrepresentable).toEqual({ diagrams: 1, charts: 1, media: 1 })
+  expect(index.slides[0]!.unrepresentable).toEqual({ diagrams: 1, charts: 1, media: 1, pictures: 0 })
 })
 
 test('a table is not counted as unrepresentable, because anydoc emits it', async () => {
   const index = await indexOf(await pptxFixture([{ title: 'Where it happens', table: true }]))
 
-  expect(index.slides[0]!.unrepresentable).toEqual({ diagrams: 0, charts: 0, media: 0 })
+  expect(index.slides[0]!.unrepresentable).toEqual({ diagrams: 0, charts: 0, media: 0, pictures: 0 })
 })
 
 test('a title split across runs mid-word is joined with no separator (fix-review Important 1)', async () => {
@@ -100,7 +100,7 @@ test('shapes nested in a group are visited: diagram and video counted, grouped t
     },
   ]))
 
-  expect(index.slides[0]!.unrepresentable).toEqual({ diagrams: 1, charts: 0, media: 1 })
+  expect(index.slides[0]!.unrepresentable).toEqual({ diagrams: 1, charts: 0, media: 1, pictures: 0 })
   expect(index.slides[0]!.textRuns).toEqual(['Cellular respiration', 'Overview', 'Grouped caption'])
 })
 
@@ -114,7 +114,7 @@ test('content inside mc:AlternateContent is counted exactly once, from the branc
     { title: 'Newer PowerPoint construct', diagramInAlternateContent: true },
   ]))
 
-  expect(index.slides[0]!.unrepresentable).toEqual({ diagrams: 0, charts: 1, media: 0 })
+  expect(index.slides[0]!.unrepresentable).toEqual({ diagrams: 0, charts: 1, media: 0, pictures: 0 })
 })
 
 test('mc:AlternateContent is read from the Fallback branch, because that is what anydoc renders', async () => {
@@ -644,6 +644,27 @@ test('a linked picture is identified by its URL, and a picture with no blip refe
 
   const withoutBlip = await indexOf(await pptxFixture([{ title: 'One', blipWithoutReference: true }]))
   expect(withoutBlip.slides[0]!.pictureOrigins).toEqual([])
+})
+
+test('a blip naming an undefined relationship is reported as a lost picture', async () => {
+  /*
+   * The one loss nothing else records. MEASURED: anydoc emits no block for such
+   * a `p:pic` and raises no finding of its own, and the reference resolves to
+   * no part here — so the two accounts AGREE, nothing refuses, and without this
+   * count the deck imports with nothing anywhere saying a picture had been
+   * there. Under the old budget it produced a blocker, with wording that sent
+   * the author looking at the wrong slide; the loss itself is real and belongs
+   * in `unrepresentable`, beside the diagram and the video.
+   *
+   * A blip naming NO relationship at all is not the same thing and is not
+   * counted: it references no image data, so nothing was ever there to lose.
+   */
+  const dangling = await indexOf(await pptxFixture([{ title: 'One', brokenImage: true }]))
+  expect(dangling.slides[0]!.pictureOrigins).toEqual([])
+  expect(dangling.slides[0]!.unrepresentable).toEqual({ diagrams: 0, charts: 0, media: 0, pictures: 1 })
+
+  const bare = await indexOf(await pptxFixture([{ title: 'One', blipWithoutReference: true }]))
+  expect(bare.slides[0]!.unrepresentable).toEqual({ diagrams: 0, charts: 0, media: 0, pictures: 0 })
 })
 
 test('an odp picture inside speaker notes is not recorded as a picture on the slide', async () => {

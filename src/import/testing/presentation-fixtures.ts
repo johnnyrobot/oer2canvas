@@ -580,10 +580,20 @@ export const PPTX_CONTENT_TYPES = {
 
 export async function pptxFixture(
   slides: readonly PptxSlideSpec[],
-  { container = 'pptx', withMacroPart = false }: {
+  { container = 'pptx', withMacroPart = false, imagePartName = 'image1.png' }: {
     container?: keyof typeof PPTX_CONTENT_TYPES
     /** Adds `ppt/vbaProject.bin`, as a real .pptm/.ppsm does. Never executed. */
     withMacroPart?: boolean
+    /**
+     * The BASENAME of the embedded picture part, `image1.png` by default. A
+     * relationship `Target` is a URI reference, so the name is percent-encoded
+     * into the rels while the ZIP entry keeps it literally — which is how a
+     * media file with a space or a reserved character in its name reaches the
+     * index's part resolver at all. PowerPoint itself always writes
+     * `imageN.ext`, but a converter, a Google Slides export, or a hand-edited
+     * package carries the author's own filename through.
+     */
+    imagePartName?: string
   } = {},
 ): Promise<Uint8Array<ArrayBuffer>> {
   const overrides = slides.map((_unused, index) =>
@@ -648,7 +658,7 @@ export async function pptxFixture(
     }
     if (slide.image || slide.secondImage || slide.video || slide.audio || slide.group?.image ||
       slide.inkInAlternateContent) {
-      rels.push('<Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>')
+      rels.push(`<Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${encodeURIComponent(imagePartName)}"/>`)
     }
     if (slide.missingMediaImage) {
       // Declared, and pointing at a part deliberately never written below.
@@ -666,7 +676,7 @@ export async function pptxFixture(
 
   if (slides.some((slide) => slide.image || slide.secondImage || slide.video || slide.audio ||
     slide.group?.image || slide.inkInAlternateContent)) {
-    entries.push({ name: 'ppt/media/image1.png', data: EMBEDDED_IMAGE_PNG })
+    entries.push({ name: `ppt/media/${imagePartName}`, data: EMBEDDED_IMAGE_PNG })
   }
   if (slides.some((slide) => slide.unpackageableImage || slide.oleObject)) {
     entries.push({ name: 'ppt/media/image2.emf', data: EMF_BYTES })
@@ -759,6 +769,23 @@ export interface OdpPageSpec {
   /** Emit the title frame LAST in the page — ODP's form of design fact 4. */
   titleLast?: boolean
   image?: { alt?: string }
+  /**
+   * A SECOND `draw:frame` referencing the SAME picture part as `image` — the
+   * ODF analogue of PPTX's `secondImage`, and the shape that makes "twice on
+   * one page" and "once on each of two pages" the same set of parts.
+   */
+  secondImage?: { alt?: string }
+  /**
+   * ONE `draw:frame` holding TWO `draw:image` children — `Pictures/image2.gif`
+   * then `Pictures/image1.png`. ODF 1.3 §10.4.2 makes a frame's children
+   * ALTERNATIVE representations of one object, of which a consumer renders the
+   * first it supports, so this frame is ONE picture and not two. Converters
+   * write it (a vector original with a raster fallback, or the reverse);
+   * collecting both children made an index expect a picture anydoc never
+   * emits, which was measured misattributing another page's picture rather
+   * than merely refusing.
+   */
+  alternateImages?: boolean
   /**
    * A `draw:plugin` carrying a media mime type — the shape Impress writes for
    * an inserted video — optionally with a `draw:image` POSTER in the same
@@ -968,6 +995,19 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
         (page.image.alt === undefined ? '' : `<svg:desc>${xmlEscape(page.image.alt)}</svg:desc>`) +
         `</draw:frame>`
       : ''
+    const secondImage = page.secondImage
+      ? `<draw:frame draw:name="Second diagram ${index + 1}" svg:width="1cm" svg:height="1cm">` +
+        `<draw:image xlink:href="Pictures/image1.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
+        (page.secondImage.alt === undefined ? '' : `<svg:desc>${xmlEscape(page.secondImage.alt)}</svg:desc>`) +
+        `</draw:frame>`
+      : ''
+    // ONE frame, TWO alternative children: the first a consumer supports wins.
+    const alternateImages = page.alternateImages
+      ? `<draw:frame draw:name="Alternatives ${index + 1}" svg:width="1cm" svg:height="1cm">` +
+        `<draw:image xlink:href="Pictures/image2.gif" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
+        `<draw:image xlink:href="Pictures/image1.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
+        `</draw:frame>`
+      : ''
     const customShape = page.customShapeText ? odpCustomShape(`Custom Shape ${index + 1}`, page.customShapeText) : ''
     const groupedCustomShape = page.groupedCustomShapeText
       ? odpGroup(`Group ${index + 1}`, odpCustomShape(`Grouped Custom Shape ${index + 1}`, page.groupedCustomShapeText))
@@ -984,7 +1024,10 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
     // A direct child of draw:page, the same level presentation:notes sits at.
     const comment = page.commentText ? odpAnnotation(`Comment ${index + 1}`, page.commentText) : ''
     const extras = `${customShape}${groupedCustomShape}${nestedFrame}${table}${media}`
-    const frames = page.titleLast ? `${outline}${image}${extras}${title}` : `${title}${outline}${image}${extras}`
+    const pictures = `${image}${secondImage}${alternateImages}`
+    const frames = page.titleLast
+      ? `${outline}${pictures}${extras}${title}`
+      : `${title}${outline}${pictures}${extras}`
     return `<draw:page draw:name="Slide ${index + 1}" draw:master-page-name="Default">${frames}${notes}${comment}</draw:page>`
   }).join('')
 
@@ -1000,14 +1043,24 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
       `<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">` +
       `<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.presentation"/>` +
       `<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>` +
-      (pages.some((page) => page.image || page.notesImage || page.video?.poster)
+      (pages.some((page) => page.image || page.secondImage || page.alternateImages || page.notesImage ||
+        page.video?.poster)
         ? `<manifest:file-entry manifest:full-path="Pictures/image1.png" manifest:media-type="image/png"/>`
+        : '') +
+      (pages.some((page) => page.alternateImages)
+        ? `<manifest:file-entry manifest:full-path="Pictures/image2.gif" manifest:media-type="image/gif"/>`
         : '') +
       `</manifest:manifest>`) },
     { name: 'content.xml', data: utf8(content) },
   ]
-  if (pages.some((page) => page.image || page.notesImage || page.video?.poster)) {
+  if (pages.some((page) => page.image || page.secondImage || page.alternateImages || page.notesImage ||
+    page.video?.poster)) {
     entries.push({ name: 'Pictures/image1.png', data: EMBEDDED_IMAGE_PNG })
+  }
+  if (pages.some((page) => page.alternateImages)) {
+    // Deliberately different bytes AND a different part, so a test can tell the
+    // two alternatives apart by which one anydoc actually rendered.
+    entries.push({ name: 'Pictures/image2.gif', data: RASTER_FIXTURES.gif.bytes })
   }
   return writeZip(entries) as Promise<Uint8Array<ArrayBuffer>>
 }

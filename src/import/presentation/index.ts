@@ -35,8 +35,18 @@ export interface PresentationSlideIndex {
   pictureOrigins: readonly string[]
   /** The title placeholder is not first in reading order. */
   titleOutOfOrder: boolean
-  /** Content anydoc drops with no block and no asset. */
-  unrepresentable: { diagrams: number; charts: number; media: number }
+  /**
+   * Content anydoc drops with no block and no asset.
+   *
+   * `pictures` is the one that is not anydoc's decision: a blip naming a
+   * relationship the package never declared. Nothing anywhere else records it —
+   * anydoc emits no block and raises no finding, and the index resolves the
+   * reference to no part — so without this the deck imports and NOTHING says a
+   * picture was ever there. It is a loss to report, not a disagreement to
+   * refuse on: the two accounts agree exactly, and what they agree on is that
+   * the deck points at a picture the deck does not contain.
+   */
+  unrepresentable: { diagrams: number; charts: number; media: number; pictures: number }
 }
 
 export interface PresentationIndex {
@@ -321,10 +331,12 @@ function slideRelationshipTargets(relsXml: string | undefined): Map<string, stri
     const id = relationship.getAttribute('Id')
     const target = relationship.getAttribute('Target')
     if (!id || !target) continue
-    targets.set(
-      id,
-      relationship.getAttribute('TargetMode') === EXTERNAL_TARGET_MODE ? target : resolveFromSlides(target),
-    )
+    if (relationship.getAttribute('TargetMode') === EXTERNAL_TARGET_MODE) {
+      targets.set(id, target)
+      continue
+    }
+    const path = resolveFromSlides(target)
+    if (path) targets.set(id, path)
   }
   return targets
 }
@@ -338,9 +350,54 @@ function relationshipTargets(relsXml: string | undefined, type: string): string[
     .filter(Boolean)
 }
 
-/** `../notesSlides/notesSlide1.xml` relative to `ppt/slides/` is `ppt/notesSlides/…`. */
-function resolveFromSlides(target: string): string {
-  return `ppt/${target.replace(/^\.\.\//, '')}`
+/**
+ * The directory every relationship in `ppt/slides/_rels/slideN.xml.rels` is
+ * relative to — the part's OWN directory, per OPC.
+ */
+const SLIDE_PART_DIRECTORY = 'ppt/slides/'
+
+/**
+ * A host that exists only to give `URL` something to resolve against. Nothing
+ * is ever fetched from it; a package part name is a relative reference and
+ * `URL` is the one correct implementation of relative-reference resolution
+ * available here (no `node:path` — `tsconfig.json` omits node types).
+ */
+const PACKAGE_ORIGIN = 'https://package.invalid/'
+
+/**
+ * A relationship target as the ZIP entry name it denotes, resolved against the
+ * slide part's own directory.
+ *
+ * This used to be `ppt/${target.replace(/^\.\.\//, '')}` — a string hack that
+ * was harmless while it only located a notes part, and is not harmless now that
+ * the same string is a picture's IDENTITY. Two things it got wrong:
+ *
+ * - NO PERCENT-DECODING. An OPC relationship `Target` is a URI reference, so a
+ *   media part named `image 1.png` is written `../media/image%201.png`.
+ *   MEASURED: the index produced `ppt/media/image%201.png` while anydoc
+ *   reported `ppt/media/image 1.png`, so a file with a space in its name — an
+ *   entirely ordinary file — refused the whole deck.
+ * - NO REAL RESOLUTION. `media/x.png` (a sibling reference, legal) resolved as
+ *   though it had been written `../media/x.png`, and `.` / `..` segments
+ *   anywhere but the very front were left in place.
+ *
+ * A target that resolves off this origin is an absolute URL, not a part: it
+ * returns `undefined` rather than a nonsense path, which fails closed. So does
+ * a malformed percent sequence, which `decodeURIComponent` throws on.
+ */
+function resolveFromSlides(target: string): string | undefined {
+  let resolved: URL
+  try {
+    resolved = new URL(target, `${PACKAGE_ORIGIN}${SLIDE_PART_DIRECTORY}`)
+  } catch {
+    return undefined
+  }
+  if (resolved.origin !== new URL(PACKAGE_ORIGIN).origin) return undefined
+  try {
+    return decodeURIComponent(resolved.pathname.replace(/^\//, ''))
+  } catch {
+    return undefined
+  }
 }
 
 /**
@@ -417,7 +474,9 @@ function rendersChoiceBranch(choice: Element): boolean {
 
 /**
  * WHERE A PICTURE SHAPE'S BYTES COME FROM: every `a:blip` under a `p:blipFill`
- * anywhere beneath `shape`, resolved through the slide's own relationships.
+ * anywhere beneath `shape`, resolved through the slide's own relationships and
+ * recorded on `state` — as an origin when it resolves, and as a reported loss
+ * (`unrepresentable.pictures`) when it does not.
  *
  * `p:blipFill` (presentationml) is the picture fill of a `p:pic` — the element
  * that IS a picture. It is deliberately not `a:blipFill` (drawingml), which is
@@ -429,21 +488,26 @@ function rendersChoiceBranch(choice: Element): boolean {
  * measured: bytes present in the package are what a renderer prefers, and
  * adding both would make the index expect two pictures where anydoc emits one.
  * A blip naming neither, or naming a relationship the package never declared,
- * contributes NOTHING — which is exactly what anydoc emits for it (measured:
+ * contributes NO ORIGIN — which is exactly what anydoc emits for it (measured:
  * a `p:pic` whose `r:embed` names an undefined relationship produces no block
  * and no finding). That is the whole of the old `hasRenderablePicture`
  * prediction, now falling out of the resolution instead of being modelled.
  */
-function blipOrigins(shape: Element, resolve: (relationshipId: string) => string | undefined): string[] {
-  const origins: string[] = []
+function readBlipOrigins(shape: Element, state: ShapeWalkState): void {
   for (const fill of shape.getElementsByTagNameNS(PML_NS, 'blipFill')) {
     for (const blip of fill.getElementsByTagNameNS(DRAWING_NS, 'blip')) {
       const relationshipId = blip.getAttributeNS(R_NS, 'embed') ?? blip.getAttributeNS(R_NS, 'link')
-      const origin = relationshipId ? resolve(relationshipId) : undefined
-      if (origin) origins.push(origin)
+      // A blip naming NO relationship references no image data at all, so
+      // nothing was ever there to lose — measured: anydoc emits nothing, and
+      // the two accounts agree on nothing. A blip naming an UNDEFINED
+      // relationship is the opposite: the deck says a picture is there and the
+      // package does not contain it. Only the second is a loss.
+      if (!relationshipId) continue
+      const origin = state.resolveRelationship(relationshipId)
+      if (origin) state.pictureOrigins.add(origin)
+      else state.unrepresentable.pictures += 1
     }
   }
-  return origins
 }
 
 interface ShapeWalkState {
@@ -452,7 +516,7 @@ interface ShapeWalkState {
   titleIndex: number
   /** Deduplicated, in the order first seen — see `PresentationSlideIndex`. */
   pictureOrigins: Set<string>
-  unrepresentable: { diagrams: number; charts: number; media: number }
+  unrepresentable: { diagrams: number; charts: number; media: number; pictures: number }
   /** A relationship id from this slide's own rels, as a part path or a URL. */
   resolveRelationship: (relationshipId: string) => string | undefined
 }
@@ -549,8 +613,12 @@ function walkShapes(container: Element, state: ShapeWalkState, depth = 0): void 
          */
         for (const oleObject of shape.getElementsByTagNameNS(PML_NS, 'oleObj')) {
           const relationshipId = oleObject.getAttributeNS(R_NS, 'id')
-          const origin = relationshipId ? state.resolveRelationship(relationshipId) : undefined
+          if (!relationshipId) continue
+          const origin = state.resolveRelationship(relationshipId)
+          // Same rule as a blip's: a named relationship the package does not
+          // declare is an embedded object the deck says is there and is not.
           if (origin) state.pictureOrigins.add(origin)
+          else state.unrepresentable.pictures += 1
         }
       }
       else if (uri === TABLE_URI) {
@@ -594,9 +662,7 @@ function walkShapes(container: Element, state: ShapeWalkState, depth = 0): void 
       const isMedia = shape.getElementsByTagNameNS(DRAWING_NS, 'videoFile').length > 0 ||
         shape.getElementsByTagNameNS(DRAWING_NS, 'audioFile').length > 0
       if (isMedia) state.unrepresentable.media += 1
-      for (const origin of blipOrigins(shape, state.resolveRelationship)) {
-        state.pictureOrigins.add(origin)
-      }
+      readBlipOrigins(shape, state)
       continue
     }
     if (shape.namespaceURI === PML_NS && shape.localName === 'grpSp') {
@@ -671,13 +737,14 @@ function pptxIndex(parts: Record<string, string>): PresentationIndex {
       title: undefined,
       titleIndex: -1,
       pictureOrigins: new Set<string>(),
-      unrepresentable: { diagrams: 0, charts: 0, media: 0 },
+      unrepresentable: { diagrams: 0, charts: 0, media: 0, pictures: 0 },
       resolveRelationship: (relationshipId) => relationshipTargetById.get(relationshipId),
     }
     walkShapes(tree, state)
 
     const notesTarget = relationshipTargets(relsXml, 'notesSlide')[0]
-    const notesXml = notesTarget ? parts[resolveFromSlides(notesTarget)] : undefined
+    const notesPath = notesTarget ? resolveFromSlides(notesTarget) : undefined
+    const notesXml = notesPath ? parts[notesPath] : undefined
     const notesText = notesXml ? notesBodyText(parseXml(notesXml, 'notes part')) : undefined
 
     slides.push({
@@ -749,6 +816,16 @@ function odfParagraphs(container: Element): string[] {
 function odfNotesText(notesElement: Element): string | undefined {
   const paragraphs = odfParagraphs(notesElement)
   return collapse(paragraphs.join(' ')) || undefined
+}
+
+/**
+ * The first `draw:image` among an element's OWN children — the one alternative
+ * representation a consumer renders (ODF 1.3 §10.4.2). See the page query below
+ * for the misattribution taking all of them produced.
+ */
+function firstImageChild(parent: Element | null): Element | undefined {
+  return [...parent?.children ?? []]
+    .find((child) => child.namespaceURI === ODF_DRAW_NS && child.localName === 'image')
 }
 
 /**
@@ -886,23 +963,41 @@ function odpIndex(parts: Record<string, string>): PresentationIndex {
       textRuns: ordered,
       ...(notesText ? { notesText } : {}),
       /*
-       * Every `draw:image` on the page that is not inside an excluded root —
-       * the notes subtree or a comment — read the same way, and for the same
-       * reason, as PPTX's `p:pic`. ODF needs no relationship part to resolve
-       * them: `xlink:href` names the part directly, and MEASURED against real
-       * anydoc 0.2.4 that is byte-for-byte the `originPart` it reports
-       * (`Pictures/image1.png`). An href pointing outside the package (a
-       * linked picture) is carried verbatim for the same reason PPTX carries
-       * an external relationship target verbatim.
+       * THE FIRST `draw:image` OF EACH FRAME, and only the first.
+       *
+       * ODF 1.3 §10.4.2: a `draw:frame`'s children are ALTERNATIVE
+       * representations of the same object, of which a consumer renders the
+       * first it supports — not several pictures side by side. Collecting all
+       * of them (this query did) makes the index expect pictures anydoc never
+       * emits, and that is not merely a spurious refusal. MEASURED, real
+       * anydoc, real .odp: page 1 with two frames both on `Pictures/image1.png`
+       * and page 2 with ONE frame holding `Pictures/image2.png` then
+       * `Pictures/image1.png` as alternatives — the over-collected reference
+       * made `image1.png` look like two slides' part, the sole-referencer rule
+       * then capped page 1 (its true and only owner) at one block and handed
+       * page 2 a claim on the surplus, and the balance check passed because the
+       * part page 2 over-claimed is exactly the part it over-collected. Page
+       * 1's second picture published inside `<section data-slide="2">` with no
+       * findings at all.
+       *
+       * The first child is taken by DOM position among its parent's own
+       * children, not by the flat query's order, so a frame nested inside
+       * another frame keeps its own first child.
+       *
+       * Otherwise as PPTX: excluded roots (notes, comments) are skipped, and
+       * ODF needs no relationship part — `xlink:href` names the part directly,
+       * and MEASURED against real anydoc 0.2.4 that is byte-for-byte the
+       * `originPart` it reports (`Pictures/image1.png`). An href pointing
+       * outside the package is carried verbatim, for the same reason PPTX
+       * carries an external relationship target verbatim.
        *
        * A `draw:image` with no `xlink:href` at all — ODF also allows the bytes
-       * inline as `office:binary-data` — contributes nothing, so a block
-       * anydoc emits for one would belong to no slide and refuse. That is
-       * fail-closed and untested against a real Impress package; see the
-       * report's concerns.
+       * inline as `office:binary-data` — contributes nothing, so the block
+       * anydoc emits for one belongs to no slide and refuses.
        */
       pictureOrigins: [...new Set([...page.getElementsByTagNameNS(ODF_DRAW_NS, 'image')]
         .filter((image) => !excludedRoots.some((root) => root.contains(image)))
+        .filter((image) => image === firstImageChild(image.parentElement))
         .map((image) => image.getAttributeNS(XLINK_NS, 'href') ?? '')
         .filter((href) => href.length > 0))],
       titleOutOfOrder: false,
@@ -923,6 +1018,15 @@ function odpIndex(parts: Record<string, string>): PresentationIndex {
       unrepresentable: {
         diagrams: 0,
         charts: 0,
+        /*
+         * ODF names a picture's part directly in `xlink:href`, so there is no
+         * relationship to dangle: an href pointing at a part the package does
+         * not contain still RESOLVES here, anydoc still emits a placeholder for
+         * it with no origin of its own, and the two accounts disagree — which
+         * is a refusal, not a silent loss. Nothing on this side goes missing
+         * the way a dangling `r:embed` does on the PPTX side.
+         */
+        pictures: 0,
         media: [
           ...page.getElementsByTagNameNS(ODF_DRAW_NS, 'plugin'),
           ...page.getElementsByTagNameNS(ODF_DRAW_NS, 'object'),
