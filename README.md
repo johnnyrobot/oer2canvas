@@ -259,7 +259,8 @@ jobs:
 ### Building it
 
 ```sh
-# production build and Worker deploy
+# A frontend build only. There is no Worker variable for this mode, because the
+# relay is not in this path at all — see above.
 OER2CANVAS_WEB_EXTRACTION=self-hosted-extractor \
 OER2CANVAS_SELF_HOSTED_EXTRACTOR_ORIGIN=https://extract.example.edu \
 npm run build
