@@ -17,15 +17,13 @@
 | [11 — Import text-based PDFs](issues/11-import-text-based-pdfs.md) | resolved | 02, 05, 10 |
 | [12 — Import URL with Firecrawl](issues/12-import-url-with-firecrawl.md) | resolved | 05, 10 |
 | [13 — Release core document importer](issues/13-release-core-document-importer.md) | resolved | 09, 10, 11, 12 |
-| [14 — Graduate presentations](issues/14-graduate-presentations.md) | resolved (PPTX enabled; ODP probe-only) | 04, 09, 10 |
+| [14 — Graduate presentations](issues/14-graduate-presentations.md) | resolved (PPTX and ODP enabled) | 04, 09, 10 |
 | [15 — Evaluate legacy DOC/PPT](issues/15-evaluate-legacy-doc-ppt.md) | ready-for-agent | 13, 14 |
 | [16 — Decide spreadsheet imports](issues/16-decide-spreadsheet-imports.md) | ready-for-agent | 13 |
 | [17 — Extract web articles self-hosted](issues/17-extract-web-articles-self-hosted.md) | ready-for-agent | 12 |
 
-**Carried forward from 14, with no issue of its own yet.** ODP is `status: 'probe-only'` in
-`src/import/capability.ts` because an Impress chart or diagram — an embedded `draw:object` —
-is dropped, or published as a still picture of itself, with no finding either way (measured
-2026-08-30; pinned in `presentation/reconcile.browser.test.ts`). Re-enabling it needs one
-measurement: the manifest media type of the embedded sub-document, so `odpIndex` can count a
-chart and a diagram the way `pptxIndex` counts a `graphicData` uri. Everything else on the ODP
-path is measured and works.
+**Carried forward from 14, with no issue of its own yet.** A deck refused for an unpackageable
+image lands in the plan editor with a disabled Prepare button, while a deck refused by the
+reconciler throws back to the file picker — two different screens for "this file cannot be
+imported", not explained to the user anywhere. It became more visible in 14, because a real
+Impress chart takes exactly the first path (its GDI metafile preview cannot be packaged).

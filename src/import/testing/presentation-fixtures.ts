@@ -1066,20 +1066,41 @@ export interface OdpPageSpec {
   /**
    * A `draw:frame > draw:object` referencing an embedded sub-document — the
    * shape Impress writes for an INSERTED CHART, and the same shape it writes
-   * for any other embedded object (a Draw diagram, a Math formula, a Calc
-   * range). `replacementImage` adds the `ObjectReplacements/` picture Impress
-   * normally writes beside it, which is the shape a real `.odp` almost always
-   * has.
+   * for a Draw diagram, a Math formula, or a Calc range.
    *
-   * The sub-document itself is deliberately NOT written into the package: no
-   * account reads it. anydoc emits nothing for the `draw:object`, and
-   * `odpIndex` reports `unrepresentable.charts` as a hardcoded zero because
-   * ODF gives the frame no `draw:mime-type` to classify it by — the mime type
-   * lives in the manifest entry for the sub-document's own directory. This
-   * option exists to PIN that gap, which is why ODP is `status: 'probe-only'`
-   * in `../capability.ts`; see `reconcile.browser.test.ts`'s ODP chart test.
+   * AUTHORED FROM A FILE LIBREOFFICE WROTE ITSELF (`soffice`, its own
+   * `impress8` filter, measured 2026-08-30), not from the specification: the
+   * frame carries NO `draw:mime-type`, `xlink:href` names a DIRECTORY
+   * (`./Object 1`), and the only statement of what the object is lives in
+   * `META-INF/manifest.xml` as that directory's `media-type`. So this option
+   * writes the manifest entry too — without it the fixture cannot exercise
+   * the classifier at all, which is how an earlier version of this option
+   * managed to "pin" a gap that a working fix left passing.
+   *
+   * A LIST, because one Impress page routinely carries several — a chart and
+   * a diagram side by side is an ordinary teaching slide, and the fixture has
+   * to be able to author the same page shape `pptx-unrepresentable` authors
+   * with its `diagram`/`chart`/`video` flags.
+   *
+   * `kind` picks the manifest media type: a chart
+   * (`…opendocument.chart`) or a diagram (`…opendocument.graphics`, what
+   * Impress writes for an embedded Draw document — ODF's nearest thing to
+   * SmartArt).
+   *
+   * `replacement` writes the `ObjectReplacements/` preview picture Impress
+   * puts beside the object, referenced by a `draw:image` in the SAME frame:
+   *
+   * - `'gdi-metafile'` is what LibreOffice ACTUALLY writes — a VCL GDI
+   *   metafile, declared `application/x-openoffice-gdimetafile`, which this
+   *   importer cannot package. A real Impress chart therefore also raises the
+   *   ordinary `embedded-content` blocker, exactly as a PowerPoint deck with
+   *   a pasted chart does through its EMF preview.
+   * - `'png'` is a raster preview a converter may write instead, which
+   *   packages normally — the shape that isolates the object classifier from
+   *   the unpackageable-image blocker.
+   * - omitted writes no replacement at all, which ODF allows.
    */
-  chartObject?: { replacementImage?: boolean }
+  embeddedObjects?: readonly { kind: 'chart' | 'diagram'; replacement?: 'gdi-metafile' | 'png' }[]
   /**
    * The `text:outline-level` of `headingText`. Level 2 makes anydoc emit an
    * `<h2>`, which would otherwise ship as a SIBLING of the slide title.
@@ -1272,6 +1293,44 @@ function odpNotesContentXml(page: OdpPageSpec, imageHref: string): string {
 }
 
 /**
+ * The embedded object's own directory, and the href of its replacement
+ * preview, for page `index`. Impress names them `Object 1`, `Object 2`, … and
+ * puts the preview at `ObjectReplacements/Object N` — a SPACE in both, which
+ * is why the hrefs are percent-encoded while the ZIP entry and the manifest
+ * row keep the literal name. That is not decoration: it is the same
+ * encode-here/literal-there split `imagePartName` exists to exercise, applied
+ * to the path the object classifier resolves.
+ */
+const odfObjectDirectory = (index: number, slot: number) => `Object ${index + 1}-${slot + 1}`
+const odfReplacementPart = (index: number, slot: number) =>
+  `ObjectReplacements/${odfObjectDirectory(index, slot)}`
+const odfReplacementHref = (index: number, slot: number) =>
+  `ObjectReplacements/${encodeURIComponent(odfObjectDirectory(index, slot))}`
+
+/**
+ * The ODF media type a `chartObject`'s manifest entry declares for its
+ * sub-document directory — the one datum that tells the index a chart from a
+ * diagram, since the frame itself carries none.
+ */
+const ODF_OBJECT_MEDIA_TYPES = {
+  chart: 'application/vnd.oasis.opendocument.chart',
+  diagram: 'application/vnd.oasis.opendocument.graphics',
+} as const
+
+/**
+ * A VCL GDI metafile, the format LibreOffice writes for an embedded object's
+ * `ObjectReplacements/` preview. `VCLMTF` is its signature. Like `EMF_BYTES`
+ * on the PPTX side these are bytes this importer cannot package, which is the
+ * property the fixture needs — a real Impress chart raises the ordinary
+ * `embedded-content` blocker for exactly this reason.
+ */
+const GDI_METAFILE_BYTES = (() => {
+  const bytes = new Uint8Array(64)
+  bytes.set(utf8('VCLMTF'), 0)
+  return bytes
+})()
+
+/**
  * Whether any page references the shared `Pictures/` part, so the ZIP entry and
  * its manifest row are written. ONE predicate, used by both, because two copies
  * that must agree is how a fixture ends up declaring a picture it never wrote —
@@ -1280,7 +1339,7 @@ function odpNotesContentXml(page: OdpPageSpec, imageHref: string): string {
  */
 function needsPicturePart(page: OdpPageSpec): boolean {
   return Boolean(page.image || page.secondImage || page.alternateImages || page.notesImage ||
-    page.video?.poster || page.chartObject?.replacementImage ||
+    page.video?.poster || page.embeddedObjects?.some((object) => object.replacement === 'png') ||
     page.hyperlinkedImage || page.imageInTableCell || page.imageInNestedFrame ||
     page.imageInCustomShape || page.unframedImage || page.groupedImage || page.deeplyGroupedImage ||
     page.imageInFrameInFrame || page.imageInFrameInGroupInFrame ||
@@ -1397,15 +1456,17 @@ export async function odpFixture(
       : ''
     const table = page.table ? odpTable(`Table ${index + 1}`) : ''
     const media = page.video ? odpMedia(`Video ${index + 1}`, page.video.poster, imageHref) : ''
-    const chartObject = page.chartObject
-      ? `<draw:frame draw:name="Object ${index + 1}" svg:width="10cm" svg:height="8cm">` +
-        `<draw:object xlink:href="./Object ${index + 1}" xlink:type="simple" xlink:show="embed" ` +
-        `xlink:actuate="onLoad"/>` +
-        (page.chartObject.replacementImage
-          ? `<draw:image xlink:href="${imageHref}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>`
+    const embeddedObjects = (page.embeddedObjects ?? []).map((object, slot) =>
+      `<draw:frame draw:name="${odfObjectDirectory(index, slot)}" svg:width="10cm" svg:height="8cm">` +
+      `<draw:object xlink:href="./${encodeURI(odfObjectDirectory(index, slot))}" xlink:type="simple" ` +
+      `xlink:show="embed" xlink:actuate="onLoad"/>` +
+      (object.replacement === 'png'
+        ? `<draw:image xlink:href="${imageHref}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>`
+        : object.replacement === 'gdi-metafile'
+          ? `<draw:image xlink:href="${odfReplacementHref(index, slot)}" xlink:type="simple" ` +
+            `xlink:show="embed" xlink:actuate="onLoad"/>`
           : '') +
-        `</draw:frame>`
-      : ''
+      `</draw:frame>`).join('')
     const nestedFrame = page.nestedFrameText
       ? odpNestedFrame(`Outer Frame ${index + 1}`, `Inner Frame ${index + 1}`, page.nestedFrameText)
       : ''
@@ -1415,7 +1476,7 @@ export async function odpFixture(
       : ''
     // A direct child of draw:page, the same level presentation:notes sits at.
     const comment = page.commentText ? odpAnnotation(`Comment ${index + 1}`, page.commentText) : ''
-    const extras = `${customShape}${groupedCustomShape}${nestedFrame}${table}${media}${chartObject}`
+    const extras = `${customShape}${groupedCustomShape}${nestedFrame}${table}${media}${embeddedObjects}`
     const pictures = `${image}${secondImage}${alternateImages}${hyperlinkedImage}${imageInTableCell}` +
       `${imageInNestedFrame}${imageInCustomShape}${unframedImage}${groupedImage}${deeplyGroupedImage}` +
       `${imageInFrameInFrame}${imageInFrameInGroupInFrame}${imageInFrameInFrameInGroup}${groupDepthImage}` +
@@ -1444,11 +1505,39 @@ export async function odpFixture(
       (pages.some((page) => page.alternateImages)
         ? `<manifest:file-entry manifest:full-path="Pictures/image2.gif" manifest:media-type="image/gif"/>`
         : '') +
+      // THE ROW THE INDEX ACTUALLY READS. An embedded object's kind is
+      // nowhere in `content.xml`; it is here, keyed by the object's own
+      // directory WITH a trailing slash, exactly as LibreOffice writes it.
+      pages.flatMap((page, index) => (page.embeddedObjects ?? []).map((object, slot) =>
+        `<manifest:file-entry manifest:full-path="${odfObjectDirectory(index, slot)}/" ` +
+        `manifest:media-type="${ODF_OBJECT_MEDIA_TYPES[object.kind]}"/>` +
+        (object.replacement === 'gdi-metafile'
+          ? `<manifest:file-entry manifest:full-path="${odfReplacementPart(index, slot)}" ` +
+            `manifest:media-type="application/x-openoffice-gdimetafile"/>`
+          : ''))).join('') +
       `</manifest:manifest>`) },
     { name: 'content.xml', data: utf8(content) },
   ]
   if (pages.some(needsPicturePart)) {
     entries.push({ name: imagePart, data: EMBEDDED_IMAGE_PNG })
+  }
+  for (const [index, page] of pages.entries()) {
+    for (const [slot, object] of (page.embeddedObjects ?? []).entries()) {
+      /*
+       * The sub-document itself. NOTHING reads it — anydoc emits no block for a
+       * `draw:object` and the index reads only the manifest's media type — but a
+       * real package always carries it, and a fixture that omitted it would be
+       * declaring a manifest entry for a part that is not there.
+       */
+      entries.push({
+        name: `${odfObjectDirectory(index, slot)}/content.xml`,
+        data: utf8('<?xml version="1.0" encoding="UTF-8"?><office:document-content ' +
+          'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"/>'),
+      })
+      if (object.replacement === 'gdi-metafile') {
+        entries.push({ name: odfReplacementPart(index, slot), data: GDI_METAFILE_BYTES })
+      }
+    }
   }
   if (pages.some((page) => page.alternateImages)) {
     // Deliberately different bytes AND a different part, so a test can tell the

@@ -11,8 +11,8 @@ infrastructure.
 
 The public web app supports OpenStax, LibreTexts, Pressbooks, pasted text/Markdown/HTML, local
 UTF-8 `.txt`, `.md`, `.markdown`, `.html`, and `.htm` files, text-oriented `.docx`, `.epub`,
-`.odt`, and `.rtf` files, text-based `.pdf` files, PowerPoint decks (`.pptx`, `.pptm`, `.ppsx`,
-`.ppsm`), and one web page at a time, through one output path:
+`.odt`, and `.rtf` files, text-based `.pdf` files, presentation decks (`.pptx`, `.pptm`, `.ppsx`,
+`.ppsm`, `.odp`), and one web page at a time, through one output path:
 
 - a Common Cartridge 1.1 download, with no Canvas address, account, or token access.
 
@@ -72,7 +72,7 @@ matrix is desktop Chrome and Firefox.
 Playwright WebKit remains diagnostic cross-engine evidence; Safari and mobile browsers are not
 supported for document import.
 
-A PowerPoint deck becomes **one proposed page**, with each slide a titled section — a deck is
+A presentation deck becomes **one proposed page**, with each slide a titled section — a deck is
 one lesson, and an instructor who wants it split can do that in the page plan editor, which
 already splits at any block boundary. Because a deck is not a document, its slides are read
 twice: once by the parser, and once from the file's own package, so the two accounts can be
@@ -82,9 +82,10 @@ compared. What that comparison buys, and what it costs:
   ordinary quotation, indistinguishable from a pull quote; matching it against the deck's own
   notes part is what tells them apart. Notes are dropped and the slides that had them are
   named, so you can add whatever students actually need.
-- **Diagrams, charts, and embedded audio or video are not imported.** They leave no content
-  behind at all, so a finding names the slide, the kind, and the count; add them in Canvas
-  afterwards.
+- **Diagrams, charts, and embedded audio or video are not imported.** A finding names the slide,
+  the kind, and the count; add them in Canvas afterwards. A video's still poster frame, and the
+  preview picture saved beside an embedded chart, do import as ordinary pictures — the finding is
+  what records that a video or a live chart, not a still, was what the slide actually held.
 - **A slide with no title is titled by its number** (`Slide 7`) and listed, so it can be found
   and renamed. Roughly two in five slides in real decks carry no title placeholder, so this is
   ordinary rather than exceptional.
@@ -97,12 +98,12 @@ compared. What that comparison buys, and what it costs:
 - **Macros are never read or run.** A `.pptm` or `.ppsm` imports its slides and nothing of its
   macro.
 
-OpenDocument Presentation (`.odp`) is **not** offered. Its support was evaluated against the
-same bar and did not meet it: an Impress chart or diagram is an embedded object neither account
-can identify, so it is dropped — or published as a still picture of itself — with nothing saying
-so. Everything else on that path works, but a silent loss is the one thing this workflow refuses
-to publish, so the format stays unreleased rather than shipping with a limitation nobody could
-act on.
+OpenDocument Presentation (`.odp`) imports the same way, through the same reconciliation, with
+one ODF-specific note. Impress stores an inserted chart or diagram as an embedded object whose
+kind is recorded only in the package manifest, and it saves a preview picture beside it in a
+format this importer cannot package — so a deck with a chart both names the chart as
+unimportable and blocks on the preview, the same way a PowerPoint deck with a pasted chart does.
+Delete the object, or replace it with a PNG, JPEG, GIF, or WebP picture, before importing.
 
 A failed or cancelled import says what went wrong, the form stays usable, and nothing from
 the interrupted attempt is kept, so you can correct the input and try again.

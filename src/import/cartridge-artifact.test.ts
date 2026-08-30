@@ -80,22 +80,22 @@ test.each(releaseEnabledFormats())(
     // substrings `packaged-cartridge.browser.test.ts` already asserts against
     // the in-memory manifest string: a real `<manifest>` root, and at least
     // one `type="webcontent"` resource — the page itself, for every format
-    // except PPTX, whose baseline case now also carries a packaged image (see
-    // the dedicated test below).
+    // except PPTX and ODP, whose baseline cases now also carry a packaged
+    // image (see the dedicated tests below).
     expect(manifest).toContain('<manifest')
     expect(manifest).toContain('type="webcontent"')
   },
 )
 
 /**
- * Asserts the packaged-asset shape the pptx test below needs, against
+ * Asserts the shape both the pptx and odp tests below need in common, against
  * a REAL `unzip` — the one place a `web_resources/` entry surviving real parse
  * → compile → `buildCartridge` → zip is checked at all, closing the gap
  * `engine/export/cartridge.test.ts`'s synthetic asset cannot: that unit test
  * proves `buildCartridge` packages an asset it is HANDED, never that a real
  * deck's own picture reaches one.
  */
-function expectPackagedImage(format: 'pptx'): void {
+function expectPackagedImage(format: 'pptx' | 'odp'): void {
   const path = cartridgeArtifactPath(format)
   if (!existsSync(path)) {
     throw new Error(`${path} does not exist. Run '${PRODUCE_ARTIFACTS_COMMAND}' to build it, then re-run.`)
@@ -118,21 +118,28 @@ function expectPackagedImage(format: 'pptx'): void {
   expect(manifest).toMatch(/<file href="web_resources\/oer2canvas\/image1-[0-9a-f]+\.png"\/>/)
 }
 
-// PPTX GETS ITS OWN TEST, outside the `test.each` loop above, because
+// PPTX AND ODP EACH GET THEIR OWN TEST, not a `test.each`, because
 // `testing/corpus.ts` deliberately puts a described-image case first among
-// that format's own cases (`pptx-packaged-image` — see that module's comment)
-// so PPTX's one baseline case, of all nine, actually carries a packaged asset
-// through the real pipeline — every other format's baseline case is still the
-// no-embedded-asset shape the loop above's comment describes.
-//
-// ODP had an identical test here, and it PASSED: at commit 0d1f4e1 both real
-// artifacts were run through the same real `unzip` and were structurally
-// identical (same `image1-<hash>.png`, same two `type="webcontent"`
-// resources, same `<file href>` reference). It was removed with ODP's release
-// claim, not because it failed — see `capability.ts`'s `odp` entry for the
-// measurement that did fail, which is about charts, not about packaging.
+// EACH format's own cases (`pptx-packaged-image`, `odp-packaged-image` — see
+// that module's comment) so both formats' one baseline case, of all ten,
+// actually carries a packaged asset through the real pipeline — every other
+// format's baseline case is still the no-embedded-asset shape the loop
+// above's comment describes.
 test('the pptx cartridge packages its slide image into web_resources, verified by a real unzip', () => {
   expectPackagedImage('pptx')
+})
+
+// Measured, not assumed identical to the PPTX case above: ran both real
+// artifacts through the same real `unzip` and compared byte-for-byte-equal
+// shapes (same `image1-<hash>.png` name — the SAME embedded PNG content hash
+// both fixture builders share — same two `type="webcontent"` resources, same
+// `<file href>` reference). ODP's `draw:frame`/`draw:image` picture packages
+// through the shared `prepareAssets` path with no difference from PPTX's
+// `p:pic` at the cartridge layer, which is the "one shared reconciler, one
+// shared packaging path" claim `odp-packaged-image`'s own `standsInFor`
+// makes — confirmed here at the archive level, not merely at the importer's.
+test('the odp cartridge packages its slide image into web_resources, verified by a real unzip', () => {
+  expectPackagedImage('odp')
 })
 
 /**

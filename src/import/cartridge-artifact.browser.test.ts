@@ -28,17 +28,17 @@ import { writeZip } from '../engine/export/zip'
  * `zip.test.ts` gives: a zip verified only by its own writer is marking its
  * own homework.
  *
- * ONE CASE PER RELEASED FORMAT (nine), NOT THE WHOLE CORPUS (twenty-seven) —
+ * ONE CASE PER RELEASED FORMAT (ten), NOT THE WHOLE CORPUS (thirty-one) —
  * the cartridge builder in `engine/export/cartridge.ts` is format-agnostic
  * downstream of import: by the time `toChapter` hands it a `Chapter`, every
  * format looks the same. Structural variants (merged cells, footnotes,
  * equations, deep headings, presentation notes and unrepresentable content,
  * …) exercise the IMPORTER, which `corpus.browser.test.ts` already runs
- * across the full twenty-seven-case corpus. Running all twenty-seven here,
- * twice each for determinism, would be fifty-four full compile+audit+zip
+ * across the full thirty-one-case corpus. Running all thirty-one here,
+ * twice each for determinism, would be sixty-two full compile+audit+zip
  * pipelines that could only ever re-confirm what that file already confirms
  * about parsing — nothing about cartridge shape depends on which structural
- * property a given DOCX, EPUB or PPTX exercises.
+ * property a given DOCX, EPUB, PPTX or ODP exercises.
  *
  * ONE EXCEPTION: whether the page carries a packaged asset at all. That IS
  * something cartridge shape can differ on — a `web_resources/` entry and a
@@ -48,13 +48,12 @@ import { writeZip } from '../engine/export/zip'
  * a synthetic, hand-built asset, but never proves the real path (anydoc parse
  * → `presentation/reconcile.ts` → compile → `buildCartridge` → a real zip)
  * carries a slide's own picture into an archive a real `unzip` can open. That
- * is why `testing/corpus.ts` puts `pptx-packaged-image`, not
- * `pptx-semantic`, first among that format's cases: it becomes this file's
- * PPTX entry below, and `RELEASED_FORMAT_CASES`'s own test pins that id
- * explicitly rather than leaving the dedup's "first occurrence" the only
- * thing standing between this suite and silently going back to testing a page
- * with no asset at all. ODP had the mirror-image case here until issue 14
- * measured it out of the release (see `capability.ts`'s `odp` entry).
+ * is why `testing/corpus.ts` puts `pptx-packaged-image` and
+ * `odp-packaged-image`, not `pptx-semantic`/`odp-semantic`, first among each
+ * format's cases: they become this file's PPTX and ODP entries below, and
+ * `RELEASED_FORMAT_CASES`'s own test pins both ids explicitly rather than
+ * leaving the dedup's "first occurrence" the only thing standing between this
+ * suite and silently going back to testing a page with no asset at all.
  */
 const metadata = {
   title: 'Artifact release check',
@@ -64,11 +63,12 @@ const metadata = {
 
 /*
  * `CORPUS_CASES` (testing/corpus.ts) lists its per-format baseline case —
- * `*-semantic` for every format except PDF (`pdf-text-multipage`) and PPTX
- * (`pptx-packaged-image`, deliberately placed ahead of `pptx-semantic` — see
- * the module comment above) — BEFORE any other case for that format. Taking
- * the FIRST case seen for each format, rather than matching on an id suffix
- * like `-semantic`, is what makes this selection correct for PDF and PPTX
+ * `*-semantic` for every format except PDF (`pdf-text-multipage`), PPTX
+ * (`pptx-packaged-image`), and ODP (`odp-packaged-image`) — the latter two
+ * deliberately placed ahead of `pptx-semantic`/`odp-semantic` — see the
+ * module comment above — BEFORE any other case for that format. Taking the
+ * FIRST case seen for each format, rather than matching on an id suffix like
+ * `-semantic`, is what makes this selection correct for PDF, PPTX, and ODP
  * too without a special case, and keeps this file from needing its own
  * hard-coded id list that could drift from the corpus's actual contents.
  */
@@ -86,7 +86,7 @@ test('the corpus has exactly one baseline case per released format', () => {
   // changing shape out from under it — e.g. a new format landing after a
   // structural variant of an existing one, which would make "first occurrence"
   // pick the wrong case. `releaseEnabledFormats()` (`capability.ts`) is the
-  // same independent statement of "the nine released formats" that
+  // same independent statement of "the ten released formats" that
   // `released-sources.ts` is built against, not a value derived from this
   // corpus, so this comparison can actually fail.
   const released = new Set(releaseEnabledFormats())
@@ -94,14 +94,15 @@ test('the corpus has exactly one baseline case per released format', () => {
   expect(RELEASED_FORMAT_CASES).toHaveLength(released.size)
 })
 
-test('the PPTX baseline case is the packaged-image one, not the plain semantic one', () => {
+test('the PPTX and ODP baseline cases are the packaged-image ones, not the plain semantic ones', () => {
   // The dedup above has no OTHER guard: if `testing/corpus.ts` ever reordered
-  // its PPTX cases so `pptx-semantic` led again, this suite would silently
+  // its PPTX or ODP cases so `*-semantic` led again, this suite would silently
   // go back to exporting a page with no asset at all — a real `unzip` failure
   // eventually (the dedicated test in `cartridge-artifact.test.ts` would catch
   // the missing `web_resources/` entry), but reported as a missing file deep
   // inside a zip rather than as this direct, named cause.
   expect(RELEASED_FORMAT_CASES.find((entry) => entry.format === 'pptx')?.id).toBe('pptx-packaged-image')
+  expect(RELEASED_FORMAT_CASES.find((entry) => entry.format === 'odp')?.id).toBe('odp-packaged-image')
 })
 
 async function cartridgeFor(entry: CorpusCase): Promise<Uint8Array> {

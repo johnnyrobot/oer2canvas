@@ -42,17 +42,18 @@ Recorded here, not only in the capability table, because these are the behaviour
 running the checks below will actually see on screen and could otherwise mistake for defects.
 
 `.pptx`, `.pptm`, `.ppsx`, and `.ppsm` are one format to this importer — all four containers
-report `pptx` from their own main-part content type — and a deck of any of them imports as
-**one proposed page whose slides are `<section data-slide="N">` sections**, each led by an
-`<h2>`. It is not one page per slide; the page plan editor splits at any block boundary if an
-instructor wants that.
+report `pptx` from their own main-part content type — and `.odp` is a second. A deck of any of
+them imports as **one proposed page whose slides are `<section data-slide="N">` sections**, each
+led by an `<h2>`. It is not one page per slide; the page plan editor splits at any block boundary
+if an instructor wants that.
 
 - **Speaker notes are excluded, and the slides that had them are named.** If a note reaches an
   imported page, that is a defect, not a limitation — `src/import/corpus.browser.test.ts`
   asserts its absence directly.
 - **Diagrams, charts, and embedded audio or video are not imported**, and each is named by a
   warning that gives the slide, the kind, and the count. A video's still poster frame does
-  import as a picture; the warning is what records that a video, not a still, was there.
+  import as a picture; the warning is what records that a video, not a still, was there. The
+  same holds for the preview picture Impress saves beside an embedded chart.
 - **A slide with no title is titled `Slide N`** and named by a warning, so it can be renamed
   in the plan editor. This is common, not exceptional.
 - **Two different refusals, with two different screens.** A deck whose slides cannot be matched
@@ -63,11 +64,13 @@ instructor wants that.
   are correct; the difference is not currently explained to the user, and is worth watching for
   in the screen-reader run below.
 
-**`.odp` is not offered.** Issue 14 evaluated it against the same bar and it did not pass: an
-Impress chart or diagram is an embedded object neither the parser nor the package index can
-identify, so it is dropped, or published as a still picture of itself, with no finding either
-way. Choosing an `.odp` in the file picker produces the ordinary unsupported-file refusal. That
-is expected behaviour, not a bug to report.
+**One ODF-specific behaviour worth expecting.** Impress records an embedded chart or diagram's
+kind only in the package manifest, and saves a preview beside it as a VCL GDI metafile — a
+format this importer cannot package. So a real Impress deck containing a chart produces BOTH the
+`presentation-unrepresentable` warning naming the chart AND the ordinary unpackageable-image
+blocker naming the preview, and does not import until the object is removed or replaced. That is
+the same pair a PowerPoint deck with a pasted chart produces through its EMF preview. Expected
+behaviour, not a bug to report.
 
 ## 1. Live Canvas push
 

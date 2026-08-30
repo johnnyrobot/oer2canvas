@@ -30,10 +30,19 @@ test('a pptx index wants no media, theme, master, or macro part', () => {
   expect(wanted('ppt/slideLayouts/_rels/slideLayout1.xml.rels')).toBe(false)
 })
 
-test('an odp index wants only content.xml', () => {
+test('an odp index wants content.xml and the manifest, and nothing else', () => {
   expect(wantedPresentationPart('odp', 'content.xml')).toBe(true)
+  // NOT optional, and not a convenience: ODF puts an embedded object's kind
+  // ONLY in its directory's `manifest:file-entry` media type — the frame
+  // itself carries no `draw:mime-type` — so without this part the index
+  // cannot tell an Impress chart from a diagram at all. See `parts.ts`.
+  expect(wantedPresentationPart('odp', 'META-INF/manifest.xml')).toBe(true)
   expect(wantedPresentationPart('odp', 'styles.xml')).toBe(false)
   expect(wantedPresentationPart('odp', 'Pictures/image1.png')).toBe(false)
+  // The embedded object's own sub-document. Its KIND is read from the
+  // manifest; its CONTENT is never read, so it is never inflated.
+  expect(wantedPresentationPart('odp', 'Object 1/content.xml')).toBe(false)
+  expect(wantedPresentationPart('odp', 'ObjectReplacements/Object 1')).toBe(false)
 })
 
 test('exactly the two deck formats are presentation packages', () => {

@@ -23,7 +23,7 @@ import { mergeQueues } from './engine/compile/index'
 import { TABLE_REFUSAL } from './engine/compile/steps/tables'
 import type { CompiledChapter, CompiledSection, QueueItem } from './contracts/index'
 import { semanticDocxFixture } from './import/testing/docx-fixture'
-import { pptxFixture } from './import/testing/presentation-fixtures'
+import { pptxFixture, odpFixture } from './import/testing/presentation-fixtures'
 // The screens under audit are styled by App.css — it is what carries the WCAG 2.2
 // SC 2.5.8 target sizes. Imported explicitly rather than relying on `App` pulling
 // it in, so that auditing a component in isolation still sees the real styling.
@@ -284,13 +284,14 @@ test('screen 1c — the document form and its page plan have no accessibility vi
  * the title is an `h2`) — so a screen-reader user can move from slide to slide
  * with heading navigation instead of reading one undifferentiated page.
  *
- * PPTX ONLY. This ran as a `test.each` over PPTX and ODP until issue 14's
- * verdict, and the ODP row PASSED — `document.ts` routes both formats through
- * the same `reconcilePresentation`, so the property held identically. The row
- * was removed because ODP is `status: 'probe-only'` and `importStructuredDocument`
- * refuses it, which is the point of a probe-only status; see `capability.ts`'s
- * `odp` entry for the measurement that decided it. The `test.each` shape is
- * kept for the one remaining row so restoring ODP is one entry, not a rewrite.
+ * PPTX AND ODP, both at this same level, not a PPTX-only screen with an ODP
+ * assumption bolted on: `document.ts` routes both formats through the same
+ * `reconcilePresentation`, so a second, whole screen for ODP would duplicate
+ * every assertion below rather than add a new one — `test.each` gets the
+ * identical property checked independently for both formats at the cost of
+ * one parameterised fixture builder, which is the cheap form the brief asked
+ * for. `pptxFixture` and `odpFixture` accept the same `{ title?, body? }`
+ * slide-spec shape, which is what makes one shared test body possible at all.
  *
  * THREE slides, not two, and the middle one deliberately untitled — the same
  * shape `testing/corpus.ts`'s `pptx-untitled-slide` case uses. A titled
@@ -311,6 +312,11 @@ test.each([
     format: 'pptx',
     mediaType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     build: pptxFixture,
+  },
+  {
+    format: 'odp',
+    mediaType: 'application/vnd.oasis.opendocument.presentation',
+    build: odpFixture,
   },
 ] as const)(
   'screen 1c-deck ($format) — an imported deck exposes each slide as a labelled, reachable section',

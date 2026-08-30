@@ -50,32 +50,35 @@ test('a .ppsm slideshow imports through the same pptx capability', async () => {
   expect(result.work.sections[0]!.html).toContain('Show deck')
 })
 
-test('an odp deck is refused, because ODP did not graduate', async () => {
-  /*
-   * This test asserted the opposite until issue 14's verdict, and it passed:
-   * an ODP deck DID import as slide sections. What changed is not the ODP
-   * path but what this release claims about it. `capability.ts`'s `odp` entry
-   * is `status: 'probe-only'` because an Impress chart — a `draw:frame` around
-   * a `draw:object` — was measured 2026-08-30 to import as a still picture of
-   * itself, or to vanish entirely, with NO finding either way; that is design
-   * fact 6's silent loss, unclosed. The refusal below is the whole
-   * user-visible consequence of that verdict, so it is asserted here rather
-   * than left implicit in a capability flag.
-   *
-   * The ODP reconciler path itself is still exercised against real anydoc by
-   * `presentation/reconcile.browser.test.ts` and `presentation/index.test.ts`,
-   * which drive the index and the reconciler directly. Those are evidence
-   * about a format this release does not ship, which is exactly what
-   * `probe-only` means.
-   */
+test('an odp deck imports as slide sections', async () => {
   const bytes = await odpFixture([{ title: 'Photosynthesis', body: ['Light reactions'] }])
   const file = new File([bytes], 'lecture.odp', {
     type: 'application/vnd.oasis.opendocument.presentation',
   })
+  const result = await importStructuredDocument(file, { metadata })
 
-  await expect(importStructuredDocument(file, { metadata })).rejects.toThrow(
-    /Choose a supported document file/,
-  )
+  expect(result.work.sections[0]!.html).toContain('<section data-slide="1"')
+})
+
+test('an odp deck names an embedded chart on its own page', async () => {
+  /*
+   * Issue 14's ODP verdict, end to end through the real importer rather than
+   * only through the reconciler. ODF gives a `draw:object` frame no
+   * `draw:mime-type`, so the kind of an embedded chart lives only in
+   * `META-INF/manifest.xml` — a part the Worker did not fetch until this
+   * issue, which is exactly why an Impress chart used to vanish with no
+   * finding. This asserts the whole chain: Worker part selection, manifest
+   * parse, object classification, and the finding reaching `ImportResult`.
+   */
+  const bytes = await odpFixture([{ title: 'Process overview', embeddedObjects: [{ kind: 'chart' }] }])
+  const file = new File([bytes], 'lecture.odp', {
+    type: 'application/vnd.oasis.opendocument.presentation',
+  })
+  const result = await importStructuredDocument(file, { metadata })
+
+  expect(result.report.findings).toContainEqual(expect.objectContaining({
+    code: 'presentation-unrepresentable', sourcePage: 1, severity: 'warning',
+  }))
 })
 
 test('a deck reconcilePresentation blocks on is refused, not published with a misattributed guess', async () => {

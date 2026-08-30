@@ -13,14 +13,8 @@ import {
 
 test('one capability table distinguishes shipped formats from parser probes', () => {
   expect(releaseEnabledFormats()).toEqual([
-    'text', 'markdown', 'html', 'docx', 'odt', 'rtf', 'epub', 'pdf', 'pptx',
+    'text', 'markdown', 'html', 'docx', 'odt', 'rtf', 'epub', 'pdf', 'pptx', 'odp',
   ])
-  // ODP is in the table but NOT in that list, and this is issue 14's verdict
-  // rather than an unfinished state: see the long comment on the `odp` entry
-  // in `capability.ts` for the measurement that decided it. Asserted here
-  // because "a format the parser accepts is not thereby a format this release
-  // ships" is the distinction this whole table exists to draw.
-  expect(capabilityForFormat('odp')).toMatchObject({ parser: 'anydoc', status: 'probe-only' })
   expect(PLAIN_TEXT_FILE_ACCEPT).toBe('.txt,text/plain')
   expect(TEXT_CONTENT_FILE_ACCEPT).toBe(
     '.txt,text/plain,.md,.markdown,text/markdown,text/x-markdown,.html,.htm,text/html,application/xhtml+xml',
@@ -33,8 +27,8 @@ test('one capability table distinguishes shipped formats from parser probes', ()
   expect(STRUCTURED_DOCUMENT_FILE_ACCEPT).toContain('.pptm')
   expect(STRUCTURED_DOCUMENT_FILE_ACCEPT).toContain('.ppsx')
   expect(STRUCTURED_DOCUMENT_FILE_ACCEPT).toContain('.ppsm')
-  expect(STRUCTURED_DOCUMENT_FILE_ACCEPT).not.toContain('.odp')
-  expect(STRUCTURED_DOCUMENT_FORMAT_SUMMARY).toBe('DOCX, ODT, RTF, EPUB, PPTX, PPTM, PPSX, or PPSM')
+  expect(STRUCTURED_DOCUMENT_FILE_ACCEPT).toContain('.odp')
+  expect(STRUCTURED_DOCUMENT_FORMAT_SUMMARY).toBe('DOCX, ODT, RTF, EPUB, PPTX, PPTM, PPSX, PPSM, or ODP')
   expect(capabilityForFilename('chapter.DOCX')).toMatchObject({
     format: 'docx',
     parser: 'anydoc',
@@ -57,14 +51,14 @@ test('one capability table distinguishes shipped formats from parser probes', ()
   })
   expect(capabilityForFilename('archive.zip')).toBeUndefined()
 
-  // ODP is the ONLY probe-only entry. Issue 13 could write "nothing is
-  // probe-only any more" because PDF was the last one; issue 14 measured that
-  // an Impress chart is lost with no finding and put ODP back, deliberately.
-  // Pinning the exact set (not just a count) means a later engineer who flips
-  // some OTHER format to probe-only, or who flips ODP to enabled without
-  // reading why it is not, fails here.
+  // Nothing is probe-only. PDF was the last one before issue 13 shipped it,
+  // and issue 14 came within one part of putting ODP back here: it failed the
+  // bar's "name every construct design fact 6 lists" criterion until the index
+  // learned to read `META-INF/manifest.xml`. The EXACT set is pinned rather
+  // than a count, so a later engineer who parks some format here has to say so
+  // in a diff that names it.
   expect(DOCUMENT_FORMAT_CAPABILITIES.filter((entry) => entry.status === 'probe-only')
-    .map((entry) => entry.format)).toEqual(['odp'])
+    .map((entry) => entry.format)).toEqual([])
 })
 
 test('pdf is offered, and the accept string is not filtered to anydoc parsers', () => {

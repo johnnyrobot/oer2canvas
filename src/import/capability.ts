@@ -173,47 +173,41 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
     mediaTypes: ['application/vnd.oasis.opendocument.presentation'],
     parser: 'anydoc',
     /*
-     * PROBE-ONLY, and this is a verdict rather than an unfinished state.
+     * ENABLED under issue 14's bar, but only after the bar was applied twice.
      *
-     * Issue 14's bar (see `.scratch/document-import/14-graduate-presentations-design.md`,
-     * "The bar, committed before the corpus is built") requires that every
-     * construct in design fact 6 — a diagram, a chart, and embedded media — be
-     * NAMED BY A FINDING on the slide that carried it. PPTX names all three,
-     * measured. ODP names ONE.
+     * The first pass failed ODP on criterion 2 — "every construct in design
+     * fact 6 is named by a finding on the right slide" — because an Impress
+     * chart produced no finding at all. That was true of the code and wrong
+     * about the cause: ODF gives an embedded object's frame no
+     * `draw:mime-type`, so nothing in `content.xml` says what a `draw:object`
+     * is, and the index was reading only `content.xml`. The package does say,
+     * in `META-INF/manifest.xml`, which the Worker was not fetching. Reading
+     * it (one pattern in `parts.ts`, one classifier in `presentation/index.ts`)
+     * is the whole fix, and it closes the criterion rather than excusing it.
      *
-     * Measured 2026-08-30 against real anydoc 0.2.4, both of the shapes
-     * LibreOffice Impress actually writes for an inserted chart
-     * (`draw:frame > draw:object`):
+     * MEASURED 2026-08-30 on a file LibreOffice Impress wrote through its own
+     * `impress8` filter, not on hand-authored XML: an inserted chart is
+     * `draw:frame > draw:object` with `xlink:href="./Object 1"`, and the
+     * manifest carries `Object 1/` as
+     * `application/vnd.oasis.opendocument.chart`. A chart and a diagram now
+     * each raise `presentation-unrepresentable` on their own page.
      *
-     * - with no replacement image, the page imports as its heading and nothing
-     *   else, with ZERO findings;
-     * - with the `ObjectReplacements/` picture Impress normally writes beside
-     *   it, the page imports that still picture as though it were an ordinary
-     *   slide image, again with ZERO findings — so a reader is shown a snapshot
-     *   of a chart with nothing saying a chart was ever there.
-     *
-     * That is design fact 6's silent loss, unclosed, on ordinary Impress
-     * content. `odpIndex` reports `unrepresentable.diagrams` and `charts` as a
-     * hardcoded zero because ODF carries both as embedded OBJECTS rather than
-     * as the distinct frame kinds PPTX uses, and no mime type for either was
-     * ever measured — so the second reader this issue exists to build cannot
-     * notice what the parser lost for either one.
-     *
-     * Everything else about the ODP path is measured and works: sections per
-     * page, generated titles for untitled pages, speaker notes excluded and
-     * named, media counted, packaged pictures through the cartridge. None of
-     * that is enough on its own, because the failure above is silent, and a
-     * silent loss is the one outcome this workflow refuses to publish.
-     *
-     * Re-enabling it needs one thing: a measurement of what Impress writes for
-     * a chart and a diagram — the manifest media type of the embedded
-     * sub-document — so `odpIndex` can count them the way `pptxIndex` counts a
-     * `graphicData` uri. That is a task, not a flag flip.
+     * The same real file also carries an `ObjectReplacements/` preview that is
+     * a VCL GDI metafile (`application/x-openoffice-gdimetafile`), which this
+     * importer cannot package — so a real Impress chart ALSO takes the
+     * ordinary unpackageable-image blocker, exactly as a PowerPoint deck with
+     * a pasted chart does through its EMF preview. That is the shared rule
+     * both formats already state below, not an ODP defect: it refuses rather
+     * than losing anything silently.
      */
-    status: 'probe-only',
+    status: 'enabled',
     limitations: [
-      'Not released: an Impress chart or diagram is an embedded object this importer cannot notice, so it is dropped — or published as a still picture of itself — with no finding saying so.',
-      'Everything else measured on this path works: one section per page, generated titles for untitled pages, speaker notes excluded and named, embedded media named, packaged pictures through the cartridge.',
+      'Speaker notes are not imported; slides that had them are listed so you can add what students need.',
+      'Charts, diagrams, and embedded audio or video are not imported — add them in Canvas afterwards.',
+      'A slide with no title is titled by its number so you can rename it.',
+      'An equation blocks import; equation rendering is not supported yet.',
+      "An image not in a format this importer can package (PNG, JPEG, GIF, or WebP) blocks import — the preview LibreOffice saves beside an embedded chart or diagram is often one of these; delete the object, or replace it with a picture in one of those formats, first.",
+      "A slide whose content cannot be matched to the deck's own outline blocks import outright, because publishing it could put content under the wrong slide.",
     ],
     probe: parserProbe('anydoc', 'odp'),
   },
@@ -243,7 +237,9 @@ export const STRUCTURED_DOCUMENT_FORMAT_SUMMARY = [
 ].filter(Boolean).join(', or ')
 
 /*
- * Every format the file picker offers: anydoc's six plus PDF. Separate from
+ * Every format the file picker offers: anydoc's six (docx, odt, rtf, epub,
+ * pptx, odp — a COUNT OF ENTRIES, not of extensions, since the pptx entry
+ * carries four) plus PDF. Separate from
  * `ENABLED_ANYDOC_CAPABILITIES` because that list answers a different question —
  * which formats `importStructuredDocument` itself handles — and its answer
  * appears in that function's refusal message, which must not offer PDF.

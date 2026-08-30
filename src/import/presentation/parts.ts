@@ -34,9 +34,25 @@ const PPTX_PATTERNS: readonly RegExp[] = [
   /^ppt\/notesSlides\/notesSlide\d+\.xml$/,
 ]
 
-// ODP keeps every page, frame, and notes body in one part, so the index needs
-// exactly that part and nothing else.
-const ODP_PATTERNS: readonly RegExp[] = [/^content\.xml$/]
+/*
+ * ODP keeps every page, frame, and notes body in `content.xml`, so that part
+ * carries almost everything the index needs.
+ *
+ * The manifest is the exception, and it is not optional. ODF gives an embedded
+ * object's own frame NO `draw:mime-type` — a chart is `draw:frame >
+ * draw:object` whose `xlink:href` names a DIRECTORY (`./Object 1`), and the
+ * only place the package says what kind of object that is, is that directory's
+ * `manifest:file-entry` media type. Without the manifest the index cannot tell
+ * an Impress chart from a diagram from anything else, which is exactly the gap
+ * that kept ODP out of a release (issue 14; see `index.ts`'s `odfObjectKinds`).
+ *
+ * It is cheap in the way this whole module is cheap: one small XML part, named
+ * exactly, never a wildcard over the archive.
+ */
+const ODP_PATTERNS: readonly RegExp[] = [
+  /^content\.xml$/,
+  /^META-INF\/manifest\.xml$/,
+]
 
 export function wantedPresentationPart(kind: PresentationPackageKind, path: string): boolean {
   const patterns = kind === 'pptx' ? PPTX_PATTERNS : ODP_PATTERNS

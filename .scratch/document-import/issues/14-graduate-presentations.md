@@ -15,123 +15,146 @@
 
 ## Answer
 
-**PPTX graduates. ODP does not.** `.pptm`, `.ppsx`, and `.ppsm` ride on the PPTX verdict,
-because design fact 1 measured them to be the same parser path rather than assuming it.
+**Both formats graduate. PPTX on the first application of the bar; ODP only on the second, after
+a defect the first pass mistook for a limitation was fixed.** `.pptm`, `.ppsx`, and `.ppsm` ride
+on the PPTX verdict, because design fact 1 measured them to be the same parser path rather than
+assuming it.
 
 The bar was written into the design before any corpus existed, precisely so this verdict could
 not be reverse-engineered from whatever the corpus turned out to do. It is applied below per
 format, per criterion, and where a criterion is met by argument rather than by measurement that
 is said in those words.
 
+### The first pass failed ODP, and the review overturned it. That history is the evidence.
+
+The first application of the bar failed ODP on criterion 2: an Impress chart produced no finding
+at all, which is design fact 6's silent loss and the exact defect the whole second reader exists
+to prevent. That measurement was correct about the code. It was wrong about the cause, and the
+review caught it by doing something neither the design nor the first pass had done — **it had
+LibreOffice write the file itself**, through `soffice`'s own `impress8` filter, instead of
+reasoning from the ODF specification and hand-authored XML.
+
+Three things fell out of that, and all three changed the verdict:
+
+1. **The claim the verdict rested on was not what a real `.odp` does.** Impress writes a chart as
+   `draw:frame > draw:object` plus an `ObjectReplacements/` preview whose manifest media type is
+   `application/x-openoffice-gdimetafile` — a VCL metafile, not a raster. Driven end to end, that
+   deck raises `embedded-content` at severity **blocker**. So a real Impress chart *refused* the
+   import. It was neither "dropped entirely" nor "published as a still picture of itself" — the
+   two shapes the failing verdict was built on. Both are real behaviours of the code; neither is
+   what a user meets. The verdict survived on the letter of criterion 2 and was **overstated
+   about the consequence**, which is exactly the distinction this issue's second criterion is
+   about.
+2. **The guard test could not detect the thing it claimed to guard.** It said "when this test
+   fails, do not loosen it — a failure means the index learned to notice an embedded object." A
+   working manifest-based counter was implemented and **both pinned rows still passed**, because
+   the fixture deliberately omitted the sub-document and therefore its manifest entry — the exact
+   datum any correct fix reads. A test that cannot go red is not evidence.
+3. **The deferred measurement was already in hand, and the fix was about thirty-five lines.** The
+   failing verdict said re-enabling "needs one measurement… that is a task, not a flag flip."
+   The measurement above supplies it. Disabling a format for users when the package already
+   carries the datum, over a seam the design already built, is not proportionate.
+
+**So the fix was made and the bar re-applied.** `parts.ts` adds one pattern
+(`META-INF/manifest.xml`) to `ODP_PATTERNS`; `presentation/index.ts` parses `manifest:file-entry`
+into a media-type map, resolves `draw:object`'s `xlink:href` (`./Object 1` → `Object 1/`) through
+the same `resolvePackagePath` the picture path already uses, and classifies
+`application/vnd.oasis.opendocument.chart` as a chart and `…opendocument.graphics` as a diagram.
+
 ### PPTX — enabled
 
 | Bar criterion | Verdict | Evidence |
 | --- | --- | --- |
-| 1. Every top-level block attributed to a slide | **Met, by measurement over the corpus** | Seven `format: 'pptx'` corpus cases, run through the real parser dispatch in a real browser against real anydoc 0.2.4 (`corpus.browser.test.ts`), produce the EXACT blocker set each case declares — and not one of them declares any, so `presentation-unattributed-content` never fires. The set is asserted in both directions, so an expected-blocker regression fails too. |
-| 2. Every construct in design fact 6 named by a finding on the right slide | **Met, by measurement** | `pptx-unrepresentable` authors a SmartArt diagram, a chart, and a video on slide 1 and produces exactly one warning: `presentation-unrepresentable`, `sourcePage: 1`, "Slide 1 contains 1 diagram, 1 chart, 1 media that could not be imported." Measured 2026-08-30. `expectFindings` asserts the warning set exactly, and Task 9's review proved that assertion load-bearing by deleting the finding from `reconcile.ts` and watching the corpus go red. |
-| 3. No notes text anywhere in the imported HTML | **Met, by measurement** | `pptx-speaker-notes` asserts the note's absence via `expectNotInHtml`, proven load-bearing by mutation: pushing the notes block into `taken` failed exactly the notes cases, with the note visible in the diff. |
-| 4. Shared accessibility review and cartridge export pass, packaged assets included | **Met, by measurement** | `App.a11y.browser.test.tsx` audits an imported three-slide deck (middle slide untitled) with axe and finds no violations and no duplicate ids; every `section[data-slide]` carries an `<h2>` with a non-empty id. `cartridge-artifact.browser.test.ts` exports `pptx-packaged-image` through the real parse → compile → `buildCartridge` → zip path, twice for determinism, and `cartridge-artifact.test.ts` reads the artifact back with a REAL `unzip`: `web_resources/oer2canvas/image1-<hash>.png` is present, and the manifest carries two `type="webcontent"` resources and the matching `<file href>`. |
+| 1. Every top-level block attributed to a slide | **Met, by measurement over the corpus** | Seven `format: 'pptx'` corpus cases, run through the real parser dispatch in a real browser against real anydoc 0.2.4 (`corpus.browser.test.ts`), produce the EXACT blocker set each case declares — and not one of them declares any, so `presentation-unattributed-content` never fires. The set is asserted in both directions. |
+| 2. Every construct in design fact 6 named by a finding on the right slide | **Met, by measurement** | `pptx-unrepresentable` authors a SmartArt diagram, a chart, and a video on slide 1 and produces exactly one warning: `presentation-unrepresentable`, `sourcePage: 1`, "Slide 1 contains 1 diagram, 1 chart, 1 media that could not be imported." `expectFindings` asserts the warning set exactly, and Task 9's review proved that assertion load-bearing by deleting the finding from `reconcile.ts` and watching the corpus go red. |
+| 3. No notes text anywhere in the imported HTML | **Met, by measurement** | `pptx-speaker-notes`'s `expectNotInHtml`, proven load-bearing by mutation: pushing the notes block into `taken` failed exactly the notes cases, with the note visible in the diff. |
+| 4. Shared accessibility review and cartridge export pass, packaged assets included | **Met, by measurement** | axe finds no violations and no duplicate ids on an imported three-slide deck whose middle slide is untitled, with every `section[data-slide]` carrying an `<h2>` with a non-empty id. `pptx-packaged-image` exports through the real parse → compile → `buildCartridge` → zip path, twice for determinism, and is read back by a REAL `unzip`: `web_resources/oer2canvas/image1-<hash>.png`, two `type="webcontent"` resources, matching `<file href>`. |
 
-**Residuals stated as limitations, not as bar failures.**
+### ODP — enabled, after the manifest fix
 
-- **PPTX has no one-sentence walk rule.** ODP now has one — "a shape's own content is read; a
-  shape nested inside another shape is not entered" — backed by eleven measured placements and
-  one measured exception. PPTX has `walkShapes`' enumeration of shape kinds, and the tenth of
-  the eleven silent misattributions found during this issue lived in the gap between two of
-  them. Nothing structural rules out a twelfth. This is why criterion 1 above is recorded as met
-  **by measurement over the corpus**, not as proven for every deck. It is a limitation because
-  no counterexample survives today and every one found was fixed and pinned; it is not dismissed,
+| Bar criterion | Verdict | Evidence |
+| --- | --- | --- |
+| 1. Every top-level block attributed to a slide | **Met, by measurement over the corpus** | Four `format: 'odp'` cases, same exact-blocker-set assertion in both directions, none declaring one. |
+| 2. Every construct in design fact 6 named by a finding on the right slide | **Met, by measurement — and this is the criterion that failed first** | `odp-unrepresentable` authors an embedded Draw diagram, an inserted chart, and a video on page 1, and produces the **identical** finding PPTX produces: `presentation-unrepresentable`, `sourcePage: 1`, "Slide 1 contains 1 diagram, 1 chart, 1 media that could not be imported." Authored to be identical deliberately, so the two formats are compared on the same evidence rather than on whichever case each happened to get. |
+| 3. No notes text anywhere in the imported HTML | **Met, by measurement** | `odp-speaker-notes`'s `expectNotInHtml`, plus the ODF notes path pinned against real anydoc across inline comments, nested frames, headings, tabs and soft breaks in `reconcile.browser.test.ts`. |
+| 4. Shared accessibility review and cartridge export pass, packaged assets included | **Met, by measurement** | The same axe screen, run independently for ODP rather than argued from the shared code path. `odp.imscc` was rebuilt and unzipped with a real `unzip` for this verdict: 5 files, 4070 bytes, `web_resources/oer2canvas/image1-b81de774.png` — structurally identical to `pptx.imscc`. |
+
+**The guard is now real.** The chart measurement is pinned in
+`presentation/reconcile.browser.test.ts` and was mutation-tested three ways: removing
+`META-INF/manifest.xml` from `ODP_PATTERNS` fails 5 rows; dropping the trailing-slash manifest
+key fails 5; misclassifying a diagram as a chart fails 1. The fixture writes the sub-document and
+its manifest row, so the datum a correct fix reads is actually present — the omission that let
+the previous version pass against a working fix.
+
+**One ODF-specific limitation, stated rather than hidden.** The `ObjectReplacements/` preview
+LibreOffice saves beside an embedded object is a VCL GDI metafile this importer cannot package,
+so a real Impress deck containing a chart raises BOTH the `presentation-unrepresentable` warning
+naming the chart AND the ordinary unpackageable-image blocker naming the preview, and does not
+import until the object is removed or replaced. That is the **same pair** a PowerPoint deck with
+a pasted chart produces through its EMF preview — a shared rule, symmetric across the formats,
+already stated in both `limitations` lists. It refuses rather than losing anything silently,
+which is the behaviour this workflow wants. It is a limitation, not a bar failure: criterion 2
+asks that the construct be named, and it is.
+
+### Residuals stated as limitations, not as bar failures
+
+- **PPTX has no one-sentence walk rule.** ODP has one — "a shape's own content is read; a shape
+  nested inside another shape is not entered" — backed by eleven measured placements and one
+  measured exception. PPTX has `walkShapes`' enumeration of shape kinds, and the tenth of the
+  eleven silent misattributions found during this issue lived in the gap between two of them.
+  Nothing structural rules out a twelfth. **This is why criterion 1 is recorded above as met by
+  measurement over the corpus, not as proven for every deck.** It is a limitation because no
+  counterexample survives today and every one found was fixed and pinned; it is not dismissed,
   because the next one would be found the same way the last ten were.
 - **Picture attribution is closed for one property and open for another.** Closed
   unconditionally: a picture block can never be published under a slide that does not reference
-  its origin part, which holds whether or not a blocker fires. Open: WHICH INSTANCE of a shared
-  media part lands under which slide still rests on the index and anydoc agreeing about which
-  shapes produce blocks. The last adversarial review could still construct one — the eleventh —
-  but it needs a producer that writes more than one blip reachable in a single fill, and neither
-  PowerPoint nor Impress does. That last sentence is **argument, not measurement**: it rests on
-  what two authoring tools were observed to write, not on a proof that nothing else can.
+  its origin part, whether or not a blocker fires. Open: WHICH INSTANCE of a shared media part
+  lands under which slide still rests on the index and anydoc agreeing about which shapes produce
+  blocks. The last adversarial review could still construct one — the eleventh — but it needs a
+  producer that writes more than one blip reachable in a single fill, and neither PowerPoint nor
+  Impress does. **That last sentence is argument, not measurement:** it rests on what two
+  authoring tools were observed to write, not on a proof that nothing else can.
 - **The mirror direction is structurally invisible.** anydoc emitting a block the index knows
   nothing about cannot be detected by the index. No reviewer could construct one; every candidate
-  resolved to "anydoc emits nothing either". Recorded as a residual with no measurement either
-  way — which is the honest status, not a clean bill.
+  resolved to "anydoc emits nothing either". Recorded as a residual **with no measurement either
+  way**, which is the honest status rather than a clean bill.
 - **Two different screens for "this file cannot be imported."** A deck with an anydoc-level
-  blocker (an unpackageable EMF) returns an `ImportResult` and lands in the plan editor with a
-  disabled Prepare button; a reconciler-level blocker throws back to the file picker. Both are
-  correct — one has trustworthy HTML to show and the other does not — but the difference is not
-  explained to the user anywhere. Not a bar criterion; recorded in `docs/RELEASE-ACCEPTANCE.md`
-  so the screen-reader run watches for it, and left as a follow-up.
+  blocker (an unpackageable EMF or GDI metafile) returns an `ImportResult` and lands in the plan
+  editor with a disabled Prepare button; a reconciler-level blocker throws back to the file
+  picker. Both are correct — one has trustworthy HTML to show and the other does not — but the
+  difference is not explained to the user anywhere. Not a bar criterion; recorded in
+  `docs/RELEASE-ACCEPTANCE.md` so the screen-reader run watches for it, and left as a follow-up.
+  It is now the more visible of the two, because a real Impress chart takes exactly this path.
 - **The reconciler blocker discards the deck's other findings**, so a refused deck shows one
   sentence where there may also have been speaker-notes and untitled-slide warnings. Not a bar
   criterion. Worth revisiting only if the refusal rate on real decks proves high.
 
-### ODP — probe-only
+### One methodological note, recorded because it changed the outcome
 
-| Bar criterion | Verdict | Evidence |
-| --- | --- | --- |
-| 1. Every top-level block attributed to a slide | Met, by measurement, on the cases that existed | The three `odp-*` corpus cases produced no blockers, and `reconcile.browser.test.ts` drives dozens of ODP shapes through real anydoc. |
-| 2. Every construct in design fact 6 named by a finding on the right slide | **NOT MET, by measurement** | ODP names ONE of the three. Media is counted: an Impress `draw:plugin` with a media mime type raises `presentation-unrepresentable` on the right page, with or without a poster. A chart does not. Measured 2026-08-30 against real anydoc 0.2.4, on both shapes LibreOffice actually writes for `draw:frame > draw:object`: with no replacement image the page imports as its heading and nothing else, **with zero findings**; with the `ObjectReplacements/` picture Impress normally writes beside it, the page imports that still picture as though it were an ordinary slide image, **again with zero findings**. A diagram is the same construct through the same door. |
-| 3. No notes text anywhere in the imported HTML | Met, by measurement | `odp-speaker-notes` asserted the absence, and `reconcile.browser.test.ts` still pins the ODF notes path against real anydoc across inline comments, nested frames, headings, tabs and soft breaks. |
-| 4. Shared accessibility review and cartridge export pass, packaged assets included | Met, by measurement, at commit `0d1f4e1` | Both real artifacts were unzipped with a real `unzip` and were structurally identical to the PPTX one — same `image1-b81de774.png`, same two `type="webcontent"` resources, same `<file href>`. The ODP a11y screen passed axe with no violations. |
-
-**Criterion 2 is the whole verdict, and it is a measurement rather than a judgement call.**
-`odpIndex` reports `unrepresentable.diagrams` and `charts` as a hardcoded zero because ODF
-carries both as an embedded OBJECT with no `draw:mime-type` on the frame to classify it by —
-the mime type lives in the manifest entry for the sub-document's own directory, which nothing
-reads. The residual was carried into this task framed as "nothing is claimed". That framing is
-too generous: the consequence is not silence about a construct, it is **a silent loss of it**,
-and in the replacement-image shape — the one a real `.odp` almost always has — it is worse than
-a loss, because the reader is shown a snapshot of a chart with nothing saying a chart was ever
-there. That is design fact 6's defect, unclosed, on the single most common thing an OER science
-deck carries after images.
-
-The whole point of the second reader is to notice what the parser lost. For an ODP chart it
-notices nothing. Enabling the format on that evidence would be exactly the "status derived from
-the parser not throwing" this issue's second criterion forbids.
-
-**What is NOT the reason.** Everything else on the ODP path is measured and works: one section
-per page, generated editable titles for untitled pages, notes excluded and named, media named,
-reading order (ODF hoists `presentation:class="title"`, so a title-last page still reads title
-first — measured), packaged pictures through a real cartridge, and eleven measured picture
-placements behind the format's one-sentence walk rule. ODP is closer to graduating than the
-verdict makes it sound. It is also worth recording that no real `.odp` written by Impress exists
-in this repository: every ODF judgement here rests on the ODF specification, hand-built XML, and
-out-of-band probes against a real file during review — whereas PPTX carries design fact 9's
-survey of 226 slides across 34 real decks. That asymmetry did not decide the verdict, but it is
-part of the honest evidence picture.
-
-**What would re-enable it:** measure what Impress writes for a chart and a diagram — the
-manifest media type of the embedded sub-document — so `odpIndex` can count them the way
-`pptxIndex` counts a `graphicData` uri. That is a task, not a flag flip.
-
-### Where the verdict lives, so it cannot quietly rot
-
-- `src/import/capability.ts` — the `odp` entry carries the measurement and the re-enable
-  condition; the `pptx` entry carries the evidence and both residuals.
-- `src/import/presentation/reconcile.browser.test.ts` — two rows, "ISSUE 14 VERDICT: an ODP
-  chart is …, with no finding saying so", pin the failing measurement against real anydoc, in
-  both of its shapes, with an explicit instruction not to loosen them.
-- `src/import/capability.test.ts` — pins that `odp` is the ONLY probe-only entry, by name, so
-  flipping it without reading why fails.
-- `src/import/presentation.browser.test.ts` — pins the user-visible consequence: an `.odp` is
-  refused at the file picker.
-- `README.md`, `docs/RELEASE-ACCEPTANCE.md`, `THIRD-PARTY-NOTICES.md` — the user-facing half.
+Every ODF judgement in this issue before the review rested on the ODF specification, hand-built
+XML, and out-of-band probes — against PPTX's design fact 9, a survey of 226 slides across 34 real
+decks. The one measurement taken from a file LibreOffice actually wrote overturned a format
+verdict. Design fact 9 was worth its cost for the same reason, and the pattern is the same one
+this whole issue keeps re-learning: for these two formats, a claim about what a producer writes
+is worth nothing until a producer has written it.
 
 ### Criteria
 
 1. **Corpus covers PPTX, PPTM, PPSX, PPSM, and ODP.** Seven PPTX cases spanning a semantic
    lecture deck (bulleted body plus a data table), a described image packaged through the
    cartridge, an untitled slide, speaker notes, a diagram/chart/video slide, the `.ppsx`
-   slideshow container, and a macro-bearing `.pptm`; `.ppsm` is exercised with its real
-   extension in `presentation.browser.test.ts`. Every case declares what it stands in for and
-   asserts its exact blocker AND warning sets. ODP's three cases were measured out of the
-   release corpus by this task's verdict; their coverage survives in
-   `presentation/reconcile.browser.test.ts` and `presentation/index.test.ts`, which drive the
-   ODP index and reconciler against real anydoc without asserting a release claim. Equations and
-   ambiguous reading order are covered by the reconciler suites rather than the corpus — an
+   slideshow container, and a macro-bearing `.pptm`; `.ppsm` is exercised with its real extension
+   in `presentation.browser.test.ts`. Four ODP cases: a packaged described image, a semantic deck
+   with a table, speaker notes, and `odp-unrepresentable` — which was added by this task
+   precisely because without it ODP would have passed the bar's fact-6 criterion **vacuously**,
+   which is the reverse-engineering the design committed the bar in advance to prevent. Every
+   case declares what it stands in for and asserts its exact blocker AND warning sets. Equations
+   and ambiguous reading order are covered by the reconciler suites rather than the corpus — an
    equation blocks via the inherited `docx-equation`/`epub-equation` path (design fact 7), and
-   title-out-of-order raises `presentation-reading-order` on both formats.
-2. **Evidence-based support status.** The table above, per format, per criterion, with the
-   measurement date and the file each measurement lives in.
+   title-out-of-order raises `presentation-reading-order`.
+2. **Evidence-based support status.** The two tables above, per format, per criterion, with the
+   measurement and the file it lives in — including the first pass's failed verdict, why it was
+   wrong, and what measurement overturned it.
 3. **Stable pages with visible slide provenance and editable titles.** A deck proposes ONE page
    whose slides are `<section data-slide="N">` blocks; `blocksOf` sees each section as one
    top-level block with no top-level heading to split on, so the existing "no repeated heading"
@@ -141,21 +164,26 @@ manifest media type of the embedded sub-document — so `odpIndex` can count the
    split points read as slide boundaries. Titles are editable like any other in the plan editor.
 4. **Specific findings.** `presentation-untitled-slide`, `presentation-reading-order`,
    `presentation-speaker-notes`, `presentation-unrepresentable` (naming the slide, the kind, and
-   the count), the inherited equation blocker, the inherited undescribed-image warning, and
-   `presentation-unattributed-content` as a blocker. Each names its slides in the message and
-   sets `sourcePage` when exactly one slide is affected — one finding per code rather than one
-   per slide, because 42% of real slides carry no title placeholder and per-slide warnings would
-   put a dozen near-identical entries on an ordinary deck.
-5. **Shared accessibility and cartridge workflow.** Both proven for PPTX end to end, including a
-   packaged asset inside `web_resources/` read back by a real `unzip`. Task 11 also found that
-   NO corpus case for ANY of the formats had previously carried a packaged image through that
-   path, so this closed a gap in the prior release's evidence too, not only in this one's.
-6. **Formats that do not meet the bar remain disabled without weakening the core importer.** ODP
-   is `status: 'probe-only'` and has no `RELEASED_SOURCES` entry. Nothing in the released
-   importer was relaxed to accommodate it: `importStructuredDocument`'s capability gate is
-   unchanged and refuses it, and the corpus, cartridge, and accessibility suites lost ODP rows
-   rather than gaining an exemption for one.
+   the count — now including an ODF embedded chart and diagram), the inherited equation blocker,
+   the inherited undescribed-image warning, and `presentation-unattributed-content` as a blocker.
+   Each names its slides in the message and sets `sourcePage` when exactly one slide is affected
+   — one finding per code rather than one per slide, because 42% of real slides carry no title
+   placeholder and per-slide warnings would put a dozen near-identical entries on an ordinary
+   deck.
+5. **Shared accessibility and cartridge workflow.** Proven for both formats end to end, each
+   independently rather than argued from the shared path, including a packaged asset inside
+   `web_resources/` read back by a real `unzip`. Task 11 also found that NO corpus case for ANY
+   format had previously carried a packaged image through that path, so this closed a gap in the
+   prior release's evidence too, not only in this one's.
+6. **Formats that do not meet the bar remain disabled without weakening the released core
+   importer.** No format ended disabled — but this criterion was genuinely exercised rather than
+   waived: ODP *was* set to `probe-only`, its `RELEASED_SOURCES` entry removed and its corpus,
+   accessibility and cartridge rows deleted, and nothing in the released importer was relaxed to
+   accommodate it at any point. The capability gate that refuses a probe-only format is unchanged
+   and still there; `capability.test.ts` pins the probe-only set exactly, by name, so parking a
+   format there in future requires a diff that says which one.
 
 **Gate:** `npm run verify:release` — criteria 1–7 all `[PASS]` on their enforced halves; the two
 MANUAL rows report `NEVER RUN` for Firefox/screen reader (criterion 2) and live Canvas
-(criterion 7), exactly as issue 13 defined them. Suite: 138 files, 1461 tests, green.
+(criterion 7), exactly as issue 13 defined them. Suite: 138 files, 1473 tests, green;
+`npm run test:artifacts` 12 + 12 green.

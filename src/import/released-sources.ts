@@ -111,18 +111,25 @@ export const RELEASED_SOURCES: readonly ReleasedSource[] = [
     maximumBytes: DOCUMENT_IMPORT_LIMITS.maximumInputBytes,
     limitations: capabilityFor('pdf').limitations,
   },
-  // PPTX (and the .pptm/.ppsx/.ppsm containers its one capability entry
-  // carries) graduated under issue 14's bar. ODP did NOT, and has no entry
-  // here on purpose: it is `status: 'probe-only'` in the capability table, and
-  // the reason is written out at length on that entry. Adding a row for it
-  // would make `released-sources.test.ts`'s reconciliation fail, which is
-  // exactly the guard working.
+  // Both presentation formats graduated under issue 14's bar — PPTX on the
+  // first pass, ODP only after the index learned to read `META-INF/manifest.xml`
+  // and so to name an embedded chart or diagram. The `.pptm`/`.ppsx`/`.ppsm`
+  // containers ride on the PPTX row: fact 1 measured all four reporting `pptx`
+  // from their own content type, so they are one capability entry and one
+  // released source, not four.
   {
     format: 'pptx',
     kind: 'file',
     label: capabilityFor('pptx').label,
     maximumBytes: DOCUMENT_IMPORT_LIMITS.maximumInputBytes,
     limitations: capabilityFor('pptx').limitations,
+  },
+  {
+    format: 'odp',
+    kind: 'file',
+    label: capabilityFor('odp').label,
+    maximumBytes: DOCUMENT_IMPORT_LIMITS.maximumInputBytes,
+    limitations: capabilityFor('odp').limitations,
   },
   {
     format: 'web',

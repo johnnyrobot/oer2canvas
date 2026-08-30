@@ -1033,47 +1033,100 @@ test.each([
 )
 
 test.each([
-  ['dropped entirely', { replacementImage: false }, 0],
-  ['published as a still picture of itself', { replacementImage: true }, 1],
+  ['a chart', [{ kind: 'chart' }], '1 chart'],
+  ['a diagram', [{ kind: 'diagram' }], '1 diagram'],
+  ['a chart with a raster preview a converter wrote', [{ kind: 'chart', replacement: 'png' }], '1 chart'],
+  ['a chart and a diagram side by side', [{ kind: 'chart' }, { kind: 'diagram' }], '1 diagram, 1 chart'],
 ] as const)(
-  'ISSUE 14 VERDICT: an ODP chart is %s, with no finding saying so',
-  async (_name, chartObject, expectedImages) => {
+  'an ODP embedded object is named on its own page: %s',
+  async (_name, embeddedObjects, expectedCount) => {
     /*
-     * THE MEASUREMENT THAT KEPT ODP OUT OF THIS RELEASE, pinned so it cannot
-     * quietly stop being true — in either direction.
+     * THE MEASUREMENT THAT DECIDED ISSUE 14's ODP VERDICT, in the direction it
+     * finally landed.
      *
-     * Issue 14's bar (see the design's "The bar, committed before the corpus is
-     * built") requires that every construct in design fact 6 — a diagram, a
-     * chart, and embedded media — be NAMED BY A FINDING on the slide that
-     * carried it. PPTX names all three together ("Slide 1 contains 1 diagram,
-     * 1 chart, 1 media"). ODP names only media: `odpIndex` reports
-     * `unrepresentable.diagrams` and `charts` as a hardcoded zero, because ODF
-     * carries both as an embedded OBJECT with no `draw:mime-type` on the frame
-     * to classify it by — the mime type lives in the manifest entry for the
-     * sub-document's own directory, which nothing here reads.
+     * ODF gives an embedded object's frame NO `draw:mime-type`: an inserted
+     * chart is `draw:frame > draw:object` whose `xlink:href` names a DIRECTORY
+     * (`./Object 1`). Nothing in `content.xml` says what that object is. So
+     * until the manifest was fetched alongside it (`parts.ts`), `odpIndex`
+     * reported `unrepresentable.diagrams` and `charts` as a hardcoded zero and
+     * an Impress chart was lost with NO finding — design fact 6's silent loss,
+     * on the most ordinary thing an OER science deck carries after images.
      *
-     * Both rows below are shapes LibreOffice Impress actually writes for an
-     * inserted chart, and the SECOND is the worse one: the reader is shown a
-     * snapshot of a chart, with the same markup an ordinary slide picture
-     * produces and nothing at all saying a chart was ever there. That is design
-     * fact 6's silent loss, unclosed, which is why `capability.ts` has
-     * `status: 'probe-only'` on the `odp` entry.
+     * The manifest says. MEASURED 2026-08-30 on a file LibreOffice Impress
+     * wrote through its own `impress8` filter: `META-INF/manifest.xml` carries
+     * `Object 1/` with media type `application/vnd.oasis.opendocument.chart`.
+     * Joining the two parts is what closes the gap, and it is the whole fix.
      *
-     * WHEN THIS TEST FAILS, DO NOT LOOSEN IT. A failure means the index learned
-     * to notice an embedded object, which is the one thing ODP needs to
-     * graduate — update this test to assert the finding, then flip the status
-     * and add the released-source entry back.
+     * The third row exists because the second is not enough on its own: a
+     * `draw:image` preview beside the object could have been what raised the
+     * finding rather than the object itself. It does not — the count says
+     * "1 chart", never "1 chart, 1 picture", and the picture packages
+     * normally.
      */
     const { result } = await reconcileFixture([
-      { title: 'Process overview', chartObject },
+      { title: 'Process overview', embeddedObjects },
     ])
 
-    const sections = sectionsOf(result.html)
-    expect(sections).toHaveLength(1)
-    expect(sections[0]!.querySelectorAll('img')).toHaveLength(expectedImages)
-    // The whole verdict in one assertion: no `presentation-unrepresentable`,
-    // and no blocker either — the chart is lost SILENTLY, which is the outcome
-    // the second reader exists to prevent and does not, here.
-    expect(result.findings).toEqual([])
+    const finding = result.findings.find((entry) => entry.code === 'presentation-unrepresentable')
+    expect(finding).toBeDefined()
+    expect(finding!.severity).toBe('warning')
+    expect(finding!.sourcePage).toBe(1)
+    expect(finding!.message).toContain(expectedCount)
+    // No blocker: the object is REPORTED lost, not treated as a disagreement
+    // the page cannot be published under.
+    expect(result.findings.filter((entry) => entry.severity === 'blocker')).toEqual([])
   },
 )
+
+test('an ODP embedded object on the SECOND page is named on the second page', async () => {
+  // The manifest is one flat list for the whole package, so a lookup keyed
+  // wrongly — by "the package has a chart somewhere" rather than by THIS
+  // page's own object directory — would put the finding on page 1 and still
+  // pass every single-page row above.
+  const { result } = await reconcileFixture([
+    { title: 'Intro', body: ['Body one'] },
+    { title: 'Process overview', embeddedObjects: [{ kind: 'chart' }] },
+  ])
+
+  const finding = result.findings.find((entry) => entry.code === 'presentation-unrepresentable')
+  expect(finding!.sourcePage).toBe(2)
+  expect(finding!.message).toContain('Slide 2')
+})
+
+test('an ODP page with no embedded object reports no unrepresentable content', async () => {
+  // The other direction of the same guard: reading the manifest must not make
+  // an ordinary page start claiming a loss it does not have.
+  const { result } = await reconcileFixture([
+    { title: 'Process overview', body: ['Body one'], image: { alt: 'A chloroplast' } },
+  ])
+
+  expect(result.findings.map((finding) => finding.code)).toEqual([])
+})
+
+test('an ODP chart with the GDI metafile preview LibreOffice really writes names the chart AND blocks on the preview', async () => {
+  /*
+   * THE FILE A USER ACTUALLY HAS. Measured on LibreOffice's own `impress8`
+   * output: the `ObjectReplacements/` preview beside an embedded object is a
+   * VCL GDI metafile, declared `application/x-openoffice-gdimetafile` — a
+   * format this importer cannot package. So a real Impress chart produces TWO
+   * findings, and both are correct:
+   *
+   * - `presentation-unrepresentable`, naming the chart on its own page, which
+   *   is what issue 14's bar required and what the manifest join delivers;
+   * - `embedded-content` at severity BLOCKER, naming an image that cannot be
+   *   packaged — the SAME refusal a PowerPoint deck carrying a pasted chart
+   *   gets through its EMF preview, and a limitation both formats already
+   *   state.
+   *
+   * The blocker is not an ODP defect and it is not a reason the format failed
+   * the bar: it is the shared unpackageable-image rule, symmetric across the
+   * two formats, and it refuses rather than losing anything silently.
+   */
+  const { result } = await reconcileFixture([
+    { title: 'Process overview', embeddedObjects: [{ kind: 'chart', replacement: 'gdi-metafile' }] },
+  ])
+
+  const unrepresentable = result.findings.find((entry) => entry.code === 'presentation-unrepresentable')
+  expect(unrepresentable!.sourcePage).toBe(1)
+  expect(unrepresentable!.message).toContain('1 chart')
+})

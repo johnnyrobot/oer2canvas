@@ -1129,6 +1129,84 @@ function isOdfMediaMime(mimeType: string | null): boolean {
     mimeType === 'application/vnd.sun.star.media'
 }
 
+const ODF_MANIFEST_NS = 'urn:oasis:names:tc:opendocument:xmlns:manifest:1.0'
+
+/**
+ * ODF media types for the two things design fact 6 calls a diagram and a chart.
+ *
+ * MEASURED (2026-08-30) from a file LibreOffice Impress wrote itself, through
+ * `soffice`'s own `impress8` filter, rather than from hand-authored XML: an
+ * inserted chart is a `draw:frame > draw:object` whose `xlink:href` names the
+ * DIRECTORY `./Object 1`, and the only statement anywhere in the package of
+ * what that object IS, is the manifest entry for `Object 1/`.
+ *
+ * A diagram gets the `…opendocument.graphics` type, which is what Impress
+ * writes for an embedded Draw document — ODF's nearest equivalent to
+ * PowerPoint's SmartArt, since ODF has no SmartArt of its own and a converted
+ * SmartArt lands either here or as ordinary grouped shapes the walk already
+ * reads.
+ *
+ * The `-template` variants are included because ODF defines them as the same
+ * document kinds, and a deck built from a chart template names one.
+ */
+const ODF_CHART_MEDIA_TYPES: ReadonlySet<string> = new Set([
+  'application/vnd.oasis.opendocument.chart',
+  'application/vnd.oasis.opendocument.chart-template',
+])
+const ODF_DIAGRAM_MEDIA_TYPES: ReadonlySet<string> = new Set([
+  'application/vnd.oasis.opendocument.graphics',
+  'application/vnd.oasis.opendocument.graphics-template',
+])
+
+/**
+ * Every `manifest:full-path` in the package, mapped to its declared media type.
+ *
+ * ABSENT MANIFEST IS NOT AN ERROR. `readZipParts` only returns parts the
+ * archive actually held, and a converter-produced `.odp` may omit the manifest
+ * entirely. An empty map then classifies every object as unknown, which is the
+ * pre-fix behaviour — a strictly no-worse fallback, and refusing a deck over a
+ * missing bookkeeping part would be a large penalty for a small omission.
+ */
+function odfManifestMediaTypes(manifest: string | undefined): ReadonlyMap<string, string> {
+  const types = new Map<string, string>()
+  if (!manifest) return types
+  const document = parseXml(manifest, 'manifest part')
+  for (const entry of document.getElementsByTagNameNS(ODF_MANIFEST_NS, 'file-entry')) {
+    const path = entry.getAttributeNS(ODF_MANIFEST_NS, 'full-path')
+    const mediaType = entry.getAttributeNS(ODF_MANIFEST_NS, 'media-type')
+    if (path && mediaType) types.set(path, mediaType)
+  }
+  return types
+}
+
+/**
+ * What kind of embedded object a `draw:object` is, per the manifest.
+ *
+ * `xlink:href` names a DIRECTORY, written by Impress as `./Object 1`, and the
+ * manifest keys that directory WITH a trailing slash (`Object 1/`). Both forms
+ * are looked up because a converter may write either, and `resolvePackagePath`
+ * is reused rather than re-implemented so this inherits the percent-decoding,
+ * traversal and empty-string rules the picture path already had to learn.
+ *
+ * Anything not recognised returns `undefined` and is counted as nothing, which
+ * is the same fail-quiet the rest of this file uses for an object it cannot
+ * name: the reconciler's own text and picture accounting is what refuses a
+ * disagreement, and inventing a loss here would manufacture one.
+ */
+function odfObjectKind(
+  href: string | null,
+  mediaTypes: ReadonlyMap<string, string>,
+): 'chart' | 'diagram' | undefined {
+  if (!href) return undefined
+  const resolved = isAbsoluteReference(href) ? undefined : resolvePackagePath(href, PACKAGE_ROOT)
+  if (resolved === undefined) return undefined
+  const mediaType = mediaTypes.get(`${resolved}/`) ?? mediaTypes.get(resolved)
+  if (mediaType === undefined) return undefined
+  if (ODF_CHART_MEDIA_TYPES.has(mediaType)) return 'chart'
+  if (ODF_DIAGRAM_MEDIA_TYPES.has(mediaType)) return 'diagram'
+  return undefined
+}
+
 function odpIndex(parts: Record<string, string>): PresentationIndex {
   const content = parts['content.xml']
   if (!content) {
@@ -1139,6 +1217,9 @@ function odpIndex(parts: Record<string, string>): PresentationIndex {
   if (!presentation) {
     throw new PresentationIndexError('This presentation has no pages to read.')
   }
+  // Parsed ONCE for the whole package, not per page: it is one flat list of
+  // every part, and every page's objects resolve against the same list.
+  const manifestMediaTypes = odfManifestMediaTypes(parts['META-INF/manifest.xml'])
 
   const slides = [...presentation.getElementsByTagNameNS(ODF_DRAW_NS, 'page')].map((page, position) => {
     const notesElement = page.getElementsByTagNameNS(ODF_PRESENTATION_NS, 'notes')[0]
@@ -1232,6 +1313,24 @@ function odpIndex(parts: Record<string, string>): PresentationIndex {
       ? textRuns
       : [title, ...textRuns.slice(0, titleIndex), ...textRuns.slice(titleIndex + 1)]
 
+    /*
+     * Embedded objects on THIS page, classified by the manifest. Counted in
+     * one pass rather than two queries so a `draw:object` can never be counted
+     * as both a chart and a diagram, and excluded roots (notes, comments) are
+     * skipped for the same reason they are everywhere else in this function:
+     * anydoc publishes nothing from them, so a loss there is not a loss on the
+     * page.
+     */
+    const odfObjectKindCounts = { chart: 0, diagram: 0 }
+    for (const object of page.getElementsByTagNameNS(ODF_DRAW_NS, 'object')) {
+      if (excludedRoots.some((root) => root.contains(object))) continue
+      // A media object is already counted as media below; classifying it again
+      // here would report one embedded video as a video AND a diagram.
+      if (isOdfMediaMime(object.getAttributeNS(ODF_DRAW_NS, 'mime-type'))) continue
+      const kind = odfObjectKind(object.getAttributeNS(XLINK_NS, 'href'), manifestMediaTypes)
+      if (kind) odfObjectKindCounts[kind] += 1
+    }
+
     return {
       number: position + 1,
       ...(title ? { title } : {}),
@@ -1279,21 +1378,33 @@ function odpIndex(parts: Record<string, string>): PresentationIndex {
       titleOutOfOrder: false,
       /*
        * ODF carries a chart or a diagram as an embedded OBJECT rather than as
-       * the distinct frame kinds PPTX uses, and nothing in the corpus
-       * exercises one yet, so those two still report zero rather than guess.
+       * the distinct frame kinds PPTX uses. That is why these two reported a
+       * hardcoded zero until issue 14 — and reporting zero was not "declining
+       * to guess", it was a silent loss: the frame carries no
+       * `draw:mime-type`, so nothing in `content.xml` alone says what the
+       * object is.
        *
-       * MEDIA is no longer among them. Impress writes an inserted video as a
+       * The package does say, in the one part nobody was reading. MEASURED
+       * 2026-08-30 on a file LibreOffice Impress wrote through its own
+       * `impress8` filter: an inserted chart is `draw:frame > draw:object`
+       * with `xlink:href="./Object 1"`, and `META-INF/manifest.xml` carries
+       * `Object 1/` with media type
+       * `application/vnd.oasis.opendocument.chart`. So the manifest is now
+       * fetched alongside `content.xml` (see `parts.ts`) and the two are
+       * joined here.
+       *
+       * MEDIA was already counted. Impress writes an inserted video as a
        * `draw:plugin` carrying a media mime type, optionally with a
        * `draw:image` poster in the same frame, and measured against real
-       * anydoc BOTH shapes are silent: with a poster the deck imports as an
-       * ordinary picture with nothing saying a video was ever there — the
-       * worse case, since the reader sees a still and has no reason to
-       * suspect otherwise — and without one it vanishes entirely. Reporting
-       * nothing is not the same as declining to guess.
+       * anydoc BOTH shapes are silent in anydoc's own output: with a poster
+       * the deck imports as an ordinary picture with nothing saying a video
+       * was ever there — the worse case, since the reader sees a still and
+       * has no reason to suspect otherwise — and without one it vanishes
+       * entirely.
        */
       unrepresentable: {
-        diagrams: 0,
-        charts: 0,
+        diagrams: odfObjectKindCounts.diagram,
+        charts: odfObjectKindCounts.chart,
         /*
          * ODF names a picture's part directly in `xlink:href`, so there is no
          * relationship to dangle: an href pointing at a part the package does
