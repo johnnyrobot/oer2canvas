@@ -730,3 +730,114 @@ test('a raw fragment separator in a target is refused, not silently truncated', 
   expect(finding?.message).toContain('slide 1 is missing a picture the deck says it carries')
   expect(finding?.message).toContain('1 block of content belongs to no slide')
 })
+
+
+test.each([
+  ['a hyperlinked picture (draw:a)', 'hyperlinkedImage'],
+  ['a picture inside a table cell', 'imageInTableCell'],
+  ["a frame inside another frame's text-box", 'imageInNestedFrame'],
+  ['a picture hung off a draw:custom-shape', 'imageInCustomShape'],
+  ['an unframed picture directly under draw:page', 'unframedImage'],
+] as const)('the odp index records nothing for %s, because anydoc renders nothing', async (_name, placement) => {
+  /*
+   * ODF puts almost no constraint on where a `draw:image` may sit, and the
+   * index's picture query was a FLAT any-depth query over the page; anydoc
+   * reaches a picture by WALKING A SHAPE TREE. The two disagree at every
+   * placement the walk does not visit, and these five are measured: anydoc
+   * emits no block for any of them.
+   *
+   * On its own each was a spurious refusal. Combined with an earlier page that
+   * really owns the part, it was a silent misattribution — see the test below.
+   */
+  const { anydocHtml, index, result } = await reconcileFixture([{ title: 'One', [placement]: true }])
+
+  expect(anydocHtml).not.toContain('<img')
+  expect(index.slides[0]!.pictureOrigins).toEqual([])
+  expect(result.findings).toEqual([])
+})
+
+test.each([
+  ['inside a draw:g group', 'groupedImage'],
+  ['inside two nested draw:g groups', 'deeplyGroupedImage'],
+] as const)('the odp index still records a picture %s, which anydoc does render', async (_name, placement) => {
+  // The positive controls for the container list. A rule that over-restricts —
+  // "only a frame that is a direct child of the page" — would pass every test
+  // above and silently stop importing Impress's own Group command.
+  const { anydocHtml, index, result } = await reconcileFixture([{ title: 'One', [placement]: true }])
+
+  expect(anydocHtml).toContain('<img')
+  expect(index.slides[0]!.pictureOrigins).toEqual(['Pictures/image1.png'])
+  expect(sectionsOf(result.html)[0]!.querySelector('img')).not.toBeNull()
+  expect(result.findings).toEqual([])
+})
+
+test.each([
+  ['a table cell', 'imageInTableCell'],
+  ['a draw:a hyperlink', 'hyperlinkedImage'],
+  ["a frame nested in another frame's text-box", 'imageInNestedFrame'],
+] as const)(
+  "an odp picture anydoc does not walk, in %s, no longer steals an earlier page's picture",
+  async (_name, placement) => {
+    /*
+     * THE EIGHTH COUNTEREXAMPLE, and the same SHAPE as the sixth and seventh:
+     * the index collects a picture anydoc does not render. Page 1 shows one
+     * picture twice; page 2 holds that SAME part somewhere anydoc's walk never
+     * visits. The over-collected reference made the part look like two pages',
+     * the sole-referencer rule capped page 1 — its true and only owner — at one
+     * block, and page 1's second picture published under page 2's heading with
+     * NO findings at all. All three placements produced byte-identical output.
+     */
+    const { anydocHtml, result } = await reconcileFixture([
+      { title: 'One', image: { alt: 'ONE PIC' }, secondImage: { alt: 'TWO PIC' } },
+      { title: 'Two', [placement]: true },
+    ])
+
+    expect(anydocHtml.match(/<img/g)).toHaveLength(2)
+    const sections = sectionsOf(result.html)
+    expect([...sections[0]!.querySelectorAll('img')].map((image) => image.alt)).toEqual(['ONE PIC', 'TWO PIC'])
+    expect(sections[1]!.querySelectorAll('img')).toHaveLength(0)
+    expect(result.findings).toEqual([])
+  },
+)
+
+test('a reference resolving to the package root cannot claim an unidentifiable picture', async () => {
+  /*
+   * `resolvePackagePath` returned the EMPTY STRING for a reference resolving to
+   * the package root (`xlink:href="."`), and `''` is exactly the origin
+   * `anydoc-html.ts` writes for a picture it could NOT identify — so the slide
+   * holding it became the sole referencer of every unidentifiable picture in
+   * the deck. MEASURED: page 1 with `href="."` and page 2 carrying its bytes
+   * inline as `office:binary-data` (no href at all, which anydoc renders with
+   * an empty origin), and page 1 claimed BOTH placeholders while the only
+   * finding was the untitled-slide warning.
+   *
+   * There were two "cannot name it" values, one deliberately unclaimable and
+   * one silently claimable. Now there is one.
+   */
+  const { anydocHtml, index, result } = await reconcileFixture([
+    { title: 'One', image: { alt: 'DOT' }, imageHrefOverride: '.' },
+    { inlineBytesImage: true },
+  ])
+
+  // Both pictures reach anydoc with NO identity of their own.
+  expect(anydocHtml.match(/data-origin-part=""/g)).toHaveLength(2)
+  expect(index.slides[0]!.pictureOrigins).not.toContain('')
+  const finding = result.findings.find((entry) => entry.code === 'presentation-unattributed-content')
+  expect(finding?.severity).toBe('blocker')
+  expect(sectionsOf(result.html)[0]!.textContent).not.toContain('INLINE BYTES')
+})
+
+test('a raw query separator in a target is refused, not silently truncated', async () => {
+  // The sibling of the `#` row: `?` starts a query, and `URL` would strip
+  // `?age.png` from the name just as silently. A part name is a path.
+  const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture(
+    [{ title: 'One', body: ['Body one'], image: { alt: 'A cell' }, imageTargetOverride: '../media/im?age.png' }],
+    { imagePartName: 'im?age.png' },
+  ))
+
+  expect(anydocHtml).toContain('data-origin-part=""')
+  expect(index.slides[0]!.pictureOrigins).not.toContain('ppt/media/im')
+  const finding = result.findings.find((entry) => entry.code === 'presentation-unattributed-content')
+  expect(finding?.severity).toBe('blocker')
+  expect(finding?.message).toContain('slide 1 is missing a picture the deck says it carries')
+})

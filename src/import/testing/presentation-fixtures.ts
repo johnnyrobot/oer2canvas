@@ -2,6 +2,8 @@
 import { writeZip } from '../../engine/export/zip.ts'
 // @ts-expect-error -- shared browser/Node test fixture; see above.
 import { RASTER_FIXTURES } from './raster-fixtures.ts'
+// @ts-expect-error -- shared browser/Node test fixture; see above.
+import { toBase64 } from './base64.ts'
 
 const utf8 = (value: string) => new TextEncoder().encode(value)
 const xmlEscape = (value: string) =>
@@ -860,6 +862,53 @@ export interface OdpPageSpec {
    */
   alternateImages?: boolean
   /**
+   * Five placements of a `draw:image` that ODF allows and anydoc's own shape
+   * walk does NOT visit — each measured emitting no block at all. They exist so
+   * the index's container discipline is stated against evidence rather than
+   * guessed: a flat any-depth `draw:image` query collected all five, and one of
+   * them (a picture inside a table cell) was measured publishing an EARLIER
+   * page's picture under this page's heading with no findings.
+   *
+   * `hyperlinkedImage` is `draw:frame > draw:a > draw:image`, ODF's own way of
+   * making a picture a link. `imageInTableCell` is a frame holding a
+   * `table:table` whose cell holds a frame holding the image.
+   * `imageInNestedFrame` is a frame whose `draw:text-box` holds another frame
+   * holding the image. `imageInCustomShape` hangs the image off a
+   * `draw:custom-shape` (a toolbar rectangle or callout).
+   * `unframedImage` puts a bare `draw:image` directly under `draw:page`.
+   */
+  hyperlinkedImage?: boolean
+  imageInTableCell?: boolean
+  imageInNestedFrame?: boolean
+  imageInCustomShape?: boolean
+  unframedImage?: boolean
+  /**
+   * The RAW `xlink:href` written for this page's `image` frame, replacing the
+   * properly percent-encoded one the fixture writes by default. The ODF twin of
+   * PPTX's `imageTargetOverride`, and the only way to author a reference that
+   * resolves to the PACKAGE ROOT (`.`, `/`, `..`) — which decodes to the EMPTY
+   * string, exactly the origin `anydoc-html.ts` writes for a picture it could
+   * not identify at all.
+   */
+  imageHrefOverride?: string
+  /**
+   * A `draw:frame > draw:image` carrying its bytes INLINE as
+   * `office:binary-data`, with no `xlink:href` at all — which ODF allows and
+   * anydoc renders with an EMPTY origin, because there is no part to name. The
+   * index records nothing for it, so the block belongs to no slide and refuses:
+   * that is the measured, intended behaviour, and it is also the block a slide
+   * holding an empty origin of its own was measured silently swallowing.
+   */
+  inlineBytesImage?: boolean
+  /**
+   * The two placements anydoc DOES walk, beside `image`'s plain frame:
+   * `draw:g > draw:frame > draw:image` (Impress's own Group command) and the
+   * same nested one level deeper. Positive controls, so a container rule that
+   * over-restricts fails rather than passing quietly.
+   */
+  groupedImage?: boolean
+  deeplyGroupedImage?: boolean
+  /**
    * A `draw:plugin` carrying a media mime type — the shape Impress writes for
    * an inserted video — optionally with a `draw:image` POSTER in the same
    * frame. anydoc emits nothing for the plugin and an ordinary picture for the
@@ -1078,8 +1127,15 @@ export async function odpFixture(
     const outline = outlineContent ? odpFrame(`Body ${index + 1}`, 'outline', outlineContent) : ''
     const image = page.image
       ? `<draw:frame draw:name="Diagram ${index + 1}" svg:width="1cm" svg:height="1cm">` +
-        `<draw:image xlink:href="${imageHref}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
+        `<draw:image xlink:href="${page.imageHrefOverride ?? imageHref}" xlink:type="simple" ` +
+        `xlink:show="embed" xlink:actuate="onLoad"/>` +
         (page.image.alt === undefined ? '' : `<svg:desc>${xmlEscape(page.image.alt)}</svg:desc>`) +
+        `</draw:frame>`
+      : ''
+    const inlineBytesImage = page.inlineBytesImage
+      ? `<draw:frame draw:name="Inline picture ${index + 1}" svg:width="1cm" svg:height="1cm">` +
+        `<draw:image><office:binary-data>${toBase64(EMBEDDED_IMAGE_PNG)}</office:binary-data></draw:image>` +
+        `<svg:desc>INLINE BYTES</svg:desc>` +
         `</draw:frame>`
       : ''
     const secondImage = page.secondImage
@@ -1094,6 +1150,40 @@ export async function odpFixture(
         `<draw:image xlink:href="Pictures/image2.gif" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
         `<draw:image xlink:href="${imageHref}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
         `</draw:frame>`
+      : ''
+    const pictureFrame = (name: string, contentXml: string) =>
+      `<draw:frame draw:name="${name}" svg:width="1cm" svg:height="1cm">${contentXml}</draw:frame>`
+    const pictureImage = `<draw:image xlink:href="${imageHref}" xlink:type="simple" ` +
+      `xlink:show="embed" xlink:actuate="onLoad"/>`
+    const hyperlinkedImage = page.hyperlinkedImage
+      ? pictureFrame(`Linked picture ${index + 1}`,
+          `<draw:a xlink:type="simple" xlink:href="https://example.edu/cells">${pictureImage}</draw:a>`)
+      : ''
+    const imageInTableCell = page.imageInTableCell
+      ? `<draw:frame draw:name="Table frame ${index + 1}" svg:width="20cm" svg:height="3cm">` +
+        `<table:table table:name="Picture table ${index + 1}">` +
+        `<table:table-column/><table:table-row><table:table-cell>` +
+        pictureFrame(`Cell picture ${index + 1}`, pictureImage) +
+        `</table:table-cell></table:table-row></table:table></draw:frame>`
+      : ''
+    const imageInNestedFrame = page.imageInNestedFrame
+      ? `<draw:frame draw:name="Outer picture frame ${index + 1}" svg:width="10cm" svg:height="3cm">` +
+        `<draw:text-box>${pictureFrame(`Inner picture frame ${index + 1}`, pictureImage)}</draw:text-box>` +
+        `</draw:frame>`
+      : ''
+    const imageInCustomShape = page.imageInCustomShape
+      ? `<draw:custom-shape draw:name="Shape picture ${index + 1}" svg:width="5cm" svg:height="2cm">` +
+        pictureImage +
+        `</draw:custom-shape>`
+      : ''
+    const unframedImage = page.unframedImage ? pictureImage : ''
+    const groupedImage = page.groupedImage
+      ? odpGroup(`Picture group ${index + 1}`, pictureFrame(`Grouped picture ${index + 1}`, pictureImage))
+      : ''
+    const deeplyGroupedImage = page.deeplyGroupedImage
+      ? odpGroup(`Outer picture group ${index + 1}`,
+          odpGroup(`Inner picture group ${index + 1}`,
+            pictureFrame(`Deeply grouped picture ${index + 1}`, pictureImage)))
       : ''
     const customShape = page.customShapeText ? odpCustomShape(`Custom Shape ${index + 1}`, page.customShapeText) : ''
     const groupedCustomShape = page.groupedCustomShapeText
@@ -1111,7 +1201,9 @@ export async function odpFixture(
     // A direct child of draw:page, the same level presentation:notes sits at.
     const comment = page.commentText ? odpAnnotation(`Comment ${index + 1}`, page.commentText) : ''
     const extras = `${customShape}${groupedCustomShape}${nestedFrame}${table}${media}`
-    const pictures = `${image}${secondImage}${alternateImages}`
+    const pictures = `${image}${secondImage}${alternateImages}${hyperlinkedImage}${imageInTableCell}` +
+      `${imageInNestedFrame}${imageInCustomShape}${unframedImage}${groupedImage}${deeplyGroupedImage}` +
+      `${inlineBytesImage}`
     const frames = page.titleLast
       ? `${outline}${pictures}${extras}${title}`
       : `${title}${outline}${pictures}${extras}`
@@ -1131,7 +1223,9 @@ export async function odpFixture(
       `<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.presentation"/>` +
       `<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>` +
       (pages.some((page) => page.image || page.secondImage || page.alternateImages || page.notesImage ||
-        page.video?.poster)
+        page.video?.poster || page.hyperlinkedImage || page.imageInTableCell ||
+        page.imageInNestedFrame || page.imageInCustomShape || page.unframedImage ||
+        page.groupedImage || page.deeplyGroupedImage)
         ? `<manifest:file-entry manifest:full-path="${imagePart}" manifest:media-type="image/png"/>`
         : '') +
       (pages.some((page) => page.alternateImages)
@@ -1141,7 +1235,8 @@ export async function odpFixture(
     { name: 'content.xml', data: utf8(content) },
   ]
   if (pages.some((page) => page.image || page.secondImage || page.alternateImages || page.notesImage ||
-    page.video?.poster)) {
+    page.video?.poster || page.hyperlinkedImage || page.imageInTableCell || page.imageInNestedFrame ||
+    page.imageInCustomShape || page.unframedImage || page.groupedImage || page.deeplyGroupedImage)) {
     entries.push({ name: imagePart, data: EMBEDDED_IMAGE_PNG })
   }
   if (pages.some((page) => page.alternateImages)) {

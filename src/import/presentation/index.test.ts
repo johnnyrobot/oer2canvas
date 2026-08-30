@@ -690,6 +690,24 @@ test('a declared relationship whose target cannot be named is still a reference'
   expect(index.slides[0]!.unrepresentable.pictures).toBe(0)
 })
 
+test('a target resolving to the package root is unresolvable, not the empty string', async () => {
+  /*
+   * `''` is not a spare value to hand back: it is exactly the origin
+   * `parsers/anydoc-html.ts` writes for a picture it could NOT identify, so a
+   * slide recording it became the sole referencer of every unidentifiable
+   * picture in the deck and claimed them. Measured on ODP with
+   * `xlink:href="."`. A reference resolving to the package root names no part,
+   * so it is unresolvable like any other — ONE "cannot name it" value, and it
+   * is unclaimable.
+   */
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'One', image: { alt: 'A cell' }, imageHrefOverride: '.' },
+  ]))
+
+  expect(index.slides[0]!.pictureOrigins).toHaveLength(1)
+  expect(index.slides[0]!.pictureOrigins).not.toContain('')
+})
+
 test('a blip naming an undefined relationship is reported as a lost picture', async () => {
   /*
    * The one loss nothing else records. MEASURED: anydoc emits no block for such

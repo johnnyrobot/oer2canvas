@@ -22,6 +22,15 @@ export interface PresentationSlideIndex {
    * any picture linked from outside the package. DEDUPLICATED, in the order
    * first seen — see `reconcile.ts` for why a set rather than a list.
    *
+   * ONE ENTRY IS NEITHER: an opaque sentinel for a reference the slide really
+   * makes and this module cannot NAME (a malformed percent sequence, a target
+   * resolving to the package root or off it, a raw `#` or `?`). It is
+   * deliberately a value no picture's `data-origin-part` can ever equal, so a
+   * slide holding one always reaches a refusal instead of quietly losing its
+   * pictures to a neighbour that looks like their sole referencer. Treat every
+   * entry as OPAQUE and compare it only against a `data-origin-part`; never
+   * parse one as a path.
+   *
    * anydoc emits a picture as a block carrying an `<img>` and NO text of its
    * own, so no text comparison can attribute one. This replaces the per-slide
    * COUNT that used to do that job. A count required predicting which shapes
@@ -428,11 +437,25 @@ function resolvePackagePath(reference: string, baseDirectory: string): string | 
   }
   if (resolved.origin !== PACKAGE_ORIGIN_ORIGIN) return undefined
   if (resolved.hash !== '' || resolved.search !== '') return undefined
+  let path: string
   try {
-    return decodeURIComponent(resolved.pathname.replace(/^\//, ''))
+    path = decodeURIComponent(resolved.pathname.replace(/^\//, ''))
   } catch {
     return undefined
   }
+  /*
+   * THE EMPTY STRING IS NOT A PART NAME, and returning it was a silent
+   * misattribution rather than a harmless oddity: `''` is exactly the origin
+   * `parsers/anydoc-html.ts` writes for a picture it could NOT identify, and a
+   * slide holding it therefore became the sole referencer of every
+   * unidentifiable picture in the deck. MEASURED, an ODP with
+   * `xlink:href="."` on page 1 and an `office:binary-data` picture on page 2:
+   * page 1 claimed BOTH placeholders and the only finding was the untitled
+   * slide warning. A reference resolving to the package root (`.`, `/`, `..`)
+   * names no part, so it is unresolvable like any other — one "cannot name it"
+   * value, deliberately unclaimable, instead of two of which one was claimable.
+   */
+  return path === '' ? undefined : path
 }
 
 /** Whether a reference names its own scheme, and so points outside the package. */
@@ -882,6 +905,57 @@ function odfNotesText(notesElement: Element): string | undefined {
 }
 
 /**
+ * The ODF containers anydoc's own walk descends through on its way from a
+ * `draw:page` down to a picture: a frame, and Impress's own Group
+ * (`draw:g`). MEASURED against real anydoc 0.2.4 — both are walked at one
+ * level and at two, and the five placements below are not.
+ *
+ * The list is EVIDENCE, not a schema reading, and the next person extending it
+ * should extend it the same way: build the deck, drive the real Worker, and see
+ * whether anydoc emits a block.
+ */
+const ODF_WALKED_CONTAINERS = new Set(['frame', 'g'])
+
+/**
+ * Whether anydoc will actually render this `draw:image` — its parent is a
+ * `draw:frame`, and every container between that frame and the `draw:page` is
+ * one anydoc walks.
+ *
+ * ODF puts almost no constraint on where a `draw:image` may sit, and the flat
+ * any-depth query this replaces collected every one of them; anydoc reaches a
+ * picture by WALKING A SHAPE TREE. The two disagree at every placement the walk
+ * does not visit, and MEASURED with real anydoc 0.2.4 that is at least five —
+ * `draw:frame > draw:a > draw:image` (ODF's hyperlinked picture), an image
+ * inside a `table:table` cell, a frame nested inside another frame's
+ * `draw:text-box`, an image hung off a `draw:custom-shape`, and a bare
+ * `draw:image` directly under `draw:page`. anydoc emits NO block for any of
+ * them while the index recorded a part for each.
+ *
+ * That was not merely a spurious refusal. The over-collected part is one an
+ * EARLIER page really owns, so the sole-referencer rule capped that page at one
+ * block and handed this one the surplus: measured with page 1 showing a picture
+ * twice and page 2 holding that same part inside a table cell, page 1's second
+ * picture published under page 2's heading with NO findings at all. The
+ * `draw:a` and nested-text-box placements produce byte-identical output.
+ *
+ * This is the ODP half of the discipline `walkShapes` already has on the PPTX
+ * side, where the walk visits named containers rather than querying at any
+ * depth. It is stated as a chain test rather than a recursive walk because the
+ * page's TEXT query is deliberately flat (see `odpIndex`) and must stay that
+ * way — a per-shape text walk double-counts a frame nested in a frame.
+ */
+function isWalkedPicture(image: Element): boolean {
+  const frame = image.parentElement
+  if (!frame || frame.namespaceURI !== ODF_DRAW_NS || frame.localName !== 'frame') return false
+  for (let ancestor = frame.parentElement; ancestor; ancestor = ancestor.parentElement) {
+    if (ancestor.namespaceURI !== ODF_DRAW_NS) return false
+    if (ancestor.localName === 'page') return true
+    if (!ODF_WALKED_CONTAINERS.has(ancestor.localName)) return false
+  }
+  return false
+}
+
+/**
  * What a `draw:image`'s `xlink:href` identifies: the package part it names, the
  * URL itself when it points outside the package, or `UNRESOLVABLE_REFERENCE`
  * when the href is there but cannot be named. `undefined` means the element
@@ -1078,6 +1152,7 @@ function odpIndex(parts: Record<string, string>): PresentationIndex {
        */
       pictureOrigins: [...new Set([...page.getElementsByTagNameNS(ODF_DRAW_NS, 'image')]
         .filter((image) => !excludedRoots.some((root) => root.contains(image)))
+        .filter((image) => isWalkedPicture(image))
         .filter((image) => image === firstImageChild(image.parentElement))
         .map((image) => odfPictureOrigin(image.getAttributeNS(XLINK_NS, 'href')))
         .filter((origin) => origin !== undefined))],
