@@ -209,14 +209,30 @@ function paragraphText(paragraph: Element, { includeFields }: { includeFields: b
  * for `a:br`. Unlike PPTX, no `isTextCarrier` is passed at all: see that
  * option's own doc comment on `joinParagraphText` for why an ODF allowlist
  * (of `text:span`, in an earlier version of this function) is a losing list
- * that dropped a hyperlink's own text. ODF has no field-chrome equivalent to
- * exclude here.
+ * that dropped a hyperlink's own text.
+ *
+ * The one thing excluded is an `office:annotation` anchored INLINE, mid
+ * paragraph — a reviewer comment, which anydoc emits no block for anywhere,
+ * so it is not paragraph content. Without this, a comment's own text is
+ * concatenated straight into the sentence it interrupts (`"Mention the
+ * labIs this still true? before class."`) — and inside SPEAKER NOTES that is
+ * safety-critical, because `notesText` is compared by strict equality
+ * against anydoc's blockquote to tell a private note from a genuine pull
+ * quote. Impress anchors its own comments at page level (which
+ * `excludedRoots` in `odpIndex` already handles), but format converters emit
+ * the inline form.
  */
 function odfParagraphText(paragraph: Element): string {
   return joinParagraphText(paragraph, {
     isSpace: (element) => element.namespaceURI === ODF_TEXT_NS &&
       (element.localName === 'line-break' || element.localName === 'tab' || element.localName === 's'),
+    exclude: isOdfAnnotation,
   })
+}
+
+/** An `office:annotation` — an Impress/converter reviewer comment. */
+function isOdfAnnotation(element: Element): boolean {
+  return element.namespaceURI === ODF_OFFICE_NS && element.localName === 'annotation'
 }
 
 /**
@@ -502,12 +518,23 @@ function pptxIndex(parts: Record<string, string>): PresentationIndex {
  * ORIGINAL form of this module's ODP stub) merges every bullet into a
  * single run, which anydoc's own per-paragraph blocks never do, and which
  * the later reconciliation cannot match against.
+ *
+ * A paragraph living INSIDE an `office:annotation` is not one of the
+ * container's own paragraphs and is skipped here, the counterpart of
+ * `odfParagraphText` excluding an inline annotation from the paragraph it
+ * interrupts. Both halves are needed and neither is redundant: an
+ * `office:annotation` carries its own `text:p`, so this flat any-depth query
+ * would otherwise find that `text:p` a SECOND time as a standalone
+ * paragraph, and `notesText` — the string a blockquote is compared against
+ * by strict equality — would count a private reviewer comment twice over.
  */
 function odfParagraphs(container: Element): string[] {
+  const annotations = [...container.getElementsByTagNameNS(ODF_OFFICE_NS, 'annotation')]
   return [
     ...container.getElementsByTagNameNS(ODF_TEXT_NS, 'p'),
     ...container.getElementsByTagNameNS(ODF_TEXT_NS, 'h'),
   ]
+    .filter((paragraph) => !annotations.some((annotation) => annotation.contains(paragraph)))
     .sort(documentOrder)
     .map((paragraph) => odfParagraphText(paragraph))
     .filter((text) => text.length > 0)

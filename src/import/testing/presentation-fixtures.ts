@@ -453,6 +453,15 @@ const ODP_NS = {
  * to pin fix-review round 4's Critical: ODF has no isolating leaf element
  * the way OOXML has `a:t`, so `text:a`'s own text is paragraph content too,
  * not just `text:span`'s.
+ *
+ * `{ comment: text }` is an `office:annotation` anchored INLINE, in the
+ * middle of the paragraph, rather than as a direct child of `draw:page` the
+ * way `commentText` authors it. Impress itself anchors a comment at page
+ * level, but format converters (and Google Slides exports) emit the inline
+ * form, and it is the shape that made `notesText` count the comment's own
+ * `text:p` twice — once inside the enclosing paragraph's text, once again as
+ * a standalone paragraph — which is a failed strict-equality comparison, and
+ * therefore published speaker notes.
  */
 export type OdpParagraphSegment =
   | string
@@ -460,6 +469,7 @@ export type OdpParagraphSegment =
   | { tab: true }
   | { spaces: number }
   | { link: string }
+  | { comment: string }
 
 export interface OdpPageSpec {
   title?: string
@@ -551,6 +561,7 @@ function odpParagraphSegmentsXml(segments: readonly OdpParagraphSegment[]): stri
     if ('link' in segment) {
       return `<text:a xlink:type="simple" xlink:href="https://example.edu/lab-safety">${xmlEscape(segment.link)}</text:a>`
     }
+    if ('comment' in segment) return odpAnnotation('Inline comment', segment.comment)
     return `<text:s text:c="${segment.spaces}"/>`
   }).join('')
 }

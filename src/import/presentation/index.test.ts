@@ -432,3 +432,37 @@ test('a text:h heading inside speaker notes is not dropped from notesText (fix-r
   expect(index.slides[0]!.notesText).toBe('Notes heading Notes body.')
   expect(index.slides[0]!.textRuns).toEqual(['Title', 'Body'])
 })
+
+test('an office:annotation anchored INSIDE a notes paragraph is counted zero times, not twice (task 6 amendment 3)', async () => {
+  /*
+   * The reconciler tells a private speaker note from a genuine pull quote by
+   * comparing `notesText` against the blockquote's text with STRICT EQUALITY,
+   * and strict equality is what keeps a real quotation on the page. An
+   * `office:annotation` anchored inline inside a notes paragraph used to be
+   * counted TWICE — once inside the enclosing paragraph's own text, once again
+   * when `odfParagraphs` found the annotation's inner `text:p` as a standalone
+   * paragraph — so the comparison failed and the notes were published. anydoc
+   * emits no block for a comment anywhere, so the honest reading is that a
+   * comment contributes NOTHING to the notes: not once, not twice.
+   */
+  const index = await odpIndexOf(await odpFixture([
+    {
+      title: 'Photosynthesis',
+      body: ['Light reactions'],
+      notesRuns: ['Mention the lab', { comment: 'Is this still true?' }, ' before class.'],
+    },
+  ]))
+
+  expect(index.slides[0]!.notesText).toBe('Mention the lab before class.')
+})
+
+test('an inline notes comment does not leak into the page text either', async () => {
+  const index = await odpIndexOf(await odpFixture([
+    {
+      title: 'Photosynthesis',
+      notesRuns: ['Mention the lab', { comment: 'Is this still true?' }, ' before class.'],
+    },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Photosynthesis'])
+})
