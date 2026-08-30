@@ -140,6 +140,35 @@ test('validated content rejects an RTF renamed with an ODT extension', async () 
     .rejects.toThrow(/contents are RTF, not an ODT document/i)
 })
 
+/*
+ * Issue 15's sixth criterion: a DISABLED format says what it is and what to do,
+ * and it says so BEFORE any bytes are read. Nothing here needs legacy bytes —
+ * the refusal happens in `enabledCapabilityFor`, ahead of `file.arrayBuffer()`
+ * — which is the point: a parked format never reaches a parser Worker at all.
+ */
+test.each([
+  ['lecture.doc', /Word 97–2003 document: Not imported\./, /\.docx/],
+  ['LECTURE.DOC', /Word 97–2003 document: Not imported\./, /\.docx/],
+  ['deck.ppt', /PowerPoint 97–2003 presentation: Not imported\./, /\.pptx/],
+  ['slideshow.pps', /PowerPoint 97–2003 presentation: Not imported\./, /\.pptx/],
+  ['template.pot', /PowerPoint 97–2003 presentation: Not imported\./, /\.pptx/],
+] as const)('%s is refused by name, with the way out', async (name, refusal, replacement) => {
+  // Real, parseable ODT bytes under a legacy name, so the refusal provably
+  // comes from the extension being parked and not from unreadable content.
+  const file = new File([await semanticOdtFixture()], name)
+
+  await expect(importStructuredDocument(file, { metadata })).rejects.toThrow(refusal)
+  await expect(importStructuredDocument(file, { metadata })).rejects.toThrow(replacement)
+  // NOT the generic message, which is what a truly unknown extension gets.
+  await expect(importStructuredDocument(file, { metadata }))
+    .rejects.not.toThrow(/Choose a supported document file/)
+})
+
+test('an unknown extension still gets the generic list', async () => {
+  await expect(importStructuredDocument(new File([new Uint8Array([1, 2, 3])], 'notes.pages'), { metadata }))
+    .rejects.toThrow(/Choose a supported document file \(\.docx, /)
+})
+
 test.each(['epub', 'odt', 'rtf'] as const)('%s malformed input fails explicitly', async (format) => {
   const malformed = new File([malformedStructuredFixture(format)], `broken.${format}`)
 

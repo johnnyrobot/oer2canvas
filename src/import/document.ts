@@ -18,7 +18,19 @@ export interface StructuredDocumentImportOptions {
 
 function enabledCapabilityFor(file: File): DocumentFormatCapability {
   const capability = capabilityForFilename(file.name)
-  if (!capability || capability.status !== 'enabled' || capability.parser !== 'anydoc') {
+  /*
+   * A format this table KNOWS and does not enable gets its own message. The
+   * generic list below is true for it too, but it answers the wrong question:
+   * someone holding a `.doc` needs to be told that this importer read the
+   * format, decided against it, and what to do instead — not handed a list of
+   * extensions to compare their own against. The first limitation is that
+   * sentence (see the parked entries in `capability.ts`), so the message stays
+   * in one place rather than being written twice.
+   */
+  if (capability && capability.status !== 'enabled') {
+    throw new Error(`${capability.label}: ${capability.limitations[0]}`)
+  }
+  if (!capability || capability.parser !== 'anydoc') {
     const extensions = ENABLED_ANYDOC_CAPABILITIES.flatMap((entry) => entry.extensions).join(', ')
     throw new Error(`Choose a supported document file (${extensions}).`)
   }
