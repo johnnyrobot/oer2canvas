@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { importWebArticle } from '../import/web'
 import { createFirecrawlFetcher } from '../import/firecrawl'
+import { createSelfHostedExtractorFetcher } from '../import/self-hosted-extractor'
 import { createFirecrawlKeyStore } from '../import/firecrawl-key'
 import { publisherForHost, PUBLISHER_TAB_LABELS } from '../sources/publisher-hosts'
 import type { ImportResult } from '../import/types'
@@ -15,6 +16,24 @@ import {
 } from './ImportMetadataFields'
 
 const FIELD = 'mt-1 min-h-9 w-full rounded-md border border-neutral-300 bg-white px-3 dark:border-neutral-700 dark:bg-neutral-900'
+
+/**
+ * Empty in the public build, where a page is fetched by Firecrawl on the user's
+ * own key. An exact HTTPS origin in a build whose operator runs the extraction
+ * service themselves, where no key is asked for, sent, or held.
+ *
+ * Read at MODULE scope and compared against `''`, exactly as `App.tsx` reads
+ * the pinned Canvas origin — and NOT taken as a prop, which is the part worth
+ * stating. A prop would keep both branches live in every build, which would put
+ * the extractor's endpoint in the public bundle; `scripts/smoke-dist.mjs`
+ * refuses that. The cost of the constant is that neither branch can be switched
+ * from inside a test, which is why the opted-in build has a Vitest project of
+ * its own (`vitest.config.ts`, `unit-self-hosted`).
+ */
+const SELF_HOSTED_EXTRACTOR_ORIGIN =
+  typeof __OER2CANVAS_SELF_HOSTED_EXTRACTOR_ORIGIN__ === 'string'
+    ? __OER2CANVAS_SELF_HOSTED_EXTRACTOR_ORIGIN__
+    : ''
 
 /** The publisher whose own tab already covers this address, if any. */
 function nudgeFor(rawUrl: string): { id: string; label: string } | undefined {
@@ -57,13 +76,19 @@ export function WebArticleImporter({
    * One store per mounted panel, and THE STORE is what the fetcher reads — the
    * input is only how the key is typed. That is what makes Forget key clear the
    * key rather than merely the field.
+   *
+   * NOT CONSTRUCTED AT ALL when an operator has pinned their own extractor.
+   * Issue 17's second criterion says no key may be "required, requested, or
+   * STORABLE" in that build, and a store that exists is somewhere a key could
+   * be put. The ternary folds with the constant, so the store — and the module
+   * that makes one — leaves that bundle entirely.
    */
-  const keyStore = useRef(createFirecrawlKeyStore())
+  const keyStore = useRef(SELF_HOSTED_EXTRACTOR_ORIGIN ? undefined : createFirecrawlKeyStore())
 
   const nudge = nudgeFor(url)
 
   function forgetKey() {
-    keyStore.current.forget()
+    keyStore.current?.forget()
     setKey('')
   }
 
@@ -81,12 +106,22 @@ export function WebArticleImporter({
     try {
       const imported = await importWebArticle(url, {
         metadata: completeImportMetadata(metadata),
-        fetcher: createFirecrawlFetcher({
-          // A getter, so a key forgotten between this render and the request is
-          // actually gone rather than captured in a closure.
-          key: () => keyStore.current.peek(),
-          ...(injectedFetch ? { fetch: injectedFetch } : {}),
-        }),
+        /*
+         * The one place the deployment mode changes what happens. Everything
+         * else on this screen, and everything below the seam, is shared — so
+         * the two builds cannot come to disagree about what a page is.
+         */
+        fetcher: SELF_HOSTED_EXTRACTOR_ORIGIN
+          ? createSelfHostedExtractorFetcher({
+            origin: SELF_HOSTED_EXTRACTOR_ORIGIN,
+            ...(injectedFetch ? { fetch: injectedFetch } : {}),
+          })
+          : createFirecrawlFetcher({
+            // A getter, so a key forgotten between this render and the request
+            // is actually gone rather than captured in a closure.
+            key: () => keyStore.current?.peek(),
+            ...(injectedFetch ? { fetch: injectedFetch } : {}),
+          }),
         signal: controller.signal,
       })
       onImported(imported)
@@ -106,14 +141,29 @@ export function WebArticleImporter({
         Above the button, in prose, not behind a disclosure triangle. A
         disclosure the user has to open is not a disclosure, and this is the
         moment before anything leaves the browser.
+
+        Two whole paragraphs rather than one with interpolated fragments,
+        because they are different claims about where bytes go and who sees
+        them. A template that produced both would be one sentence nobody can
+        read as either.
       */}
-      <p className="rounded-md border border-neutral-300 p-3 text-sm text-neutral-700 dark:border-neutral-700 dark:text-neutral-300">
-        Importing a web page sends the address below and your Firecrawl API key directly from this
-        browser to api.firecrawl.dev. This app’s relay is not involved and never sees your key.
-        Firecrawl fetches the page and returns the extracted text; each import costs one Firecrawl
-        credit. Your key is held in this tab’s memory only, is never written to browser storage, and
-        is erased when you close the tab or choose Forget key.
-      </p>
+      {SELF_HOSTED_EXTRACTOR_ORIGIN ? (
+        <p className="rounded-md border border-neutral-300 p-3 text-sm text-neutral-700 dark:border-neutral-700 dark:text-neutral-300">
+          Importing a web page sends the address below from this browser to {SELF_HOSTED_EXTRACTOR_ORIGIN},
+          the extraction service this deployment’s operator runs. No account and no API key are
+          needed, and this browser sends no credential of any kind. This app’s relay is not
+          involved. That service fetches the page and returns the extracted text; the operator of
+          this deployment, not this project, sees the address you enter.
+        </p>
+      ) : (
+        <p className="rounded-md border border-neutral-300 p-3 text-sm text-neutral-700 dark:border-neutral-700 dark:text-neutral-300">
+          Importing a web page sends the address below and your Firecrawl API key directly from this
+          browser to api.firecrawl.dev. This app’s relay is not involved and never sees your key.
+          Firecrawl fetches the page and returns the extracted text; each import costs one Firecrawl
+          credit. Your key is held in this tab’s memory only, is never written to browser storage, and
+          is erased when you close the tab or choose Forget key.
+        </p>
+      )}
 
       <label className="mt-4 block text-sm font-medium">
         Web page address
@@ -148,6 +198,13 @@ export function WebArticleImporter({
         </p>
       )}
 
+      {/*
+        ABSENT, not disabled and not hidden, when an operator pinned their own
+        extractor. The constant folds, so this whole block — the input, the
+        reveal toggle, Forget key, and the store above — is gone from that
+        build rather than merely unreachable in it.
+      */}
+      {!SELF_HOSTED_EXTRACTOR_ORIGIN && (
       <div className="mt-4">
         <label className="block text-sm font-medium" htmlFor="web-article-key">
           Firecrawl API key
@@ -172,7 +229,7 @@ export function WebArticleImporter({
             name="firecrawl-api-key"
             onChange={(event) => {
               setKey(event.target.value)
-              keyStore.current.hold(event.target.value)
+              keyStore.current?.hold(event.target.value)
             }}
             className={FIELD}
           />
@@ -196,6 +253,7 @@ export function WebArticleImporter({
           From your own Firecrawl account. It goes only to the address named above, and nowhere else.
         </p>
       </div>
+      )}
 
       <ImportMetadataFields
         value={metadata}
@@ -222,7 +280,11 @@ export function WebArticleImporter({
         </p>
       )}
       <p role="status" aria-live="polite" className="mt-4 text-sm">
-        {busy ? 'Asking Firecrawl for this page…' : ''}
+        {busy
+          ? SELF_HOSTED_EXTRACTOR_ORIGIN
+            ? 'Asking the extraction service for this page…'
+            : 'Asking Firecrawl for this page…'
+          : ''}
       </p>
       <div className="mt-3 flex flex-wrap gap-3">
         <button type="submit" disabled={busy} className="min-h-9 rounded-md bg-brand-700 px-4 text-sm font-medium text-white disabled:opacity-60">
