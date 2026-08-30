@@ -37,6 +37,17 @@ govern what Firecrawl does with the address and with the page it fetches — thi
 speak for them. Note what this means: **any URL you paste is a host this app now talks to**, on
 your account.
 
+A deployment whose operator runs their own extraction service changes exactly one thing about
+that paragraph, and the interface says which before you press the button. The address you enter
+goes from your browser to that operator's own service — its address is named on the screen —
+instead of to `api.firecrawl.dev`. **No API key is sent, asked for, or held, because there is
+no key field in that build at all**, and no credential of any kind leaves your browser on this
+path. This app's relay is still not involved. The operator of that deployment, rather than this
+project or a third-party vendor, is who sees the address you enter and runs the browser that
+fetches it; they are responsible for publishing an accurate notice for their own deployment, as
+the last paragraph of this notice says. Everything after the fetch — normalizing, previewing,
+auditing, packaging — happens in your browser exactly as it does on the public app.
+
 Small workflow values remain browser-local. A one-time migration removes Canvas token keys
 saved by earlier releases from both the current and legacy IndexedDB databases. Clearing site
 data removes other browser-local state.

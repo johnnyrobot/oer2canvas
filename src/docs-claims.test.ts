@@ -36,6 +36,17 @@ test('every obligation in criterion 5 is stated in a file a user reads', () => {
     ['local compute', /in (this|your) browser|locally as WebAssembly/i],
     ['memory-only credentials', /memory only|held in .*memory/i],
     ['firecrawl disclosure', /api\.firecrawl\.dev/i],
+    /*
+     * Issue 17's seventh criterion. Three obligations, because the second
+     * deployment mode makes three claims a user or an operator would otherwise
+     * have to discover: that a key is not required, that the extraction service
+     * must serve HTTPS (and why localhost cannot), and that the relay stays out
+     * of it. Presence and location only, as above — the wording must stay
+     * improvable.
+     */
+    ['self-hosted extraction needs no key', /no third-party account and no key|no account and no key|no API key is sent/i],
+    ['why the extractor must serve https', /loopback|mixed content/i],
+    ['the relay stays out of web import', /relay is (still )?not involved|not behind the relay|beside the relay/i],
     ['no OCR', /OCR/],
     ['resource limits', /16 MiB|2 MiB/],
     ['recovery guidance', /try again|retry/i],

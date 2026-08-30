@@ -24,8 +24,27 @@ credential, revoke it in Canvas immediately and mention only that it was revoked
   `Authorization` header, never placed in a URL or a request body, and held in memory for the
   current tab only. It is never written to browser storage and needs no migration, because no
   release ever wrote one. `Forget key` clears the held key and the live field.
-- The relay is not involved in web-page import and its allowlist is unchanged. A CORS or network
-  failure is reported as such and never offers a relay route.
+- Web extraction has a second, default-off deployment mode in which the operator runs the
+  extraction service themselves and no key is required. It is compiled out of the public build:
+  the artifact check requires the public bundle to name the Firecrawl endpoint and no other, and
+  requires a self-hosted bundle to be the exact mirror — no `api.firecrawl.dev`, no
+  `/v2/scrape`, and no key field on the screen.
+- In that mode the extractor origin is pinned at build time and validated by the same rule as
+  the pinned Canvas origin: public HTTPS FQDN, no path, no query, no credentials, no IP literal,
+  no private or reserved host. Loopback and plain HTTP are refused at build time because a page
+  served over HTTPS cannot reach either — measured 2026-08-30 on Chromium 151, a loopback fetch
+  is denied by the Local Network Access permission and any other plain-HTTP fetch is blocked as
+  mixed content.
+- No credential is sent by the browser in that mode. The extraction service's own token, if it
+  has one, is supplied by the operator's reverse proxy; the app has no field, no store, and no
+  build variable for it.
+- The app refuses an extraction service whose reported version is outside the supported range,
+  rather than importing pages whose origin status it cannot check.
+- The relay is not involved in web-page import in either mode and its allowlist is unchanged.
+  The extractor sits beside the relay, not behind it: a Worker at the edge cannot reach an
+  operator's own network, and one allowlisted host that fetches whatever URL is named in a
+  request body would be an open proxy with an extra hop. A CORS or network failure is reported
+  as such and never offers a relay route.
 - A target URL is validated as public HTTPS before the request leaves the browser — the extraction
   service is itself an SSRF vector, and was measured accepting and proxying `http://127.0.0.1:8080/`
   on 2026-08-29 — and the post-redirect URL is re-validated.
