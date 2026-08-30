@@ -7,6 +7,7 @@ import {
 import { DOCUMENT_FIXTURE_CASES } from '../import/testing/document-fixture-cases'
 import { pdfFixturePages } from '../import/testing/pdf-fixture'
 import { capabilityForFormat } from '../import/capability'
+import { buildXlsx } from '../import/testing/spreadsheet-fixtures'
 import type { ImportResult } from '../import/types'
 
 async function chooseFile(name: string, bytes: Uint8Array<ArrayBuffer>) {
@@ -114,4 +115,25 @@ test('a scanned pdf refuses with the reason, and stays retryable', async () => {
   await waitFor(() => expect(alert).toHaveFocus())
   expect(alert).toHaveTextContent(/OCR/i)
   expect(screen.getByRole('button', { name: 'Inspect document' })).toBeEnabled()
+})
+
+test('a spreadsheet says it is unavailable before the user submits it', async () => {
+  // Issue 16 left the four spreadsheet formats `probe-only`, so the picker's
+  // `accept` never offers one — but a user can still choose one by hand, and
+  // "Excel workbook limitation:" would read as a caveat on a supported format
+  // rather than as the refusal it actually is.
+  render(<DocumentImporter onImported={() => {}} />)
+  await chooseFile('enrollment.xlsx', await buildXlsx([
+    { name: 'Enrollment', rows: [['Term', 'Students'], ['Fall', 120]] },
+  ]))
+
+  expect(screen.getByText(/Excel workbook is not available in this release/i)).toBeVisible()
+  expect(screen.getByText(/Spreadsheets are not imported in this release/i)).toBeVisible()
+  expect(screen.queryByText(/Excel workbook limitation/i)).not.toBeInTheDocument()
+
+  // And submitting still refuses, naming the formats that do work.
+  completeRights()
+  fireEvent.click(screen.getByRole('button', { name: 'Inspect document' }))
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent(/Choose a supported document file/i)
 })
