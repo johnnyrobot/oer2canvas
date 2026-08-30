@@ -103,14 +103,32 @@ async function inflateRaw(payload: Uint8Array, declared: number): Promise<Uint8A
   const chunks: Uint8Array[] = []
   let total = 0
   for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    total += value.length
+    // A corrupted deflate stream — the shape a truncated or partially
+    // downloaded upload actually takes — throws a raw `TypeError` straight
+    // from the platform's zlib binding (Node's carries `code: 'Z_DATA_ERROR'`
+    // and an empty message) rather than any error this module defines. Only
+    // the read itself is wrapped: the size-cap refusal just below throws its
+    // own `ZipReadError` outside this try, and must reach the caller
+    // unchanged rather than being redescribed as a decompression failure.
+    let step: ReadableStreamReadResult<Uint8Array>
+    try {
+      step = await reader.read()
+    } catch (cause) {
+      const reason =
+        cause && typeof cause === 'object' && 'code' in cause && typeof (cause as { code: unknown }).code === 'string'
+          ? (cause as { code: string }).code
+          : cause instanceof Error && cause.message
+            ? cause.message
+            : String(cause)
+      throw malformed(`a compressed part is corrupt and could not be inflated (${reason})`)
+    }
+    if (step.done) break
+    total += step.value.length
     if (total > declared) {
       await reader.cancel()
       throw malformed('an entry inflated past the size its header declared')
     }
-    chunks.push(value)
+    chunks.push(step.value)
   }
   const out = new Uint8Array(total)
   let at = 0
