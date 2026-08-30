@@ -439,6 +439,7 @@ const ODP_NS = {
   presentation: 'urn:oasis:names:tc:opendocument:xmlns:presentation:1.0',
   svg: 'urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0',
   xlink: 'http://www.w3.org/1999/xlink',
+  table: 'urn:oasis:names:tc:opendocument:xmlns:table:1.0',
 }
 
 /**
@@ -546,6 +547,13 @@ export interface OdpPageSpec {
    * on ordinary Impress content that never touched anything unusual.
    */
   headingText?: string
+  /**
+   * A `table:table` inside a `draw:frame` — Impress's data table, which anydoc
+   * emits as a real `<table>` (design fact 8). The same two rows the PPTX
+   * fixture's `table` option authors, so both formats can be measured against
+   * anydoc's row-major rendering with one expectation.
+   */
+  table?: boolean
 }
 
 /**
@@ -619,6 +627,18 @@ function odpAnnotation(name: string, text: string): string {
   return `<office:annotation office:name="${name}"><text:p>${xmlEscape(text)}</text:p></office:annotation>`
 }
 
+/** A `table:table` in a `draw:frame` — see `table` on `OdpPageSpec`. */
+function odpTable(name: string): string {
+  return `<draw:frame draw:name="${name}" svg:width="20cm" svg:height="3cm" svg:x="2cm" svg:y="6cm">` +
+    `<table:table table:name="${name}">` +
+    `<table:table-column table:number-columns-repeated="2"/>` +
+    `<table:table-row><table:table-cell><text:p>Stage</text:p></table:table-cell>` +
+    `<table:table-cell><text:p>Location</text:p></table:table-cell></table:table-row>` +
+    `<table:table-row><table:table-cell><text:p>Calvin cycle</text:p></table:table-cell>` +
+    `<table:table-cell><text:p>Stroma</text:p></table:table-cell></table:table-row>` +
+    `</table:table></draw:frame>`
+}
+
 /** A `text:h` heading paragraph — see `headingText` on `OdpPageSpec`. */
 function odpHeading(text: string): string {
   // `text:outline-level="1"` is the top level a presentation body uses;
@@ -658,6 +678,7 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
     const groupedCustomShape = page.groupedCustomShapeText
       ? odpGroup(`Group ${index + 1}`, odpCustomShape(`Grouped Custom Shape ${index + 1}`, page.groupedCustomShapeText))
       : ''
+    const table = page.table ? odpTable(`Table ${index + 1}`) : ''
     const nestedFrame = page.nestedFrameText
       ? odpNestedFrame(`Outer Frame ${index + 1}`, `Inner Frame ${index + 1}`, page.nestedFrameText)
       : ''
@@ -667,7 +688,7 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
       : ''
     // A direct child of draw:page, the same level presentation:notes sits at.
     const comment = page.commentText ? odpAnnotation(`Comment ${index + 1}`, page.commentText) : ''
-    const extras = `${customShape}${groupedCustomShape}${nestedFrame}`
+    const extras = `${customShape}${groupedCustomShape}${nestedFrame}${table}`
     const frames = page.titleLast ? `${outline}${image}${extras}${title}` : `${title}${outline}${image}${extras}`
     return `<draw:page draw:name="Slide ${index + 1}" draw:master-page-name="Default">${frames}${notes}${comment}</draw:page>`
   }).join('')

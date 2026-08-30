@@ -10,6 +10,7 @@ const slide = (
 ): PresentationIndex['slides'][number] => ({
   number,
   textRuns: [],
+  images: 0,
   titleOutOfOrder: false,
   unrepresentable: { diagrams: 0, charts: 0, media: 0 },
   ...overrides,
@@ -256,14 +257,18 @@ test("an agenda slide whose bullets name later slides does not eat those slides'
   // spare, and the agenda's spare "Cell walls" run then swallowed slide 2's own
   // heading — silently, with no finding at all.
   const result = reconcilePresentation({
+    // Slide 2 is PHOTOSYNTHESIS, the agenda's LAST bullet. That ordering is the
+    // whole point: the run left spare by matching the `<ul>` against one bullet
+    // has to be the one the NEXT block's heading matches, or the old rule
+    // breaks correctly here by luck and the defect goes unpinned.
     html:
       '<h2 id="Agenda">Agenda</h2><ul><li><p>Cell walls</p></li><li><p>Photosynthesis</p></li></ul>' +
-      '<h2 id="Cell-walls">Cell walls</h2><p>Rigid layer outside the membrane</p>' +
-      '<h2 id="Photosynthesis">Photosynthesis</h2><p>Light reactions happen in the thylakoid</p>',
+      '<h2 id="Photosynthesis">Photosynthesis</h2><p>Light reactions happen in the thylakoid</p>' +
+      '<h2 id="Cell-walls">Cell walls</h2><p>Rigid layer outside the membrane</p>',
     index: index([
       slide(1, { title: 'Agenda', textRuns: ['Agenda', 'Cell walls', 'Photosynthesis'] }),
-      slide(2, { title: 'Cell walls', textRuns: ['Cell walls', 'Rigid layer outside the membrane'] }),
-      slide(3, { title: 'Photosynthesis', textRuns: ['Photosynthesis', 'Light reactions happen in the thylakoid'] }),
+      slide(2, { title: 'Photosynthesis', textRuns: ['Photosynthesis', 'Light reactions happen in the thylakoid'] }),
+      slide(3, { title: 'Cell walls', textRuns: ['Cell walls', 'Rigid layer outside the membrane'] }),
     ]),
     sourceLabel: 'ODP',
   })
@@ -271,10 +276,10 @@ test("an agenda slide whose bullets name later slides does not eat those slides'
   expect(result.html).toBe(
     '<section data-slide="1" data-plan-label="Slide 1: Agenda">' +
     '<h2 id="Agenda">Agenda</h2><ul><li><p>Cell walls</p></li><li><p>Photosynthesis</p></li></ul></section>' +
-    '<section data-slide="2" data-plan-label="Slide 2: Cell walls">' +
-    '<h2 id="Cell-walls">Cell walls</h2><p>Rigid layer outside the membrane</p></section>' +
-    '<section data-slide="3" data-plan-label="Slide 3: Photosynthesis">' +
-    '<h2 id="Photosynthesis">Photosynthesis</h2><p>Light reactions happen in the thylakoid</p></section>',
+    '<section data-slide="2" data-plan-label="Slide 2: Photosynthesis">' +
+    '<h2 id="Photosynthesis">Photosynthesis</h2><p>Light reactions happen in the thylakoid</p></section>' +
+    '<section data-slide="3" data-plan-label="Slide 3: Cell walls">' +
+    '<h2 id="Cell-walls">Cell walls</h2><p>Rigid layer outside the membrane</p></section>',
   )
   expect(result.findings).toEqual([])
 })
@@ -307,7 +312,7 @@ test('a partly-produced slide refuses rather than publishing what survived', () 
   expect(finding.message).toContain('slide 1 is missing text the deck says it carries')
 })
 
-test("an untitled slide gets its own h2 even when anydoc emitted an h1 of its own", () => {
+test("an untitled slide gets its own h2, and anydoc's h1 is demoted beneath it", () => {
   // MEASURED: an ODP `text:h` body heading becomes `<h1 id="...">`. Treating any
   // heading as the slide's title suppressed the generated `<h2 id="slide-1">`,
   // leaving the section with no anchor while the finding claimed it was titled.
@@ -319,9 +324,92 @@ test("an untitled slide gets its own h2 even when anydoc emitted an h1 of its ow
 
   expect(result.html).toBe(
     '<section data-slide="1" data-plan-label="Slide 1">' +
-    '<h2 id="slide-1">Slide 1</h2><p>Body text</p><h1 id="A-heading-paragraph">A heading paragraph</h1></section>',
+    '<h2 id="slide-1">Slide 1</h2><p>Body text</p><h3 id="A-heading-paragraph">A heading paragraph</h3></section>',
   )
   expect(only(result, 'presentation-untitled-slide').message).toContain('"Slide 1"')
+})
+
+test("one slide's h1 does not demote every slide title on the page", () => {
+  /*
+   * `engine/allowlist.ts` turns on `shiftHeadings` whenever a content `h1` is
+   * present and demotes EVERY heading one level, so a single ODP `text:h`
+   * anywhere in a deck would push every slide title from `h2` to `h3`. Keeping
+   * the `h1` out of the output is what stops one paragraph on one slide from
+   * restructuring the whole page.
+   */
+  const result = reconcilePresentation({
+    html:
+      '<h2 id="One">One</h2><p>Body one</p><h1 id="A-heading">A heading</h1>' +
+      '<h2 id="Two">Two</h2><p>Body two</p>',
+    index: index([
+      slide(1, { title: 'One', textRuns: ['One', 'Body one', 'A heading'] }),
+      slide(2, { title: 'Two', textRuns: ['Two', 'Body two'] }),
+    ]),
+    sourceLabel: 'ODP',
+  })
+
+  expect(result.html).not.toContain('<h1')
+  expect(result.html).toContain('<h3 id="A-heading">A heading</h3>')
+  expect(result.html).toContain('<h2 id="One">One</h2>')
+  expect(result.html).toContain('<h2 id="Two">Two</h2>')
+})
+
+test('an image-only slide keeps its own picture, and the slide before it does not', () => {
+  // MEASURED on a three-slide deck, ODP and PPTX alike: anydoc emits a picture
+  // as `<p><img …></p>`, carrying no text at all. Absorbing any text-free block
+  // into whichever slide was open put the middle slide's image in slide 1 and
+  // shipped slide 2 holding nothing but a generated heading, with no finding.
+  const image = '<p><img src="cell.png" alt="A cell"></p>'
+  const result = reconcilePresentation({
+    html: `<h2>One</h2><p>Body one</p>${image}<h2>Three</h2><p>Body three</p>`,
+    index: index([
+      slide(1, { title: 'One', textRuns: ['One', 'Body one'] }),
+      slide(2, { images: 1 }),
+      slide(3, { title: 'Three', textRuns: ['Three', 'Body three'] }),
+    ]),
+    sourceLabel: 'PPTX',
+  })
+
+  const sections = result.html.split('<section').slice(1)
+  expect(sections[0]).not.toContain('<img')
+  expect(sections[1]).toContain('<img')
+  expect(result.findings.map((finding) => finding.code)).toEqual(['presentation-untitled-slide'])
+})
+
+test('a titled slide still takes its own picture', () => {
+  const result = reconcilePresentation({
+    html: '<h2>One</h2><p>Body one</p><p><img src="cell.png" alt="A cell"></p><h2>Two</h2>',
+    index: index([
+      slide(1, { title: 'One', textRuns: ['One', 'Body one'], images: 1 }),
+      slide(2, { title: 'Two', textRuns: ['Two'] }),
+    ]),
+    sourceLabel: 'PPTX',
+  })
+
+  expect(result.html.split('<section')[1]).toContain('<img')
+  expect(result.findings).toEqual([])
+})
+
+test('a picture no slide claims refuses instead of being absorbed', () => {
+  // The index says neither slide has a picture, so the block belongs to
+  // nobody — and swallowing it would attribute a figure to a slide it was
+  // never on.
+  const result = reconcilePresentation({
+    html: '<h2>One</h2><p><img src="cell.png" alt="A cell"></p><h2>Two</h2>',
+    index: index([
+      slide(1, { title: 'One', textRuns: ['One'] }),
+      slide(2, { title: 'Two', textRuns: ['Two'] }),
+    ]),
+    sourceLabel: 'PPTX',
+  })
+
+  // The refusal is total, not local: once a block belongs to nobody, every
+  // block after it is unattributable too, which is precisely why this is a
+  // blocker rather than a warning that drops one figure.
+  const finding = only(result, 'presentation-unattributed-content')
+  expect(finding.severity).toBe('blocker')
+  expect(finding.message).toContain('belong to no slide')
+  expect(result.html).not.toContain('<img')
 })
 
 test('a quotation that CONTAINS the whole of the notes still survives', () => {

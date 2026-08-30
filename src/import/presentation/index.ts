@@ -16,6 +16,14 @@ export interface PresentationSlideIndex {
   textRuns: readonly string[]
   /** Notes text, when the slide has a notes part that is not whitespace. */
   notesText?: string
+  /**
+   * Plain pictures on the slide — PPTX `p:pic` that is not media, ODF
+   * `draw:image`. anydoc emits each as a block carrying an `<img>` and NO text
+   * of its own, which no text comparison can attribute; the count is how the
+   * reconciler knows an image-only slide is a slide rather than a gap, and
+   * refuses to let one slide absorb the next slide's picture.
+   */
+  images: number
   /** The title placeholder is not first in reading order. */
   titleOutOfOrder: boolean
   /** Content anydoc drops with no block and no asset. */
@@ -41,6 +49,7 @@ const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationship
 const MC_NS = 'http://schemas.openxmlformats.org/markup-compatibility/2006'
 const DIAGRAM_URI = 'http://schemas.openxmlformats.org/drawingml/2006/diagram'
 const CHART_URI = 'http://schemas.openxmlformats.org/drawingml/2006/chart'
+const TABLE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/table'
 const ODF_OFFICE_NS = 'urn:oasis:names:tc:opendocument:xmlns:office:1.0'
 const ODF_TEXT_NS = 'urn:oasis:names:tc:opendocument:xmlns:text:1.0'
 const ODF_DRAW_NS = 'urn:oasis:names:tc:opendocument:xmlns:drawing:1.0'
@@ -333,6 +342,7 @@ interface ShapeWalkState {
   textRuns: string[]
   title: string | undefined
   titleIndex: number
+  images: number
   unrepresentable: { diagrams: number; charts: number; media: number }
 }
 
@@ -399,8 +409,27 @@ function walkShapes(container: Element, state: ShapeWalkState, depth = 0): void 
       const uri = data?.getAttribute('uri') ?? ''
       if (uri === DIAGRAM_URI) state.unrepresentable.diagrams += 1
       else if (uri === CHART_URI) state.unrepresentable.charts += 1
-      // A table frame is deliberately NOT counted: anydoc emits it as a real
-      // data table (design fact 8), so it is not a loss to report.
+      else if (uri === TABLE_URI) {
+        /*
+         * A table frame is NOT a loss — anydoc emits it as a real data table
+         * (design fact 8) — so its text is CONTENT, and content anydoc emits
+         * that the index does not know about is a disagreement the reconciler
+         * can only answer by refusing. Measured with real anydoc 0.2.4: a slide
+         * carrying a title, a body and a two-by-two table emitted the table's
+         * every cell, while `textRuns` held only the title and the body, and
+         * the deck refused to import. (The ODP side needed no equivalent: its
+         * flat `text:p` query already finds a `table:table-cell`'s paragraph
+         * wherever it sits.)
+         *
+         * `shapeParagraphs` over the frame returns every `a:p` under `a:tbl` in
+         * DOCUMENT ORDER, which for a table is row-major — row by row, cell by
+         * cell — the same order anydoc renders `thead` then `tbody` in. Header
+         * rows are not hoisted by either account, because OOXML has no separate
+         * header row: `a:tblPr/@firstRow` merely styles the first row, which is
+         * already first.
+         */
+        state.textRuns.push(...shapeParagraphs(shape))
+      }
       continue
     }
     if (shape.namespaceURI === PML_NS && shape.localName === 'pic') {
@@ -410,6 +439,7 @@ function walkShapes(container: Element, state: ShapeWalkState, depth = 0): void 
       const isMedia = shape.getElementsByTagNameNS(DRAWING_NS, 'videoFile').length > 0 ||
         shape.getElementsByTagNameNS(DRAWING_NS, 'audioFile').length > 0
       if (isMedia) state.unrepresentable.media += 1
+      else state.images += 1
       continue
     }
     if (shape.namespaceURI === PML_NS && shape.localName === 'grpSp') {
@@ -468,6 +498,7 @@ function pptxIndex(parts: Record<string, string>): PresentationIndex {
       textRuns: [],
       title: undefined,
       titleIndex: -1,
+      images: 0,
       unrepresentable: { diagrams: 0, charts: 0, media: 0 },
     }
     walkShapes(tree, state)
@@ -484,6 +515,7 @@ function pptxIndex(parts: Record<string, string>): PresentationIndex {
       ...(state.title ? { title: state.title } : {}),
       textRuns: state.textRuns,
       ...(notesText ? { notesText } : {}),
+      images: state.images,
       titleOutOfOrder: state.titleIndex > 0,
       unrepresentable: state.unrepresentable,
     })
@@ -671,6 +703,12 @@ function odpIndex(parts: Record<string, string>): PresentationIndex {
       ...(title ? { title } : {}),
       textRuns: ordered,
       ...(notesText ? { notesText } : {}),
+      // Every `draw:image` on the page that is not inside an excluded root —
+      // the notes subtree or a comment — counted the same way, and for the same
+      // reason, as PPTX's `p:pic`.
+      images: [...page.getElementsByTagNameNS(ODF_DRAW_NS, 'image')]
+        .filter((image) => !excludedRoots.some((root) => root.contains(image)))
+        .length,
       titleOutOfOrder: false,
       // ODF carries charts and media as embedded objects rather than as the
       // distinct frame kinds PPTX uses. Nothing in the corpus exercises one

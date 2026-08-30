@@ -1,7 +1,7 @@
 import { probeParser } from '../parsers/probe'
 import { readPresentationIndex } from './index'
 import { reconcilePresentation } from './reconcile'
-import { odpFixture } from '../testing/presentation-fixtures'
+import { odpFixture, pptxFixture } from '../testing/presentation-fixtures'
 
 /**
  * The reconciler against REAL anydoc 0.2.4, in the real Worker, on real
@@ -9,16 +9,23 @@ import { odpFixture } from '../testing/presentation-fixtures'
  * and both defects this file pins passed a full suite of hand-written HTML.
  * Hand-written HTML can only ever restate what its author already believed.
  */
-async function reconcileFixture(pages: Parameters<typeof odpFixture>[0]) {
-  const bytes = await odpFixture(pages)
+async function reconcileBytes(kind: 'odp' | 'pptx', bytes: Uint8Array) {
   const parsed = await probeParser({
     parser: 'anydoc',
     bytes: bytes.buffer as ArrayBuffer,
-    formatHint: 'odp',
+    formatHint: kind,
   })
-  const index = readPresentationIndex('odp', parsed.presentation!.parts)
-  const result = reconcilePresentation({ html: parsed.normalized!.html, index, sourceLabel: 'ODP' })
+  const index = readPresentationIndex(kind, parsed.presentation!.parts)
+  const result = reconcilePresentation({
+    html: parsed.normalized!.html,
+    index,
+    sourceLabel: kind.toUpperCase(),
+  })
   return { anydocHtml: parsed.normalized!.html, index, result }
+}
+
+async function reconcileFixture(pages: Parameters<typeof odpFixture>[0]) {
+  return reconcileBytes('odp', await odpFixture(pages))
 }
 
 const sectionsOf = (html: string) =>
@@ -47,10 +54,14 @@ test('speaker notes carrying an inline comment are excluded, not published', asy
 })
 
 test("an agenda deck keeps every slide's own heading in its own section", async () => {
+  // Slide 2 is the agenda's LAST bullet, deliberately: the run left spare by
+  // matching the one `<ul>` block against a single bullet has to be the run the
+  // NEXT block's heading matches, or the pre-fix rule breaks correctly here by
+  // luck and this pins nothing.
   const { anydocHtml, result } = await reconcileFixture([
     { title: 'Agenda', bulletList: ['Cell walls', 'Photosynthesis'] },
-    { title: 'Cell walls', body: ['Rigid layer outside the membrane'] },
     { title: 'Photosynthesis', body: ['Light reactions happen in the thylakoid'] },
+    { title: 'Cell walls', body: ['Rigid layer outside the membrane'] },
   ])
 
   // The granularity mismatch this rule exists for: one `<ul>` block against
@@ -66,9 +77,9 @@ test("an agenda deck keeps every slide's own heading in its own section", async 
   // Each later section carries the heading ANYDOC emitted — identified by the
   // id anydoc derived from the slide's own title, not a heading fabricated here
   // to replace one that went missing.
-  expect(sections[1]!.querySelector('h2')!.id).toBe('Cell-walls')
-  expect(sections[1]!.querySelector('p')).toHaveTextContent('Rigid layer outside the membrane')
-  expect(sections[2]!.querySelector('h2')!.id).toBe('Photosynthesis')
+  expect(sections[1]!.querySelector('h2')!.id).toBe('Photosynthesis')
+  expect(sections[1]!.querySelector('p')).toHaveTextContent('Light reactions happen in the thylakoid')
+  expect(sections[2]!.querySelector('h2')!.id).toBe('Cell-walls')
   expect(result.findings).toEqual([])
 })
 
@@ -85,4 +96,63 @@ test('an untitled slide is given its own titled anchor even beside an anydoc h1'
   expect(section!.firstElementChild).toHaveProperty('id', 'slide-1')
   expect(section!.firstElementChild).toHaveTextContent('Slide 1')
   expect(result.findings.map((finding) => finding.code)).toEqual(['presentation-untitled-slide'])
+})
+
+test.each([
+  ['odp', async () => odpFixture([{ title: 'Data', body: ['Body text'], table: true }])],
+  ['pptx', async () => pptxFixture([{ title: 'Data', body: ['Body text'], table: true }])],
+] as const)('a %s slide carrying a table imports it instead of refusing', async (kind, fixture) => {
+  // Design fact 8: a table is not a loss, because anydoc emits it — so its text
+  // has to be in BOTH accounts or the deck refuses. The PPTX index used to hold
+  // only the title and body, and every deck with a table was unimportable.
+  const { anydocHtml, result } = await reconcileBytes(kind, await fixture())
+
+  expect(anydocHtml).toContain('<table>')
+  expect(result.findings).toEqual([])
+  expect(result.html).toContain('<table>')
+  expect(result.html).toContain('<td><p>Calvin cycle</p></td>')
+})
+
+test.each([
+  ['odp', async () => odpFixture([
+    { title: 'One', body: ['Body one'] },
+    { image: { alt: 'A cell' } },
+    { title: 'Three', body: ['Body three'] },
+  ])],
+  ['pptx', async () => pptxFixture([
+    { title: 'One', body: ['Body one'] },
+    { image: { alt: 'A cell' } },
+    { title: 'Three', body: ['Body three'] },
+  ])],
+] as const)('a %s image-only slide keeps its own picture', async (kind, fixture) => {
+  // anydoc emits a picture as a block with NO text, so nothing about the block
+  // itself says which slide it came from; the index's per-slide image count
+  // does. Absorbing it into whichever slide was open put this image in slide 1
+  // and shipped slide 2 empty, with no finding at all.
+  const { anydocHtml, result } = await reconcileBytes(kind, await fixture())
+
+  expect(anydocHtml).toContain('<img')
+  const sections = sectionsOf(result.html)
+  expect(sections).toHaveLength(3)
+  expect(sections[0]!.querySelector('img')).toBeNull()
+  expect(sections[1]!.querySelector('img')).not.toBeNull()
+  expect(sections[2]!.querySelector('img')).toBeNull()
+  expect(result.findings.map((finding) => finding.code)).toEqual(['presentation-untitled-slide'])
+})
+
+test("one slide's text:h does not demote every slide title on the page", async () => {
+  // `engine/allowlist.ts` shifts EVERY heading down a level when any content
+  // `h1` is present, so one `text:h` on one slide would push every slide title
+  // from `h2` to `h3` across the whole imported page.
+  const { anydocHtml, result } = await reconcileFixture([
+    { title: 'Titled', headingText: 'A heading paragraph', body: ['Body text'] },
+    { title: 'Second', body: ['Body two'] },
+  ])
+
+  expect(anydocHtml).toContain('<h1 id="A-heading-paragraph">')
+  expect(result.html).not.toContain('<h1')
+  expect(result.html).toContain('<h3 id="A-heading-paragraph">A heading paragraph</h3>')
+  expect(sectionsOf(result.html).map((section) => section.querySelector('h2')!.textContent))
+    .toEqual(['Titled', 'Second'])
+  expect(result.findings).toEqual([])
 })

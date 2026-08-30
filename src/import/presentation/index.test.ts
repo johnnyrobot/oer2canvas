@@ -469,3 +469,51 @@ test('an inline notes comment does not leak into the page text either', async ()
 
   expect(index.slides[0]!.textRuns).toEqual(['Photosynthesis'])
 })
+
+test("a pptx table's cells enter textRuns in anydoc's row-major order", async () => {
+  /*
+   * Design fact 8: a table is NOT unrepresentable, because anydoc emits it as a
+   * real data table — so its text is content, and content anydoc emits that the
+   * index cannot account for is a disagreement the reconciler answers by
+   * refusing. MEASURED with real anydoc 0.2.4 on this fixture: the emitted
+   * table reads Stage, Location, Calvin cycle, Stroma, row by row, cell by
+   * cell, which is document order.
+   */
+  const index = await indexOf(await pptxFixture([
+    { title: 'Data', body: ['Body text'], table: true },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Data', 'Body text', 'Stage', 'Location', 'Calvin cycle', 'Stroma'])
+})
+
+test("an odp table's cells reach textRuns through the flat paragraph query", async () => {
+  // The ODP side needs no table-specific branch: a `table:table-cell`'s
+  // `text:p` is found wherever it sits, already in document order.
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Data', body: ['Body text'], table: true },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['Data', 'Body text', 'Stage', 'Location', 'Calvin cycle', 'Stroma'])
+})
+
+test('a pptx picture is counted as an image while a video is counted as lost media', async () => {
+  // The reconciler cannot attribute a picture by its text, because anydoc emits
+  // it as a block with none. The count is what tells an image-only slide apart
+  // from a gap.
+  const index = await indexOf(await pptxFixture([
+    { title: 'Pictures', image: { alt: 'A cell' }, video: true },
+  ]))
+
+  expect(index.slides[0]!.images).toBe(1)
+  expect(index.slides[0]!.unrepresentable.media).toBe(1)
+})
+
+test('an odp picture is counted, and one inside speaker notes is not', async () => {
+  const index = await odpIndexOf(await odpFixture([
+    { title: 'Pictures', image: { alt: 'A cell' } },
+    { title: 'None', notes: 'A note.' },
+  ]))
+
+  expect(index.slides[0]!.images).toBe(1)
+  expect(index.slides[1]!.images).toBe(0)
+})

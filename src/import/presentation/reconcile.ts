@@ -37,10 +37,18 @@ import type { PresentationIndex, PresentationSlideIndex } from './index'
  *
  * Output is one `<section data-slide="N">` per slide. `section` and `data-*` are
  * both already on the Canvas allowlist (`engine/allowlist.ts`). Slide titles stay
- * at the `h2` anydoc already emits for them; note that anydoc DOES emit an `h1`
- * of its own for an ODP `text:h` body heading (measured), which passes through
- * this module untouched — what the Canvas allowlist does with it is the
- * allowlist's business, not this module's.
+ * at the `h2` anydoc already emits for them, and an `h1` anydoc emits of its own
+ * for an ODP `text:h` body heading (measured) is DEMOTED TO `h3` — see the
+ * demotion below for why that is this module's business rather than the
+ * allowlist's.
+ *
+ * `#slide-N` IS NOT A STABLE PER-SLIDE ANCHOR. anydoc gives a heading its own
+ * `id` derived from the document's own anchor (measured: `<h2 id="Cell-walls">`),
+ * and an id the document chose beats one invented here, so `slide-N` only ever
+ * appears on a heading this module generated — for an untitled slide, or where
+ * anydoc emitted no heading for the title. Anything wanting to address every
+ * slide (a slide-by-slide table of contents, say) must go through
+ * `section[data-slide]`, which is always there.
  *
  * FINDINGS ARE AGGREGATED PER CODE, not raised per slide. Task 4 measured 96 of
  * 226 real slides (42%) with no title placeholder at all, so one finding per
@@ -97,6 +105,28 @@ const HEADING_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
 /** The open tag of a heading block, for inserting the slide's id into it. */
 const HEADING_OPEN_TAG = /^<h[1-6](?=[\s/>])/i
 
+const H1_OPEN_TAG = /^<h1(?=[\s/>])/i
+const H1_CLOSE_TAG = /<\/h1>$/i
+
+/**
+ * An `h1` anydoc emitted INSIDE a slide becomes an `h3`. anydoc emits one for
+ * an ODP `text:h` body heading (measured), and such a heading is content
+ * subordinate to the slide's own `h2` title, so `h3` is the level that says
+ * what it is.
+ *
+ * This is not something to hand downstream. `engine/allowlist.ts` turns on
+ * `shiftHeadings` whenever any content `h1` is present and demotes EVERY
+ * heading a level, so one stray `text:h` anywhere in a deck would push every
+ * slide title on the page from `h2` to `h3` — a whole document's heading
+ * structure changed by one paragraph in one slide. Fixing it here, where the
+ * enclosing `h2` is known, is the only place the correct level can be worked
+ * out at all.
+ */
+function demoteH1(html: string): string {
+  if (!H1_OPEN_TAG.test(html)) return html
+  return html.replace(H1_OPEN_TAG, '<h3').replace(H1_CLOSE_TAG, '</h3>')
+}
+
 function escapeAttribute(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -121,6 +151,8 @@ interface BlockFacts {
   /** An id anydoc already chose (`anchor`-derived) — never overwritten. */
   hasId: boolean
   isQuote: boolean
+  /** Carries a picture: the only text-free block a slide can claim. */
+  hasImage: boolean
 }
 
 function readBlock(html: string): BlockFacts {
@@ -137,6 +169,7 @@ function readBlock(html: string): BlockFacts {
     isHeading: element !== null && HEADING_TAGS.has(element.localName),
     hasId: element !== null && element.hasAttribute('id'),
     isQuote: element !== null && element.localName === 'blockquote',
+    hasImage: parsed.body.getElementsByTagName('img').length > 0,
   }
 }
 
@@ -211,6 +244,7 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
     const expected = squeeze(slide.textRuns.join(''))
     const taken: BlockFacts[] = []
     let accumulated = ''
+    let imagesLeft = slide.images
 
     while (at < blocks.length) {
       const block = blocks[at]!
@@ -239,12 +273,35 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
         continue
       }
 
+      /*
+       * A TEXT-FREE BLOCK IS CLAIMED AGAINST THE SLIDE'S IMAGE COUNT, never
+       * absorbed because it happens to be next. anydoc emits a picture as
+       * `<p><img …></p>` — measured — which carries no text for the
+       * accumulation to test, so an earlier version let ANY text-free block
+       * through unconditionally. Measured on a three-slide deck whose middle
+       * slide is image-only, in both ODP and PPTX: the image landed in slide
+       * 1's section, slide 2 shipped holding nothing but a generated heading,
+       * and no finding said so — misattribution AND content loss, silently.
+       *
+       * The index's per-slide image count is what disambiguates it, and it has
+       * to be a count rather than a position: a titled slide with its own
+       * picture must still take that picture, and nothing about where the block
+       * sits distinguishes that from the next slide's. A text-free block this
+       * slide has no budget for — or one carrying no picture at all — ends the
+       * slide and becomes the refusal below rather than being swallowed.
+       */
+      if (!block.squeezed) {
+        if (!block.hasImage || imagesLeft <= 0) break
+        imagesLeft -= 1
+        taken.push(block)
+        at += 1
+        continue
+      }
+
       // A block that would take the accumulation off the slide's own text ends
       // the slide: it belongs to the next one, or to nobody, and the checks
-      // below decide which. A block with no text of its own (an image, a rule)
-      // cannot break a prefix and is simply carried along with the slide it
-      // sits in.
-      if (block.squeezed && !expected.startsWith(accumulated + block.squeezed)) break
+      // below decide which.
+      if (!expected.startsWith(accumulated + block.squeezed)) break
       accumulated += block.squeezed
       taken.push(block)
       at += 1
@@ -293,9 +350,12 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
     // that breaks the in-page link the id exists to serve — and never over an
     // id anydoc derived from the document's own anchor, which an internal link
     // may already point at.
-    const body = taken.map((block) => block === titleBlock && !block.hasId
-      ? block.html.replace(HEADING_OPEN_TAG, (open) => `${open} id="slide-${slide.number}"`)
-      : block.html).join('')
+    const body = taken.map((block) => {
+      const html = block === titleBlock && !block.hasId
+        ? block.html.replace(HEADING_OPEN_TAG, (open) => `${open} id="slide-${slide.number}"`)
+        : block.html
+      return block === titleBlock ? html : demoteH1(html)
+    }).join('')
     const label = slide.title?.trim() ? `Slide ${slide.number}: ${title}` : `Slide ${slide.number}`
     sections.push(
       `<section data-slide="${slide.number}" data-plan-label="${escapeAttribute(label)}">` +
