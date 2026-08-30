@@ -13,9 +13,34 @@ import type { PresentationIndex, PresentationSlideIndex } from './index'
  * forward-only walk can only confirm or fail, and failing is the right outcome
  * when the accounts disagree.
  *
+ * ATTRIBUTION IS BY PREFIX ACCUMULATION, NOT BY MATCHING RUNS ONE AT A TIME.
+ * The two accounts do not agree on granularity: anydoc collapses a whole
+ * bulleted body into ONE `<ul>` block (measured — `<ul><li><p>Light reactions
+ * </p></li><li><p>Calvin cycle</p></li></ul>`), while the index keeps one run
+ * per bullet. An earlier rule that matched each block against ANY ONE
+ * remaining run therefore left a slide's other bullets spare, and — because
+ * the match was loose enough to survive anydoc's reflowing — a LATER block
+ * could then be eaten by a spare run: a real three-slide agenda deck whose
+ * bullets named its later slides put slide 2's own title heading inside slide
+ * 1's section, fabricated a replacement heading for slide 2, and raised no
+ * finding at all. Silent misattribution, which is the one outcome this module
+ * exists to make impossible.
+ *
+ * So a slide's expected text is its runs CONCATENATED, and blocks are consumed
+ * while the text accumulated so far remains a PREFIX of it. The slide is
+ * complete on exact equality, and a slide that ends incomplete is a refusal,
+ * never a guess. Both sides are squeezed (all whitespace removed, not merely
+ * collapsed) before comparing, because the two accounts disagree about
+ * whitespace in ways that carry no meaning: `<li>` boundaries, a soft line
+ * break rendered as `<br>` against the index's single space, and ODF
+ * whitespace between sibling runs.
+ *
  * Output is one `<section data-slide="N">` per slide. `section` and `data-*` are
- * both already on the Canvas allowlist (`engine/allowlist.ts`), and `h1` is not,
- * which is why slide titles stay at the `h2` anydoc already emits.
+ * both already on the Canvas allowlist (`engine/allowlist.ts`). Slide titles stay
+ * at the `h2` anydoc already emits for them; note that anydoc DOES emit an `h1`
+ * of its own for an ODP `text:h` body heading (measured), which passes through
+ * this module untouched — what the Canvas allowlist does with it is the
+ * allowlist's business, not this module's.
  *
  * FINDINGS ARE AGGREGATED PER CODE, not raised per slide. Task 4 measured 96 of
  * 226 real slides (42%) with no title placeholder at all, so one finding per
@@ -42,21 +67,28 @@ export interface ReconcileResult {
 const collapse = (value: string) => value.replace(/\s+/g, ' ').trim()
 
 /**
- * How much of an unattributed block's text the blocker quotes back. Long enough
- * to recognise the paragraph in the deck, short enough that a finding stays one
- * readable sentence — the same span `page-plan.ts`'s block summaries excerpt at.
+ * The comparison form for BOTH accounts: every whitespace character removed,
+ * not just runs of it collapsed. anydoc and the deck's own XML disagree about
+ * whitespace wherever it carries no meaning — `<li>` boundaries inside the one
+ * `<ul>` block a bulleted body becomes, a soft line break anydoc renders as
+ * `<br>` (whose `textContent` joins with nothing) against the single space the
+ * index renders it as, and the whitespace ODF leaves between sibling runs. None
+ * of those differences is a difference in content, and squeezing is the one
+ * normalisation under which the two accounts can be compared for equality at
+ * all.
  */
-const ORPHAN_EXCERPT_CHARACTERS = 60
+const squeeze = (value: string) => value.replace(/\s+/g, '')
 
 /**
  * What a soft line break contributes to a block's text: ONE SPACE. anydoc
  * renders PPTX `a:br` and ODF `text:line-break` as an inline `<br>` inside the
  * same block, and `textContent` concatenates straight across it — so
- * `<p>First half<br>second half</p>` reads `"First halfsecond half"`. The index
- * deliberately renders the same break as one space (`joinParagraphText`'s
- * `isSpace`), so a RAW `textContent` read would disagree with `notesText` on
- * every note containing a soft break, fail the equality below, and publish the
- * presenter's private words. Both sides must mean "a break is a space".
+ * `<p>First half<br>second half</p>` reads `"First halfsecond half"` where the
+ * index renders the same break as one space. `squeeze` makes the two agree
+ * either way; this keeps `text` readable for a human looking at a block, and
+ * keeps the two meanings of "a break" reconciled at the one place that
+ * compares them, rather than resting the safety of the notes comparison on a
+ * single normalisation.
  */
 const SOFT_BREAK_TEXT = ' '
 
@@ -81,8 +113,10 @@ function escapeText(value: string): string {
 interface BlockFacts {
   /** The block exactly as `blocksOf` serialized it — never re-serialized. */
   html: string
-  /** Its text with soft breaks as spaces, for matching against the index. */
+  /** Its text with soft breaks as spaces, for a human reading a block. */
   text: string
+  /** Its text in comparison form — see `squeeze`. */
+  squeezed: string
   isHeading: boolean
   /** An id anydoc already chose (`anchor`-derived) — never overwritten. */
   hasId: boolean
@@ -91,15 +125,15 @@ interface BlockFacts {
 
 function readBlock(html: string): BlockFacts {
   const parsed = new DOMParser().parseFromString(html, 'text/html')
-  // See SOFT_BREAK_TEXT: this is the one place the two accounts' text is
-  // compared, so it is the one place the break rule has to be reconciled.
   for (const lineBreak of [...parsed.body.getElementsByTagName('br')]) {
     lineBreak.replaceWith(parsed.createTextNode(SOFT_BREAK_TEXT))
   }
   const element = parsed.body.firstElementChild
+  const text = collapse(parsed.body.textContent ?? '')
   return {
     html,
-    text: collapse(parsed.body.textContent ?? ''),
+    text,
+    squeezed: squeeze(text),
     isHeading: element !== null && HEADING_TAGS.has(element.localName),
     hasId: element !== null && element.hasAttribute('id'),
     isQuote: element !== null && element.localName === 'blockquote',
@@ -170,54 +204,61 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
   const withNotes: number[] = []
   const outOfOrder: number[] = []
   const lossy: number[] = []
+  const incomplete: number[] = []
   const lostTotals = { diagrams: 0, charts: 0, media: 0 }
 
   for (const slide of slides) {
-    const remaining = slide.textRuns.map(collapse).filter(Boolean)
+    const expected = squeeze(slide.textRuns.join(''))
     const taken: BlockFacts[] = []
+    let accumulated = ''
 
     while (at < blocks.length) {
       const block = blocks[at]!
 
       /*
-       * NOTES ARE TESTED BEFORE THE RUN MATCH, and consumed without one.
+       * NOTES ARE TESTED FIRST, and consumed without contributing any text.
        * Notes reach the page as a `<blockquote>` indistinguishable from a real
        * quotation (design fact 5), and they are NOT in `textRuns` — so a block
-       * tested against the runs first would end the slide here and be reported
-       * as unattributed content, blocking every deck that has speaker notes.
-       * Testing notes first also closes the narrower leak: the run match is
-       * deliberately loose (`text.includes(run)`), so a note long enough to
-       * contain a short run of its own slide — "Mention the thylakoid
-       * membrane." against the run "membrane" — would otherwise be taken for
-       * slide content and PUBLISHED.
+       * tested against the accumulation first would end the slide here, leave
+       * it incomplete, and refuse every deck that has speaker notes.
        *
-       * The comparison is STRICT EQUALITY against `notesText` and nothing else.
-       * That is what keeps a genuine pull quote on the page: a quotation is
-       * only ever mistaken for notes if its whole text equals the whole of the
-       * notes, and any looser rule (prefix, substring, similarity) would start
-       * deleting quotations the presenter also mentioned in their notes.
+       * The comparison is STRICT EQUALITY against `notesText` and nothing else
+       * (in the squeezed form both accounts are compared in). That is what
+       * keeps a genuine pull quote on the page: a quotation is only ever
+       * mistaken for notes if its WHOLE text equals the WHOLE of the notes, and
+       * any looser rule — containment in either direction, a prefix, a
+       * similarity score — starts deleting quotations a presenter also
+       * mentioned in their notes. A deleted quotation is invisible to the
+       * reader; that is why the rule does not bend.
        */
       const isNotes = slide.notesText !== undefined &&
         block.isQuote &&
-        block.text === collapse(slide.notesText)
+        block.squeezed === squeeze(slide.notesText)
       if (isNotes) {
         at += 1
         continue
       }
 
-      // A block whose text no remaining run of this slide accounts for ends the
-      // slide — it belongs to the next one, or to nobody, and the check after
-      // the loop decides which. The match is loose because anydoc reflows text;
-      // its failure mode is the blocker below, a refusal rather than a guess.
-      if (block.text) {
-        const match = remaining.findIndex((run) =>
-          run === block.text || run.includes(block.text) || block.text.includes(run))
-        if (match === -1) break
-        remaining.splice(match, 1)
-      }
+      // A block that would take the accumulation off the slide's own text ends
+      // the slide: it belongs to the next one, or to nobody, and the checks
+      // below decide which. A block with no text of its own (an image, a rule)
+      // cannot break a prefix and is simply carried along with the slide it
+      // sits in.
+      if (block.squeezed && !expected.startsWith(accumulated + block.squeezed)) break
+      accumulated += block.squeezed
       taken.push(block)
       at += 1
     }
+
+    /*
+     * A slide whose text anydoc never produced in full. The deck says the slide
+     * carries text this HTML does not account for, so something was lost or
+     * reordered, and every later slide's attribution is now a guess. This is
+     * the refusal that makes the walk's promise true — without it, total
+     * content loss (`html: ''` against a fully populated deck) produced a page
+     * of empty sections and NO finding at all.
+     */
+    if (accumulated !== expected) incomplete.push(slide.number)
 
     const title = slide.title?.trim() || `Slide ${slide.number}`
     if (!slide.title?.trim()) untitled.push(slide.number)
@@ -230,22 +271,31 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
       lostTotals.media += slide.unrepresentable.media
     }
 
-    // A slide whose title never reached the HTML still gets a heading, so every
-    // section is navigable and every slide is visible in the plan editor.
-    const heading = taken.some((block) => block.isHeading)
-      ? ''
-      : `<h2 id="slide-${slide.number}">${escapeText(title)}</h2>`
-    // The slide's id goes on the FIRST heading that has none. Not on every
-    // heading, because a slide with a second heading would then carry the id
-    // twice — invalid HTML that breaks the in-page link it exists to serve —
-    // and not over an id anydoc derived from the document's own anchor, which
-    // an internal link may already point at.
-    let idPlaced = false
-    const body = taken.map((block) => {
-      if (!block.isHeading || block.hasId || idPlaced) return block.html
-      idPlaced = true
-      return block.html.replace(HEADING_OPEN_TAG, (open) => `${open} id="slide-${slide.number}"`)
-    }).join('')
+    /*
+     * The heading anydoc emitted for THIS SLIDE'S TITLE, if it emitted one —
+     * identified by its text, not merely by being a heading. An untitled slide
+     * has none by definition, and a slide can carry headings that are not its
+     * title: an ODP `text:h` in the body becomes an `<h1>` of anydoc's own
+     * (measured). Treating any heading as the title left an untitled slide with
+     * no generated `<h2 id="slide-N">` at all — no anchor, and a
+     * `presentation-untitled-slide` finding claiming a title the section did
+     * not have.
+     */
+    const titleBlock = slide.title?.trim()
+      ? taken.find((block) => block.isHeading && block.squeezed === squeeze(title))
+      : undefined
+    // Every section gets a heading: anydoc's own when it produced one, and
+    // otherwise a generated `h2` carrying the slide's anchor, so every slide is
+    // navigable and visible in the plan editor.
+    const heading = titleBlock ? '' : `<h2 id="slide-${slide.number}">${escapeText(title)}</h2>`
+    // The slide's id goes on that ONE heading — not on every heading, because a
+    // slide with a second heading would then carry the id twice, invalid HTML
+    // that breaks the in-page link the id exists to serve — and never over an
+    // id anydoc derived from the document's own anchor, which an internal link
+    // may already point at.
+    const body = taken.map((block) => block === titleBlock && !block.hasId
+      ? block.html.replace(HEADING_OPEN_TAG, (open) => `${open} id="slide-${slide.number}"`)
+      : block.html).join('')
     const label = slide.title?.trim() ? `Slide ${slide.number}: ${title}` : `Slide ${slide.number}`
     sections.push(
       `<section data-slide="${slide.number}" data-plan-label="${escapeAttribute(label)}">` +
@@ -288,15 +338,32 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
     ))
   }
 
-  if (at < blocks.length) {
-    const orphan = blocks[at]!.text
+  /*
+   * ONE blocker for the whole disagreement, whichever side it fell on: slides
+   * missing text the deck says they carry, blocks belonging to no slide, or
+   * both. It DESCRIBES the mismatch without reproducing any of the content —
+   * an earlier version quoted 60 characters of the orphaned block, which for a
+   * failed notes match is the presenter's private note itself, copied into a
+   * finding that may be logged, exported, or shared. A feature whose purpose is
+   * not publishing private notes must not publish them through its own error
+   * reporting either.
+   */
+  const orphaned = blocks.length - at
+  if (incomplete.length > 0 || orphaned > 0) {
+    const problems = [
+      incomplete.length > 0
+        ? `${slidesPhrase(incomplete).toLowerCase()} ${incomplete.length === 1 ? 'is' : 'are'} missing text the deck says ${incomplete.length === 1 ? 'it carries' : 'they carry'}`
+        : '',
+      orphaned > 0
+        ? `${orphaned === 1 ? '1 block of content belongs' : `${orphaned} blocks of content belong`} to no slide`
+        : '',
+    ].filter(Boolean)
     findings.push({
       code: 'presentation-unattributed-content',
       severity: 'blocker',
       message:
-        `This ${options.sourceLabel} produced content that belongs to no slide ` +
-        `(starting "${orphan.slice(0, ORPHAN_EXCERPT_CHARACTERS)}"). ` +
-        'Publishing it under the wrong slide would be a silent error, so this file must be resolved before it can be imported.',
+        `This ${options.sourceLabel} and the slides it declares do not agree: ${problems.join(', and ')}. ` +
+        'Publishing content under the wrong slide would be a silent error, so this file must be resolved before it can be imported.',
     })
   }
 

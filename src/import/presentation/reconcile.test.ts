@@ -249,6 +249,129 @@ test('a heading anydoc already gave an id keeps that id', () => {
   expect(result.html).not.toContain('slide-1')
 })
 
+test("an agenda slide whose bullets name later slides does not eat those slides' headings", () => {
+  // MEASURED with real anydoc 0.2.4 on a three-page .odp: a bulleted body is
+  // ONE `<ul>` block while the index keeps one run per bullet. A rule that
+  // matched a block against any single remaining run left the other bullets
+  // spare, and the agenda's spare "Cell walls" run then swallowed slide 2's own
+  // heading — silently, with no finding at all.
+  const result = reconcilePresentation({
+    html:
+      '<h2 id="Agenda">Agenda</h2><ul><li><p>Cell walls</p></li><li><p>Photosynthesis</p></li></ul>' +
+      '<h2 id="Cell-walls">Cell walls</h2><p>Rigid layer outside the membrane</p>' +
+      '<h2 id="Photosynthesis">Photosynthesis</h2><p>Light reactions happen in the thylakoid</p>',
+    index: index([
+      slide(1, { title: 'Agenda', textRuns: ['Agenda', 'Cell walls', 'Photosynthesis'] }),
+      slide(2, { title: 'Cell walls', textRuns: ['Cell walls', 'Rigid layer outside the membrane'] }),
+      slide(3, { title: 'Photosynthesis', textRuns: ['Photosynthesis', 'Light reactions happen in the thylakoid'] }),
+    ]),
+    sourceLabel: 'ODP',
+  })
+
+  expect(result.html).toBe(
+    '<section data-slide="1" data-plan-label="Slide 1: Agenda">' +
+    '<h2 id="Agenda">Agenda</h2><ul><li><p>Cell walls</p></li><li><p>Photosynthesis</p></li></ul></section>' +
+    '<section data-slide="2" data-plan-label="Slide 2: Cell walls">' +
+    '<h2 id="Cell-walls">Cell walls</h2><p>Rigid layer outside the membrane</p></section>' +
+    '<section data-slide="3" data-plan-label="Slide 3: Photosynthesis">' +
+    '<h2 id="Photosynthesis">Photosynthesis</h2><p>Light reactions happen in the thylakoid</p></section>',
+  )
+  expect(result.findings).toEqual([])
+})
+
+test('a slide whose text anydoc never produced refuses instead of importing an empty section', () => {
+  // Total content loss must not be indistinguishable from a clean import.
+  const result = reconcilePresentation({
+    html: '',
+    index: index([
+      slide(1, { title: 'One', textRuns: ['One', 'Body one'] }),
+      slide(2, { title: 'Two', textRuns: ['Two', 'Body two'] }),
+    ]),
+    sourceLabel: 'PPTX',
+  })
+
+  const finding = only(result, 'presentation-unattributed-content')
+  expect(finding.severity).toBe('blocker')
+  expect(finding.message).toContain('slides 1 and 2 are missing text the deck says they carry')
+})
+
+test('a partly-produced slide refuses rather than publishing what survived', () => {
+  const result = reconcilePresentation({
+    html: '<h2>One</h2>',
+    index: index([slide(1, { title: 'One', textRuns: ['One', 'Body that never arrived'] })]),
+    sourceLabel: 'PPTX',
+  })
+
+  const finding = only(result, 'presentation-unattributed-content')
+  expect(finding.severity).toBe('blocker')
+  expect(finding.message).toContain('slide 1 is missing text the deck says it carries')
+})
+
+test("an untitled slide gets its own h2 even when anydoc emitted an h1 of its own", () => {
+  // MEASURED: an ODP `text:h` body heading becomes `<h1 id="...">`. Treating any
+  // heading as the slide's title suppressed the generated `<h2 id="slide-1">`,
+  // leaving the section with no anchor while the finding claimed it was titled.
+  const result = reconcilePresentation({
+    html: '<p>Body text</p><h1 id="A-heading-paragraph">A heading paragraph</h1>',
+    index: index([slide(1, { textRuns: ['Body text', 'A heading paragraph'] })]),
+    sourceLabel: 'ODP',
+  })
+
+  expect(result.html).toBe(
+    '<section data-slide="1" data-plan-label="Slide 1">' +
+    '<h2 id="slide-1">Slide 1</h2><p>Body text</p><h1 id="A-heading-paragraph">A heading paragraph</h1></section>',
+  )
+  expect(only(result, 'presentation-untitled-slide').message).toContain('"Slide 1"')
+})
+
+test('a quotation that CONTAINS the whole of the notes still survives', () => {
+  // Pins the safety property from one side: mutating the notes comparison to
+  // `block.text.includes(notesText)` deletes this quotation.
+  const result = reconcilePresentation({
+    html: '<h2>Photosynthesis</h2><blockquote><p>Mention the membrane. It matters.</p></blockquote>',
+    index: index([slide(1, {
+      title: 'Photosynthesis',
+      textRuns: ['Photosynthesis', 'Mention the membrane. It matters.'],
+      notesText: 'Mention the membrane.',
+    })]),
+    sourceLabel: 'PPTX',
+  })
+
+  expect(result.html).toContain('<blockquote><p>Mention the membrane. It matters.</p></blockquote>')
+  expect(codes(result)).not.toContain('presentation-unattributed-content')
+})
+
+test('a quotation CONTAINED IN the notes still survives', () => {
+  // And from the other side: mutating the comparison to
+  // `notesText.includes(block.text)` deletes this one.
+  const result = reconcilePresentation({
+    html: '<h2>Photosynthesis</h2><blockquote><p>mention the membrane</p></blockquote>',
+    index: index([slide(1, {
+      title: 'Photosynthesis',
+      textRuns: ['Photosynthesis', 'mention the membrane'],
+      notesText: 'Remember to mention the membrane before class.',
+    })]),
+    sourceLabel: 'PPTX',
+  })
+
+  expect(result.html).toContain('<blockquote><p>mention the membrane</p></blockquote>')
+  expect(codes(result)).not.toContain('presentation-unattributed-content')
+})
+
+test('the refusal describes the mismatch without reproducing the content', () => {
+  // When the orphaned block is a failed notes match it IS the private note, and
+  // a finding may be logged, exported, or shared.
+  const result = reconcilePresentation({
+    html: '<h2>Photosynthesis</h2><blockquote><p>Do not repeat me anywhere.</p></blockquote>',
+    index: index([slide(1, { title: 'Photosynthesis', textRuns: ['Photosynthesis'] })]),
+    sourceLabel: 'PPTX',
+  })
+
+  const finding = only(result, 'presentation-unattributed-content')
+  expect(finding.message).not.toContain('Do not repeat me')
+  expect(finding.message).toContain('1 block of content belongs to no slide')
+})
+
 test('content that cannot be attributed to a slide blocks the import', () => {
   const result = reconcilePresentation({
     // A paragraph the index knows nothing about: the two accounts disagree, and
