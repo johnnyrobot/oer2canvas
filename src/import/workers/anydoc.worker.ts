@@ -118,10 +118,15 @@ workerScope.addEventListener('message', (event: MessageEvent<ParserProbeRequest>
         0,
       )
 
-      // The deck's own account of itself, alongside anydoc's. A failure to read it
-      // is NOT fatal here: the main thread decides what an unreadable package means,
-      // and `document.ts` refuses a presentation with no index rather than the
-      // Worker deciding for every format at once.
+      // The deck's own account of itself, alongside anydoc's. A failure to read
+      // it IS fatal here: `readZipParts` sits inside this same try/catch, so its
+      // throw becomes this Worker's `failure` response and the whole import
+      // rejects — there is no path where an unreadable index reaches the main
+      // thread as a resolved result with `presentation` merely absent. (The
+      // `!parsed.presentation` guard in `document.ts` is defense in depth
+      // against a hypothetical future drift, not a live path today; see its
+      // own comment.) `security.browser.test.ts`'s size-lie and
+      // path-traversal cases are the evidence: both reject the whole import.
       let presentation: { kind: 'pptx' | 'odp'; parts: Record<string, string> } | undefined
       const kind = detectedFormat
       if (kind !== undefined && isPresentationPackageKind(kind)) {

@@ -245,6 +245,7 @@ test('a deck whose package entry lies about its size is refused', async () => {
   )).rejects.toMatchObject({
     name: 'ParserProbeError',
     code: 'malformed',
+    retryable: true,
     message: expect.stringMatching(/not a readable archive.*inflated past the size/),
   })
 })
@@ -258,8 +259,13 @@ test('a macro-enabled deck imports no macro bytes and packages no macro asset', 
   // up: the SAME macro-enabled file, run through the whole import, produces
   // slide content and neither macro bytes in the page nor an asset packaged
   // from that part. We never execute the macro; this is the test that keeps
-  // that true.
-  const deck = await pptxFixture([{ title: 'Macro deck' }], { container: 'pptm', withMacroPart: true })
+  // that true. The slide carries a real `image` so `result.work.assets` is
+  // non-empty: an assets assertion against an always-empty array would prove
+  // nothing about whether the macro part specifically stayed out of it.
+  const deck = await pptxFixture(
+    [{ title: 'Macro deck', image: { alt: 'A photosynthesis diagram' } }],
+    { container: 'pptm', withMacroPart: true },
+  )
   const result = await importStructuredDocument(
     new File([deck], 'lecture.pptm', { type: PPTM_MEDIA_TYPE }),
     { metadata: hostileDeckMetadata },
@@ -272,20 +278,83 @@ test('a macro-enabled deck imports no macro bytes and packages no macro asset', 
   expect(result.work.assets.map((asset) => asset.originPart)).not.toContain('ppt/vbaProject.bin')
 })
 
-test('a deck with more package entries than the ceiling is refused by resource-limit', async () => {
-  // `parts.ts` only asks `readZipParts` for `ppt/*` XML paths, but the ceiling
-  // in `zip-read.ts` checks the archive's TOTAL entry count before it ever
-  // asks which parts are wanted — so a deck padded with junk entries to
-  // exhaust the central-directory walk itself is refused before path
-  // filtering runs at all.
-  const entries = Array.from(
-    { length: PRESENTATION_PACKAGE_LIMITS.maximumPackageEntries + 1 },
-    (_unused, index) => ({ name: `ppt/slides/slide${index}.xml`, data: new TextEncoder().encode('<p:sld/>') }),
-  )
+/**
+ * Rebuilds a deck's zip AS a plain entry list, so a test can pad it with junk
+ * entries and re-zip it. Every part `pptxFixture` writes is UTF-8 XML text,
+ * so reading them all back with `readZipParts(bytes, () => true)` and
+ * re-encoding loses nothing — this is a lossless round trip, not a
+ * reconstruction that could quietly diverge from the original bytes.
+ */
+async function unpackXmlOnlyDeck(bytes: Uint8Array): Promise<{ name: string; data: Uint8Array }[]> {
+  const parts = await readZipParts(bytes, () => true)
+  return [...parts].map(([name, xml]) => ({ name, data: new TextEncoder().encode(xml) }))
+}
 
-  await expect(readZipParts(await writeZip(entries), () => true)).rejects.toMatchObject({
-    name: 'ZipReadError',
+test('a deck with more package entries than the ceiling is refused by resource-limit', async () => {
+  /*
+   * End-to-end, not a direct `readZipParts` call: a unit-level duplicate of
+   * `zip-read.test.ts`'s own ceiling test would never touch
+   * `importStructuredDocument`, so it would exercise none of the derivation
+   * chain this file exists to protect — not the Worker's `failure()` mapping
+   * (`rawCode === 'resourceLimit'` -> `'resource-limit'`) and not
+   * `actionableFailure`'s `retryable` derivation. Both are exercised here.
+   *
+   * `parts.ts` only asks `readZipParts` for `ppt/*` XML paths, but the
+   * ceiling in `zip-read.ts` checks the archive's TOTAL entry count before it
+   * ever asks which parts are wanted — so a deck padded with junk entries
+   * that the index never reads is still refused. `pptxFixture` with one
+   * untitled-image slide writes exactly 5 parts, so the ceiling is crossed by
+   * padding with `maximumPackageEntries + 1 - 5` junk `ppt/media/*` entries —
+   * parts the index has no reason to touch at all.
+   */
+  const controlDeck = await pptxFixture([{ title: 'Control' }])
+  const baseEntries = await unpackXmlOnlyDeck(controlDeck)
+  const junkEntries = Array.from(
+    { length: PRESENTATION_PACKAGE_LIMITS.maximumPackageEntries + 1 - baseEntries.length },
+    (_unused, index) => ({ name: `ppt/media/junk${index}.png`, data: new Uint8Array(0) }),
+  )
+  const paddedDeck = await writeZip([...baseEntries, ...junkEntries]) as Uint8Array<ArrayBuffer>
+
+  // The control: the SAME 5 parts, no padding, import normally — proof that
+  // anydoc is not the thing failing below.
+  const controlResult = await importStructuredDocument(
+    new File([controlDeck], 'control.pptx', { type: PPTX_MEDIA_TYPE }),
+    { metadata: hostileDeckMetadata },
+  )
+  expect(controlResult.work.sections[0]!.html).toContain('Control')
+
+  await expect(importStructuredDocument(
+    new File([paddedDeck], 'lecture.pptx', { type: PPTX_MEDIA_TYPE }),
+    { metadata: hostileDeckMetadata },
+  )).rejects.toMatchObject({
+    name: 'ParserProbeError',
     code: 'resource-limit',
-    message: expect.stringMatching(/entries/),
+    retryable: true,
+    message: expect.stringMatching(/entries; the browser limit is/),
+  })
+})
+
+test('a deck carrying a path-traversal entry is refused outright, not quietly indexed minus it', async () => {
+  /*
+   * `safePartPath` (`zip-read.ts`) is the one check that runs for EVERY
+   * central-directory entry, including ones the index never wants — so this
+   * proves a traversal-bearing deck is refused wholesale, rather than the
+   * traversal entry being silently skipped while the rest of the (otherwise
+   * legitimate) deck is indexed and imported anyway.
+   */
+  const controlDeck = await pptxFixture([{ title: 'Control' }])
+  const baseEntries = await unpackXmlOnlyDeck(controlDeck)
+  const hostileDeck = await writeZip([
+    ...baseEntries,
+    { name: '../evil.xml', data: new TextEncoder().encode('<x/>') },
+  ]) as Uint8Array<ArrayBuffer>
+
+  await expect(importStructuredDocument(
+    new File([hostileDeck], 'lecture.pptx', { type: PPTX_MEDIA_TYPE }),
+    { metadata: hostileDeckMetadata },
+  )).rejects.toMatchObject({
+    name: 'ParserProbeError',
+    code: 'malformed',
+    message: expect.stringMatching(/path escapes the package \(\.\.\/evil\.xml\)/),
   })
 })

@@ -1433,7 +1433,7 @@ export async function odpFixture(
  * to keep truthful, not two that can quietly drift apart.
  */
 export function patchUncompressedSizes(
-  zip: Uint8Array<ArrayBuffer>,
+  zip: Uint8Array,
   declared: number,
 ): Uint8Array<ArrayBuffer> {
   const patched = zip.slice()
