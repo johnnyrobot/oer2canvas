@@ -72,6 +72,10 @@ function parserLabel(report: ImportReport): string {
     case 'anydoc': return `AnyDoc ${report.parserVersion ?? ''}`.trim()
     case 'pdf-inspector': return `PDF Inspector ${report.parserVersion ?? ''}`.trim()
     case 'firecrawl': return 'Firecrawl'
+    // Named for what it is to the reader of a page — a service this
+    // deployment's operator runs — rather than for whichever product they
+    // chose to run, which is not a fact about the page.
+    case 'self-hosted-extractor': return 'Self-hosted extraction service'
     default: return report.format === 'markdown' ? 'Marked GFM browser parser' : 'Native browser parser'
   }
 }
