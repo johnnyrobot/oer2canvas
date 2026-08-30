@@ -19,10 +19,13 @@
 applied twice over a corpus of eleven synthetic fixtures, and both times it said "met". The final
 whole-branch review then ran files real producers wrote, and measured 2 of 11 real `.pptx` decks
 refusing and 0 of 3 real `.odp` files importing. Four ordinary defects came out of that, all four
-are fixed and pinned here, and the numbers on real files are now 29 of 39 `.pptx` importing and
-**14 of 14 `.odp`** — see "What real files did to this verdict" below for the full measurement,
-including the one construct that still refuses. Read that section before the two tables: the
-tables record what the corpus proves, and the corpus was not enough.
+are fixed and pinned here, and the numbers on real files are now 29 of 39 `.pptx` and 14 of 14
+`.odp` reaching a page with **no presentation blocker** — of which 28 and 11 respectively carry
+no blocker of any kind, the rest taking the ordinary `embedded-content` blocker for a preview
+image this importer cannot package. See "What real files did to this verdict" below for the full
+measurement, the two kinds of blocker, and the one construct that still refuses. Read that
+section before the two tables: the tables record what the corpus proves, and the corpus was not
+enough.
 
 **PPTX graduated on the first application of the bar; ODP only on the second, after
 a defect the first pass mistook for a limitation was fixed.** `.pptm`, `.ppsx`, and `.ppsm` ride
@@ -83,7 +86,7 @@ the same `resolvePackagePath` the picture path already uses, and classifies
 
 | Bar criterion | Verdict | Evidence |
 | --- | --- | --- |
-| 1. Every top-level block attributed to a slide | **Met over the corpus AND over every real `.odp` measured** | Five `format: 'odp'` cases, same exact-blocker-set assertion in both directions, none declaring one — plus **14 of 14 real `.odp` files written by LibreOffice Impress itself importing with no blocker**, where before this fix wave 6 of those 14 refused and the three the final reviewer measured refused 3 of 3. This is the row that changed most: the corpus said "met" while every real file said otherwise, because no fixture had ever carried the empty `text:p` LibreOffice writes inside every shape with no text, or the `page-number` frame it writes for a slide number. Both now have corpus cases (`odp-page-chrome`) and pinned anydoc measurements. |
+| 1. Every top-level block attributed to a slide | **Met over the corpus AND over every real `.odp` measured** | Five `format: 'odp'` cases, same exact-blocker-set assertion in both directions, none declaring one — plus **14 of 14 real `.odp` files written by LibreOffice Impress itself reaching a page with no PRESENTATION blocker**, where before this fix wave 6 of those 14 refused and the three the final reviewer measured refused 3 of 3. **Three of the fourteen** — `docling-ecosystem`, `powerpoint-sample`, `reference` — still take the ordinary `embedded-content` blocker for LibreOffice's GDI metafile preview, so they land in the plan editor with Prepare disabled rather than publishing; that is the ODF limitation stated three sections above, and it is criterion 1 that this row is about, not "the file publishes". Saying "no blocker" here would be the same shape of claim criterion 2 exists to catch: true on the letter, overstated about the consequence. This is the row that changed most: the corpus said "met" while every real file said otherwise, because no fixture had ever carried the empty `text:p` LibreOffice writes inside every shape with no text, or the `page-number` frame it writes for a slide number. Both now have corpus cases (`odp-page-chrome`) and pinned anydoc measurements. |
 | 2. Every construct in design fact 6 named by a finding on the right slide | **Met, by measurement — and this is the criterion that failed first** | `odp-unrepresentable` authors an embedded Draw diagram, an inserted chart, and a video on page 1, and produces the **identical** finding PPTX produces: `presentation-unrepresentable`, `sourcePage: 1`, "Slide 1 contains 1 diagram, 1 chart, 1 media that could not be imported." Authored to be identical deliberately, so the two formats are compared on the same evidence rather than on whichever case each happened to get. |
 | 3. No notes text anywhere in the imported HTML | **Met, by measurement** | `odp-speaker-notes`'s `expectNotInHtml`, plus the ODF notes path pinned against real anydoc across inline comments, nested frames, headings, tabs and soft breaks in `reconcile.browser.test.ts`. |
 | 4. Shared accessibility review and cartridge export pass, packaged assets included | **Met, by measurement** | The same axe screen, run independently for ODP rather than argued from the shared code path. `odp.imscc` was rebuilt and unzipped with a real `unzip` for this verdict: 5 files, 4070 bytes, `web_resources/oer2canvas/image1-b81de774.png` — structurally identical to `pptx.imscc`. |
@@ -157,6 +160,18 @@ templates) and **14 real `.odp` files LibreOffice Impress wrote itself** through
 | …of which the presentation module's own doing | 11 of 39 | **4 of 39** |
 | Real `.odp` refused | 6 of 14 | **0 of 14** |
 
+**"Refused" here means THROWN — no page at all.** It is not the same as "published", and this
+Answer has to keep the two apart, because the difference is a whole residual of its own (see
+"Two different screens" below). Of the 29 `.pptx` and 14 `.odp` that reach a page, **28 and 11**
+carry no finding at severity `blocker`; the remaining **1 and 3** carry the ordinary
+`embedded-content` blocker for a preview image this importer cannot package — an EMF on
+`AI at LACCD`, and LibreOffice's GDI metafile on `docling-ecosystem`, `powerpoint-sample` and
+`reference`. Those four land in the plan editor with Prepare disabled. They are counted as
+imports of the PRESENTATION module because that is what the bar's criterion 1 is about and no
+presentation-level disagreement remains in them; they are not counted as files a user can
+publish, and an earlier draft of this Answer said "importing with no blocker", which was true on
+the letter and overstated about the consequence — the exact failure criterion 2 exists to catch.
+
 The 10 remaining `.pptx` refusals are three kinds, and only one is this module's:
 
 1. **A chart inserted in PowerPoint — 4 decks.** Anydoc renders a chart's cached values as a
@@ -199,13 +214,31 @@ class, or one character per otherwise identical package) AND by a corpus case th
 shape end to end, and each pin was mutation-tested — ten mutations in all, each turning red
 exactly the assertions it should.
 
-**The real-file harness is not committed.** It reads decks from this machine's own Documents,
-OneDrive and caches, and those files are not ours to check in. What IS committed is every shape
-they exposed, as a fixture: `placeholders` and `chartWithData` on `PptxSlideSpec`, `chromeFrames`
-and `emptyCustomShape` on `OdpPageSpec`, and the `pptx-slide-chrome` and `odp-page-chrome` corpus
-cases. The disclosure that stood before this wave stands after it, one level up: **no real deck
-of any kind is committed to this repository**, and the only defence against that is to keep
-running real files.
+**The real-file harness is not committed, and NOTHING IN THIS REPOSITORY WILL MAKE THE NEXT
+READER RUN ONE.** That is the single most valuable thing this branch learned and the least
+reproducible thing about it. The harness was a throwaway `*.browser.test.ts` that fetched decks
+copied into `public/`, plus a shell script that gathered them; both were deleted, and the decks
+themselves lived under `/private/tmp` and this machine's `Documents`, OneDrive and tool caches —
+files that are not ours to check in. There is no npm script, no CI job and no fixture that
+re-creates any of it.
+
+What IS committed is every shape they exposed, as a fixture: `placeholders` and `chartWithData`
+on `PptxSlideSpec`, `chromeFrames`, `emptyCustomShape` and `nestedMedia` on `OdpPageSpec`, the
+`pptx-slide-chrome` and `odp-page-chrome` corpus cases, and a pinned anydoc measurement for each.
+So the four defects found this way can never come back. **The fifth cannot be caught by any of
+it.** Every defect in the table above was invisible to a corpus of hand-authored fixtures by
+construction — the fixtures encode what their author already believed a producer writes — and
+the only method that found any of them was running a file a producer had actually written.
+
+To do it again: `mdfind 'kMDItemFSName == "*.pptx"'` for the decks, `soffice --convert-to odp`
+for real ODF, copy them somewhere Vite serves, and drive each one through
+`importStructuredDocument` in the `browser` project, recording the thrown message or the finding
+codes. It took under an hour and it found five defects, four of which the eleven-fixture corpus,
+two applications of the bar, and twelve review rounds had all missed.
+
+The disclosure that stood before this wave stands after it, one level up: **no real deck of any
+kind is committed to this repository**, and the only defence against that is to keep running
+real files.
 
 ### Residuals stated as limitations, not as bar failures
 
@@ -265,6 +298,37 @@ running real files.
   high"; the refusal rate has now been measured twice, and at 4 of 39 real `.pptx` and 0 of 14
   real `.odp` the answer is that it is not high enough to force this. It stays a follow-up, but
   the trigger is no longer hypothetical — it has been evaluated.
+
+### Three gaps in this wave's OWN evidence, carried rather than closed
+
+Each is small, each is stated because the next reader would otherwise rediscover it, and each is
+the same category of defect this branch produced four times — a claim whose test cannot fail, or
+a measurement that lives only in prose.
+
+- **The notes-body field measurement is committed only as a comment.** `notesBodyText`'s
+  `includeFields` was flipped because real anydoc renders a field inside the BODY placeholder and
+  renders nothing for a `sldNum`/`dt` SHAPE. The index-level consequence IS pinned
+  (`index.test.ts` asserts `notesText` carries the date and not the notes part's own cached `7`),
+  and that test goes red when the flag is flipped back. But **no committed browser row drives a
+  notes-body field through real anydoc and asserts what the blockquote says.** The claim that the
+  blockquote reads `Mention the 8/30/26 deadline` is prose. If anydoc changes its mind about
+  fields, the index test keeps passing and the strict-equality comparison starts failing on real
+  decks, which is the failure mode that publishes a presenter's private note.
+- **The ODF presentation-class list pins three of four skips and NONE of its twelve renders.**
+  `reconcile.browser.test.ts` has a row for `footer`, `page-number` and `date-time`; `header` —
+  which was measured as unrendered and is in `ODF_UNRENDERED_PRESENTATION_CLASSES` — has no row at
+  all, and neither do the twelve classes anydoc DOES render. The PPTX side pins its three skips
+  and four of its renders, on the stated argument that a list pinning only its skips can silently
+  widen. **That argument applies to ODF exactly as much and is not honoured there.** The full
+  sixteen-class measurement was taken; only three of the sixteen rows survived into a committed
+  test.
+- **`isVacant` and the walk disagree about what "empty" means.** `readBlock` decides vacancy with
+  `collapse` (whitespace collapsed, then trimmed) while the walk compares with `squeeze`
+  (whitespace and the invisible characters anydoc drops REMOVED). So a block whose only content is
+  a zero width space is `squeezed === ''` but NOT vacant. It fails safe — such a block ends the
+  slide and refuses rather than being silently dropped — and it is unreachable through anydoc,
+  which strips U+200B before emitting. Two normalisations for one idea is still one more than
+  there should be, and this is the note that says so rather than the next reader deriving it.
 
 ### One methodological note, recorded because it changed the outcome
 
@@ -339,8 +403,11 @@ MANUAL rows report `NEVER RUN` for Firefox/screen reader (criterion 2) and live 
 `npm run test:artifacts` 12 + 12 green.
 
 **Verdict after the real-file measurement: both formats still graduate, and ODP now graduates on
-stronger evidence than PPTX.** ODP imports 14 of 14 real Impress files with no blocker. PPTX
-imports 29 of 39 real decks, and the 4 refusals that are this module's own doing are one named,
+stronger evidence than PPTX.** ODP reaches a page on 14 of 14 real Impress files with no
+presentation blocker — 11 of them with no blocker at all, the other three held at the plan editor
+by the `embedded-content` blocker for a GDI metafile preview. PPTX reaches a page on 29 of 39 real
+decks (28 with no blocker at all; `AI at LACCD` carries `embedded-content` for an EMF), and the
+4 refusals that are this module's own doing are one named,
 pinned construct — an inserted chart — stated in `capability.ts` so a user is told what to do
 about it. Refusing is not the outcome anyone wants, but it is the outcome this module was built
 to produce when the two accounts disagree, and it is the only remaining one.
