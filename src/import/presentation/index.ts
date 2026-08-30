@@ -546,11 +546,25 @@ function rendersChoiceBranch(choice: Element): boolean {
  * recorded on `state` — as an origin when it resolves, and as a reported loss
  * (`unrepresentable.pictures`) when it does not.
  *
- * `p:blipFill` (presentationml) is the picture fill of a `p:pic` — the element
- * that IS a picture. It is deliberately not `a:blipFill` (drawingml), which is
- * how a shape, a slide background or a table cell says "fill me with this
- * image"; anydoc emits no picture block for any of those, so collecting them
- * would make the index expect parts that never arrive.
+ * The scoping that matters is being INSIDE A `p:pic` — the element that IS a
+ * picture — not the namespace of its fill. This is only ever called with a
+ * `p:pic`, so a slide background's, a shape's or a table cell's `a:blipFill`
+ * (drawingml) is out of reach by construction; anydoc emits no picture block
+ * for any of those, and all three are measured agreeing.
+ *
+ * WITHIN a `p:pic`, both namespaces are read. PowerPoint writes
+ * `p:blipFill` (presentationml) and that is preferred when present, but
+ * MEASURED with real anydoc 0.2.4, a `p:pic` whose fill is written
+ * `a:blipFill` instead renders with a real origin — and so does one whose
+ * `a:blipFill` sits under `p:spPr` where a SHAPE fill would go. Scoping to the
+ * presentationml element recorded nothing for either, which alone is a loud
+ * blocker but beside an untitled picture-only slide let the previous slide stay
+ * sole referencer and claim both blocks.
+ *
+ * ONE FILL, because one picture shape is one picture: the first `p:blipFill`,
+ * else the first `a:blipFill`. A `p:pic` carrying a real picture fill AND a
+ * decorative one would otherwise make the index expect two pictures where
+ * anydoc emits one.
  *
  * `r:embed` wins over `r:link` when a blip carries both — REASONED, not
  * measured: bytes present in the package are what a renderer prefers, and
@@ -562,7 +576,9 @@ function rendersChoiceBranch(choice: Element): boolean {
  * prediction, now falling out of the resolution instead of being modelled.
  */
 function readBlipOrigins(shape: Element, state: ShapeWalkState): void {
-  for (const fill of shape.getElementsByTagNameNS(PML_NS, 'blipFill')) {
+  const fill = shape.getElementsByTagNameNS(PML_NS, 'blipFill')[0]
+    ?? shape.getElementsByTagNameNS(DRAWING_NS, 'blipFill')[0]
+  if (fill) {
     for (const blip of fill.getElementsByTagNameNS(DRAWING_NS, 'blip')) {
       const relationshipId = blip.getAttributeNS(R_NS, 'embed') ?? blip.getAttributeNS(R_NS, 'link')
       // A blip naming NO relationship references no image data at all, so
@@ -905,54 +921,95 @@ function odfNotesText(notesElement: Element): string | undefined {
 }
 
 /**
- * The ODF containers anydoc's own walk descends through on its way from a
- * `draw:page` down to a picture: a frame, and Impress's own Group
- * (`draw:g`). MEASURED against real anydoc 0.2.4 — both are walked at one
- * level and at two, and the five placements below are not.
+ * ODF drawing elements that are NOT a shape of their own on the page, and so do
+ * not count toward the nesting depth `enclosingShapeCount` measures:
+ * `draw:g`, Impress's own Group command, which anydoc walks straight through
+ * (measured at one, two, three, four and five levels); and `draw:text-box`, a
+ * frame's own text container rather than a second shape inside it.
  *
- * The list is EVIDENCE, not a schema reading, and the next person extending it
- * should extend it the same way: build the deck, drive the real Worker, and see
- * whether anydoc emits a block.
+ * Anything else in the drawing namespace between a page and its content is a
+ * SHAPE — a `draw:frame`, a `draw:custom-shape`, a toolbar rectangle, a
+ * `draw:a` picture hyperlink.
  */
-const ODF_WALKED_CONTAINERS = new Set(['frame', 'g'])
+const ODF_TRANSPARENT_CONTAINERS = new Set(['g', 'text-box'])
 
 /**
- * Whether anydoc will actually render this `draw:image` — its parent is a
- * `draw:frame`, and every container between that frame and the `draw:page` is
- * one anydoc walks.
+ * How many ODF SHAPES enclose this element on its way up to its `draw:page`, or
+ * `undefined` when it is not on a page at all. Elements outside the drawing
+ * namespace — `table:table-cell`, `text:list`, `text:list-item` — are neither
+ * shapes nor terminators and are simply passed through.
+ */
+function enclosingShapeCount(node: Element): number | undefined {
+  let shapes = 0
+  for (let ancestor = node.parentElement; ancestor; ancestor = ancestor.parentElement) {
+    if (ancestor.namespaceURI !== ODF_DRAW_NS) continue
+    if (ancestor.localName === 'page') return shapes
+    if (!ODF_TRANSPARENT_CONTAINERS.has(ancestor.localName)) shapes += 1
+  }
+  return undefined
+}
+
+/**
+ * ONE RULE, TWO CONTENT TYPES: **a shape's own content is read; a shape nested
+ * inside another shape is not entered.** A page places shapes, `draw:g` groups
+ * them, and anydoc's walk stops the moment a shape contains another shape.
  *
- * ODF puts almost no constraint on where a `draw:image` may sit, and the flat
- * any-depth query this replaces collected every one of them; anydoc reaches a
- * picture by WALKING A SHAPE TREE. The two disagree at every placement the walk
- * does not visit, and MEASURED with real anydoc 0.2.4 that is at least five —
- * `draw:frame > draw:a > draw:image` (ODF's hyperlinked picture), an image
- * inside a `table:table` cell, a frame nested inside another frame's
- * `draw:text-box`, an image hung off a `draw:custom-shape`, and a bare
- * `draw:image` directly under `draw:page`. anydoc emits NO block for any of
- * them while the index recorded a part for each.
+ * ODF puts almost no constraint on where a `draw:image` or a `text:p` may sit,
+ * and the flat any-depth queries this replaces collected every one of them;
+ * anydoc reaches content by WALKING A SHAPE TREE. The two disagree at every
+ * placement the walk does not visit, and MEASURED with real anydoc 0.2.4 that
+ * is at least eight for pictures — `draw:frame > draw:a > draw:image` (ODF's
+ * hyperlinked picture), an image inside a `table:table` cell, a frame nested
+ * inside another frame's `draw:text-box`, an image hung off a
+ * `draw:custom-shape`, a bare `draw:image` directly under `draw:page`, and a
+ * frame inside a frame reached directly, through a group, and inside a group.
+ * anydoc emits NO block for any of them while the index recorded a part for
+ * each.
  *
  * That was not merely a spurious refusal. The over-collected part is one an
  * EARLIER page really owns, so the sole-referencer rule capped that page at one
  * block and handed this one the surplus: measured with page 1 showing a picture
- * twice and page 2 holding that same part inside a table cell, page 1's second
- * picture published under page 2's heading with NO findings at all. The
- * `draw:a` and nested-text-box placements produce byte-identical output.
+ * twice and page 2 holding that same part inside a table cell — and again with
+ * a frame inside a frame — page 1's second picture published under page 2's
+ * heading with NO findings at all.
  *
- * This is the ODP half of the discipline `walkShapes` already has on the PPTX
- * side, where the walk visits named containers rather than querying at any
- * depth. It is stated as a chain test rather than a recursive walk because the
- * page's TEXT query is deliberately flat (see `odpIndex`) and must stay that
- * way — a per-shape text walk double-counts a frame nested in a frame.
+ * An earlier version of this rule allowed `draw:frame` as an intermediate
+ * container as well as `draw:g`. Every measurement across four rounds is
+ * consistent with groups being the ONLY thing a frame may be reached through,
+ * and `draw:frame` was the one member of that set never backed by a
+ * measurement — which is exactly the member that admitted the ninth
+ * counterexample.
+ *
+ * The TEXT half is not identical, and the difference is measured rather than
+ * assumed: a `draw:custom-shape`'s OWN text IS emitted (task 5), and so is a
+ * grouped one's, while a frame nested inside another shape is not entered for
+ * text any more than for pictures. So text allows any shape at depth one, where
+ * a picture additionally requires that shape to be the `draw:frame` holding it.
+ *
+ * Both are chain tests rather than a recursive walk because the page's queries
+ * must stay FLAT: fix round 3 of task 6 measured that a per-shape text walk
+ * double-counts a paragraph inside a frame inside a frame, finding it once for
+ * each enclosing frame's own descendant query.
  */
+
+/** A shape's own content: the shape that holds it, and nothing above it but groups. */
+const OWN_CONTENT_SHAPE_DEPTH = 1
+
 function isWalkedPicture(image: Element): boolean {
   const frame = image.parentElement
   if (!frame || frame.namespaceURI !== ODF_DRAW_NS || frame.localName !== 'frame') return false
-  for (let ancestor = frame.parentElement; ancestor; ancestor = ancestor.parentElement) {
-    if (ancestor.namespaceURI !== ODF_DRAW_NS) return false
-    if (ancestor.localName === 'page') return true
-    if (!ODF_WALKED_CONTAINERS.has(ancestor.localName)) return false
-  }
-  return false
+  return enclosingShapeCount(image) === OWN_CONTENT_SHAPE_DEPTH
+}
+
+/**
+ * Text belongs to the shape that holds it, so it may sit at most that one shape
+ * deep. Zero — a paragraph directly under the `draw:page`, outside any shape —
+ * is left alone rather than newly excluded: it is not a shape anydoc was
+ * measured skipping, and the flat query has always collected it.
+ */
+function isWalkedText(paragraph: Element): boolean {
+  const shapes = enclosingShapeCount(paragraph)
+  return shapes !== undefined && shapes <= OWN_CONTENT_SHAPE_DEPTH
 }
 
 /**
@@ -1078,6 +1135,7 @@ function odpIndex(parts: Record<string, string>): PresentationIndex {
     ]
       .sort(documentOrder)
       .filter((paragraph) => !excludedRoots.some((root) => root.contains(paragraph)))
+      .filter((paragraph) => isWalkedText(paragraph))
       .map((paragraph) => ({ element: paragraph, text: odfParagraphText(paragraph) }))
       .filter((paragraph) => paragraph.text.length > 0)
 

@@ -738,6 +738,9 @@ test.each([
   ["a frame inside another frame's text-box", 'imageInNestedFrame'],
   ['a picture hung off a draw:custom-shape', 'imageInCustomShape'],
   ['an unframed picture directly under draw:page', 'unframedImage'],
+  ['a frame directly inside another frame', 'imageInFrameInFrame'],
+  ['a frame inside a group inside another frame', 'imageInFrameInGroupInFrame'],
+  ['a frame inside another frame, inside a group', 'imageInFrameInFrameInGroup'],
 ] as const)('the odp index records nothing for %s, because anydoc renders nothing', async (_name, placement) => {
   /*
    * ODF puts almost no constraint on where a `draw:image` may sit, and the
@@ -757,13 +760,17 @@ test.each([
 })
 
 test.each([
-  ['inside a draw:g group', 'groupedImage'],
-  ['inside two nested draw:g groups', 'deeplyGroupedImage'],
+  ['inside a draw:g group', { groupedImage: true }],
+  ['inside two nested draw:g groups', { deeplyGroupedImage: true }],
+  ['three groups deep', { groupDepth: 3 }],
+  ['four groups deep', { groupDepth: 4 }],
+  ['five groups deep', { groupDepth: 5 }],
 ] as const)('the odp index still records a picture %s, which anydoc does render', async (_name, placement) => {
-  // The positive controls for the container list. A rule that over-restricts —
-  // "only a frame that is a direct child of the page" — would pass every test
-  // above and silently stop importing Impress's own Group command.
-  const { anydocHtml, index, result } = await reconcileFixture([{ title: 'One', [placement]: true }])
+  // The positive controls for the nesting rule. A rule that over-restricts —
+  // "only a frame that is a direct child of the page", or one that quietly caps
+  // group depth — passes every negative test above and silently stops importing
+  // Impress's own Group command.
+  const { anydocHtml, index, result } = await reconcileFixture([{ title: 'One', ...placement }])
 
   expect(anydocHtml).toContain('<img')
   expect(index.slides[0]!.pictureOrigins).toEqual(['Pictures/image1.png'])
@@ -775,6 +782,9 @@ test.each([
   ['a table cell', 'imageInTableCell'],
   ['a draw:a hyperlink', 'hyperlinkedImage'],
   ["a frame nested in another frame's text-box", 'imageInNestedFrame'],
+  ['a frame directly inside another frame', 'imageInFrameInFrame'],
+  ['a frame inside a group inside another frame', 'imageInFrameInGroupInFrame'],
+  ['a frame inside another frame, inside a group', 'imageInFrameInFrameInGroup'],
 ] as const)(
   "an odp picture anydoc does not walk, in %s, no longer steals an earlier page's picture",
   async (_name, placement) => {
@@ -841,3 +851,65 @@ test('a raw query separator in a target is refused, not silently truncated', asy
   expect(finding?.severity).toBe('blocker')
   expect(finding?.message).toContain('slide 1 is missing a picture the deck says it carries')
 })
+
+
+test('an odp frame nested inside another frame contributes no text either', async () => {
+  /*
+   * The TEXT half of the one nesting rule, and a shape that was measured
+   * UNIMPORTABLE: anydoc emits `<h2>One</h2>` and nothing else for a frame
+   * inside a frame, while the index collected the inner frame's paragraph — a
+   * run no block carries, so the deck took a `presentation-unattributed-content`
+   * blocker. Fail-closed rather than a misattribution, but a unit test asserted
+   * that collection was correct.
+   */
+  const { anydocHtml, index, result } = await reconcileFixture([
+    { title: 'One', nestedFrameText: 'NESTED TEXT' },
+  ])
+
+  expect(anydocHtml).toBe('<h2 id="One">One</h2>')
+  expect(index.slides[0]!.textRuns).toEqual(['One'])
+  expect(result.findings).toEqual([])
+})
+
+test.each([
+  ["a drawn shape's own text", { customShapeText: 'SHAPE TEXT' }, 'SHAPE TEXT'],
+  ["a grouped drawn shape's own text", { groupedCustomShapeText: 'GROUPED TEXT' }, 'GROUPED TEXT'],
+] as const)('%s is still read, because anydoc still emits it', async (_name, page, expected) => {
+  // The text rule is NOT the picture rule. Task 5 measured that Impress puts
+  // typed text directly inside a toolbar shape with no enclosing frame, and
+  // that anydoc emits a block for it; the nesting rule must not take that with
+  // it. A shape's own content is read — a shape inside another shape is not
+  // entered.
+  const { anydocHtml, index, result } = await reconcileFixture([{ title: 'One', ...page }])
+
+  expect(anydocHtml).toContain(expected)
+  expect(index.slides[0]!.textRuns).toEqual(['One', expected])
+  expect(result.findings).toEqual([])
+})
+
+test.each([
+  ['written where the picture fill goes', {}],
+  ['written under p:spPr where a shape fill goes', { inSpPr: true }],
+] as const)(
+  "a p:pic whose fill is drawingml, %s, is attributed rather than lost",
+  async (_name, drawingmlBlipFill) => {
+    /*
+     * MEASURED: anydoc renders a `p:pic` whose fill is `a:blipFill` with a real
+     * origin, in both placements. The index scoped to the presentationml
+     * `p:blipFill` and recorded nothing — a loud blocker on its own, but beside
+     * an untitled picture-only slide it left slide 1 the sole referencer, which
+     * then claimed BOTH blocks and shipped slide 2 empty under nothing but an
+     * untitled-slide warning.
+     */
+    const { anydocHtml, result } = await reconcileBytes('pptx', await pptxFixture([
+      { title: 'One', drawingmlBlipFill },
+      { image: { alt: 'SLIDE TWO PIC' } },
+    ]))
+
+    expect(anydocHtml.match(/<img/g)).toHaveLength(2)
+    const sections = sectionsOf(result.html)
+    expect(sections[0]!.querySelector('img')!.alt).toBe('Drawingml fill')
+    expect(sections[1]!.querySelector('img')!.alt).toBe('SLIDE TWO PIC')
+    expect(result.findings.map((finding) => finding.code)).toEqual(['presentation-untitled-slide'])
+  },
+)

@@ -441,15 +441,57 @@ test('an odp draw:custom-shape wrapped in a draw:g group is still found (fix-rev
   expect(index.slides[0]!.textRuns).toEqual(['Title', 'Grouped drawn text'])
 })
 
-test('a draw:frame nested inside another draw:frame contributes its text exactly once (fix-review round 3 Important 3)', async () => {
-  // Widening the shape-kind allowlist (rather than querying text:p directly)
-  // would double-count a frame nested inside a frame: the OUTER frame's own
-  // descendant query would find the SAME text:p the inner frame also finds.
+test('a draw:frame nested inside another draw:frame contributes NO text, because anydoc emits none', async () => {
+  /*
+   * THIS TEST USED TO ASSERT THE OPPOSITE, and it was wrong. It was written to
+   * pin that the flat `text:p` query does not DOUBLE-count a frame inside a
+   * frame the way a per-shape walk would (fix round 3 of task 6, still true and
+   * still the reason the query is flat) — but it went on to assert that the
+   * text is collected ONCE, which nobody had measured.
+   *
+   * MEASURED with real anydoc 0.2.4: this page comes out as `<h2>One</h2>` and
+   * nothing else. anydoc's walk stops the moment a shape contains another
+   * shape, so collecting the text made the index expect a run no block carries,
+   * and the deck took a `presentation-unattributed-content` blocker. Fail-closed
+   * rather than a misattribution, but the shape was unimportable while this test
+   * presented its collection as correct.
+   *
+   * The counting property it was written for is unchanged and still asserted:
+   * exactly zero, not twice.
+   */
   const index = await odpIndexOf(await odpFixture([
     { title: 'Title', nestedFrameText: 'Text in a frame inside a frame' },
   ]))
 
-  expect(index.slides[0]!.textRuns).toEqual(['Title', 'Text in a frame inside a frame'])
+  expect(index.slides[0]!.textRuns).toEqual(['Title'])
+})
+
+test("a shape's OWN text is still read, at every depth of grouping", async () => {
+  /*
+   * The other half of the one rule: a shape's own content is read; a shape
+   * nested inside another shape is not entered. Nesting a frame in a frame must
+   * not take a `draw:custom-shape`'s own text with it — that was itself an
+   * Important finding two tasks ago (Impress puts typed text directly inside a
+   * toolbar shape, with no enclosing frame at all), and anydoc emits a block
+   * for it at page level and inside a group alike.
+   */
+  const shape = await odpIndexOf(await odpFixture([
+    { title: 'One', customShapeText: 'SHAPE TEXT' },
+  ]))
+  expect(shape.slides[0]!.textRuns).toEqual(['One', 'SHAPE TEXT'])
+
+  const grouped = await odpIndexOf(await odpFixture([
+    { title: 'One', groupedCustomShapeText: 'GROUPED TEXT' },
+  ]))
+  expect(grouped.slides[0]!.textRuns).toEqual(['One', 'GROUPED TEXT'])
+
+  // A table cell's paragraph is a frame's own content too: `table:*` elements
+  // are not shapes, so the cell text sits at the same depth as the frame.
+  const table = await odpIndexOf(await odpFixture([
+    { title: 'Data', body: ['Body text'], table: true },
+  ]))
+  expect(table.slides[0]!.textRuns)
+    .toEqual(['Data', 'Body text', 'Stage', 'Location', 'Calvin cycle', 'Stroma'])
 })
 
 test('an odp text:tab becomes one space so notesText matches anydoc (fix-review round 3 Important 4)', async () => {
@@ -688,6 +730,29 @@ test('a declared relationship whose target cannot be named is still a reference'
   expect(index.slides[0]!.pictureOrigins).toHaveLength(1)
   expect(index.slides[0]!.pictureOrigins[0]).not.toBe('ppt/media/100%.png')
   expect(index.slides[0]!.unrepresentable.pictures).toBe(0)
+})
+
+test("a p:pic's fill is read in either namespace, because anydoc renders both", async () => {
+  /*
+   * PowerPoint writes `p:blipFill` (presentationml) inside a `p:pic`, and the
+   * index scoped to that element alone. MEASURED with real anydoc 0.2.4: a
+   * `p:pic` whose fill is written `a:blipFill` (drawingml) instead renders with
+   * a real origin, and so does one whose `a:blipFill` sits under `p:spPr` where
+   * a SHAPE fill would go. Recording nothing for either is a loud blocker on
+   * its own — but beside an untitled picture-only slide it let the previous
+   * slide stay sole referencer and claim both blocks.
+   *
+   * The scoping that matters is being inside a `p:pic`, not the namespace: a
+   * slide background's, a shape's or a table cell's `a:blipFill` is out of
+   * reach by construction, and all three are measured agreeing.
+   */
+  const direct = await indexOf(await pptxFixture([{ title: 'One', drawingmlBlipFill: {} }]))
+  expect(direct.slides[0]!.pictureOrigins).toEqual(['ppt/media/image1.png'])
+
+  const inShapeProperties = await indexOf(await pptxFixture([
+    { title: 'One', drawingmlBlipFill: { inSpPr: true } },
+  ]))
+  expect(inShapeProperties.slides[0]!.pictureOrigins).toEqual(['ppt/media/image1.png'])
 })
 
 test('a target resolving to the package root is unresolvable, not the empty string', async () => {

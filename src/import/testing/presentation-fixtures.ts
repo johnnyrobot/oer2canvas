@@ -146,6 +146,16 @@ export interface PptxSlideSpec {
    */
   unpackageableImage?: { alt?: string }
   /**
+   * A `p:pic` whose fill is the DRAWINGML `a:blipFill` rather than the
+   * presentationml `p:blipFill` PowerPoint itself writes. Not a shape's picture
+   * fill — that lives under `p:spPr` and anydoc renders nothing for it — but
+   * the picture's own fill element, in the wrong namespace, as a converter can
+   * emit. MEASURED: anydoc renders it with a real origin. `inSpPr` puts an
+   * `a:blipFill` where a SHAPE fill goes instead, which is the case that must
+   * keep collecting nothing.
+   */
+  drawingmlBlipFill?: { inSpPr?: boolean }
+  /**
    * A pasted Excel worksheet: `p:graphicFrame` → `graphicData uri=…/ole` →
    * `p:oleObj` → a preview `p:pic`. The preview is the only part of it anydoc
    * ever sees, and it is a picture — nested two levels below the shape tree,
@@ -537,6 +547,16 @@ function slideXml(spec: PptxSlideSpec): string {
       `<p:blipFill><a:blip r:embed="rIdEmf"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
       `<p:spPr/></p:pic>`
     : ''
+  const drawingmlBlipFill = spec.drawingmlBlipFill
+    ? `<p:pic><p:nvPicPr><p:cNvPr id="29" name="Drawingml Fill 29" descr="Drawingml fill"/>` +
+      `<p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+      (spec.drawingmlBlipFill.inSpPr
+        ? `<p:spPr><a:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch>` +
+          `</a:blipFill></p:spPr>`
+        : `<a:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>` +
+          `<p:spPr/>`) +
+      `</p:pic>`
+    : ''
   const brokenImage = spec.brokenImage
     ? `<p:pic><p:nvPicPr><p:cNvPr id="11" name="Broken Picture 11"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
       `<p:blipFill><a:blip r:embed="rIdMissingImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
@@ -578,7 +598,7 @@ function slideXml(spec: PptxSlideSpec): string {
   const nested = spec.nestedGroupDepth ? nestedGroups(spec.nestedGroupDepth) : ''
 
   const pictures = `${image}${secondImage}${linkedImage}${brokenImage}${blipWithoutReference}` +
-    `${missingMediaImage}${unpackageableImage}`
+    `${missingMediaImage}${unpackageableImage}${drawingmlBlipFill}`
   const shapes = spec.titleLast
     ? `${body}${pictures}${diagram}${chart}${video}${audio}${table}${oleObject}${group}${alternateContent}${nested}${title}`
     : `${title}${body}${pictures}${diagram}${chart}${video}${audio}${table}${oleObject}${group}${alternateContent}${nested}`
@@ -731,7 +751,7 @@ export async function pptxFixture(
       rels.push('<Relationship Id="rIdAudio" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio" Target="../media/audio1.m4a" TargetMode="External"/>')
     }
     if (slide.image || slide.secondImage || slide.video || slide.audio || slide.group?.image ||
-      slide.inkInAlternateContent || slide.pictureInChoiceOnlyAlternateContent) {
+      slide.inkInAlternateContent || slide.pictureInChoiceOnlyAlternateContent || slide.drawingmlBlipFill) {
       const target = slide.imageTargetOverride ?? `../media/${encodeURIComponent(imagePartName)}`
       rels.push(`<Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="${target}"/>`)
     }
@@ -750,7 +770,8 @@ export async function pptxFixture(
   })
 
   if (slides.some((slide) => slide.image || slide.secondImage || slide.video || slide.audio ||
-    slide.group?.image || slide.inkInAlternateContent || slide.pictureInChoiceOnlyAlternateContent)) {
+    slide.group?.image || slide.inkInAlternateContent || slide.pictureInChoiceOnlyAlternateContent ||
+    slide.drawingmlBlipFill)) {
     entries.push({ name: `ppt/media/${imagePartName}`, data: EMBEDDED_IMAGE_PNG })
   }
   if (slides.some((slide) => slide.unpackageableImage || slide.oleObject)) {
@@ -901,6 +922,16 @@ export interface OdpPageSpec {
    */
   inlineBytesImage?: boolean
   /**
+   * Three more placements anydoc does NOT walk, all of them a `draw:frame`
+   * reached through another `draw:frame`: directly, through a group, and inside
+   * a group. Measured emitting no block. A chain rule that allows `draw:frame`
+   * as an intermediate container admits all three — and one of them was the
+   * ninth silent misattribution.
+   */
+  imageInFrameInFrame?: boolean
+  imageInFrameInGroupInFrame?: boolean
+  imageInFrameInFrameInGroup?: boolean
+  /**
    * The two placements anydoc DOES walk, beside `image`'s plain frame:
    * `draw:g > draw:frame > draw:image` (Impress's own Group command) and the
    * same nested one level deeper. Positive controls, so a container rule that
@@ -908,6 +939,12 @@ export interface OdpPageSpec {
    */
   groupedImage?: boolean
   deeplyGroupedImage?: boolean
+  /**
+   * A picture inside N nested `draw:g` groups. Impress nests groups freely and
+   * anydoc walks all of them; 3, 4 and 5 deep are measured emitting a block, so
+   * a chain rule that quietly caps group depth fails here.
+   */
+  groupDepth?: number
   /**
    * A `draw:plugin` carrying a media mime type — the shape Impress writes for
    * an inserted video — optionally with a `draw:image` POSTER in the same
@@ -1177,6 +1214,27 @@ export async function odpFixture(
         `</draw:custom-shape>`
       : ''
     const unframedImage = page.unframedImage ? pictureImage : ''
+    const imageInFrameInFrame = page.imageInFrameInFrame
+      ? pictureFrame(`Outer frame ${index + 1}`, pictureFrame(`Inner frame ${index + 1}`, pictureImage))
+      : ''
+    const imageInFrameInGroupInFrame = page.imageInFrameInGroupInFrame
+      ? pictureFrame(`Outer frame g ${index + 1}`,
+          odpGroup(`Middle group ${index + 1}`, pictureFrame(`Inner frame g ${index + 1}`, pictureImage)))
+      : ''
+    const imageInFrameInFrameInGroup = page.imageInFrameInFrameInGroup
+      ? odpGroup(`Outer group ${index + 1}`,
+          pictureFrame(`Grouped outer frame ${index + 1}`,
+            pictureFrame(`Grouped inner frame ${index + 1}`, pictureImage)))
+      : ''
+    const groupDepthImage = page.groupDepth
+      ? (() => {
+          let xml = pictureFrame(`Depth picture ${index + 1}`, pictureImage)
+          for (let level = 0; level < page.groupDepth!; level += 1) {
+            xml = odpGroup(`Depth group ${index + 1}-${level}`, xml)
+          }
+          return xml
+        })()
+      : ''
     const groupedImage = page.groupedImage
       ? odpGroup(`Picture group ${index + 1}`, pictureFrame(`Grouped picture ${index + 1}`, pictureImage))
       : ''
@@ -1203,6 +1261,7 @@ export async function odpFixture(
     const extras = `${customShape}${groupedCustomShape}${nestedFrame}${table}${media}`
     const pictures = `${image}${secondImage}${alternateImages}${hyperlinkedImage}${imageInTableCell}` +
       `${imageInNestedFrame}${imageInCustomShape}${unframedImage}${groupedImage}${deeplyGroupedImage}` +
+      `${imageInFrameInFrame}${imageInFrameInGroupInFrame}${imageInFrameInFrameInGroup}${groupDepthImage}` +
       `${inlineBytesImage}`
     const frames = page.titleLast
       ? `${outline}${pictures}${extras}${title}`
@@ -1225,7 +1284,9 @@ export async function odpFixture(
       (pages.some((page) => page.image || page.secondImage || page.alternateImages || page.notesImage ||
         page.video?.poster || page.hyperlinkedImage || page.imageInTableCell ||
         page.imageInNestedFrame || page.imageInCustomShape || page.unframedImage ||
-        page.groupedImage || page.deeplyGroupedImage)
+        page.groupedImage || page.deeplyGroupedImage ||
+        page.imageInFrameInFrame || page.imageInFrameInGroupInFrame ||
+        page.imageInFrameInFrameInGroup || page.groupDepth)
         ? `<manifest:file-entry manifest:full-path="${imagePart}" manifest:media-type="image/png"/>`
         : '') +
       (pages.some((page) => page.alternateImages)
@@ -1236,7 +1297,9 @@ export async function odpFixture(
   ]
   if (pages.some((page) => page.image || page.secondImage || page.alternateImages || page.notesImage ||
     page.video?.poster || page.hyperlinkedImage || page.imageInTableCell || page.imageInNestedFrame ||
-    page.imageInCustomShape || page.unframedImage || page.groupedImage || page.deeplyGroupedImage)) {
+    page.imageInCustomShape || page.unframedImage || page.groupedImage || page.deeplyGroupedImage ||
+    page.imageInFrameInFrame || page.imageInFrameInGroupInFrame ||
+    page.imageInFrameInFrameInGroup || page.groupDepth)) {
     entries.push({ name: imagePart, data: EMBEDDED_IMAGE_PNG })
   }
   if (pages.some((page) => page.alternateImages)) {
