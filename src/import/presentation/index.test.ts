@@ -135,6 +135,44 @@ test('mc:AlternateContent is read from the Fallback branch, because that is what
   expect(index.slides[0]!.textRuns).toEqual(['One', 'FALLBACK TEXT'])
 })
 
+test.each([
+  // MEASURED with real anydoc 0.2.4 across nine `Requires` values on an
+  // otherwise identical package (and pinned against anydoc itself in
+  // `reconcile.browser.test.ts`): the Choice is rendered only for `a14` —
+  // PowerPoint's 2010 drawing extensions — and when `Requires` is absent.
+  ['p14', 'FALLBACK TEXT'],
+  ['p15', 'FALLBACK TEXT'],
+  ['a14', 'CHOICE TEXT'],
+  ['a16', 'FALLBACK TEXT'],
+  ['cx', 'FALLBACK TEXT'],
+  ['wps', 'FALLBACK TEXT'],
+  ['v', 'FALLBACK TEXT'],
+  ['unknown', 'FALLBACK TEXT'],
+  [false, 'CHOICE TEXT'],
+] as const)('mc:Choice Requires=%s is read from the branch anydoc renders', async (requires, expected) => {
+  const index = await indexOf(await pptxFixture([
+    { title: 'One', alternateContentText: { choice: 'CHOICE TEXT', fallback: 'FALLBACK TEXT', requires } },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['One', expected])
+})
+
+test("an OLE object's preview picture is counted, though it sits below the shape tree", async () => {
+  /*
+   * A pasted Excel worksheet is `p:graphicFrame` → `p:oleObj` → a preview
+   * `p:pic`, two levels below where the shape walk looks for a picture.
+   * MEASURED: anydoc emits `<p><span>[Embedded image: Worksheet]</span></p>`
+   * for that preview, so a slide that cannot claim it has a block belonging to
+   * nobody — and combined with a broken embed on an earlier slide, that turned
+   * into content published under the wrong slide's heading with no blocker.
+   */
+  const index = await indexOf(await pptxFixture([
+    { title: 'One', body: ['Body one'], oleObject: true },
+  ]))
+
+  expect(index.slides[0]!.images).toBe(1)
+})
+
 test("an ink annotation's fallback picture is counted, so the page's own image is not orphaned", async () => {
   const index = await indexOf(await pptxFixture([
     { title: 'One', inkInAlternateContent: true },

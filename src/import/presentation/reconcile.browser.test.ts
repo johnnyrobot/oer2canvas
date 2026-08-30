@@ -1,7 +1,7 @@
 import { probeParser } from '../parsers/probe'
 import { readPresentationIndex } from './index'
 import { reconcilePresentation } from './reconcile'
-import { odpFixture, pptxFixture } from '../testing/presentation-fixtures'
+import { odpFixture, pptxFixture, MC_REQUIRES_NAMESPACES } from '../testing/presentation-fixtures'
 
 /**
  * The reconciler against REAL anydoc 0.2.4, in the real Worker, on real
@@ -254,7 +254,7 @@ test('a picture that could not be packaged is attributed, not refused', async ()
    * wrong.
    */
   const bytes = await pptxFixture([
-    { title: 'One', body: ['Body one'], unpackageableImage: true },
+    { title: 'One', body: ['Body one'], unpackageableImage: {} },
     { title: 'Two', body: ['Body two'] },
   ])
   const parsed = await probeParser({ parser: 'anydoc', bytes: bytes.buffer as ArrayBuffer, formatHint: 'pptx' })
@@ -306,4 +306,73 @@ test('a level-two text:h does not ship as a sibling of the slide title', async (
   expect(result.html).toContain('<h3 id="A-level-two-heading">A level two heading</h3>')
   expect([...new DOMParser().parseFromString(result.html, 'text/html').querySelectorAll('h2')]
     .map((heading) => heading.textContent)).toEqual(['Titled', 'Second'])
+})
+
+test.each([...Object.keys(MC_REQUIRES_NAMESPACES), false] as const)(
+  'the index reads the same mc:AlternateContent branch anydoc renders, for Requires=%s',
+  async (requires) => {
+    /*
+     * The invariant, stated against anydoc itself rather than against a table
+     * of remembered results: whichever branch anydoc renders is the branch the
+     * index read. anydoc renders the Choice for `a14` and for an absent
+     * `Requires`, and the Fallback for everything else — so an anydoc upgrade
+     * that changes ANY of these rows fails here instead of silently flipping
+     * attribution for the decks that use it.
+     */
+    const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture([
+      { title: 'One', alternateContentText: { choice: 'CHOICE TEXT', fallback: 'FALLBACK TEXT', requires } },
+    ]))
+
+    const rendered = anydocHtml.includes('CHOICE TEXT') ? 'CHOICE TEXT' : 'FALLBACK TEXT'
+    expect(index.slides[0]!.textRuns).toEqual(['One', rendered])
+    expect(result.findings).toEqual([])
+  },
+)
+
+test("a pasted worksheet's preview stays on the slide that carries it", async () => {
+  // `p:graphicFrame` → `p:oleObj` → a preview `p:pic`, which anydoc renders as
+  // a picture block. Counting zero for it left that block unclaimable.
+  const { anydocHtml, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', body: ['Body one'], oleObject: true },
+    { title: 'Two', body: ['Body two'] },
+  ]))
+
+  expect(anydocHtml).toContain('<span>[Embedded image: Worksheet]</span>')
+  const sections = sectionsOf(result.html)
+  expect(sections[0]!.textContent).toContain('[Embedded image: Worksheet]')
+  expect(sections[1]!.textContent).not.toContain('[Embedded image')
+  expect(result.findings).toEqual([])
+})
+
+test('a deck whose pictures anydoc did not all emit fails closed', async () => {
+  /*
+   * Slide 1 holds a picture anydoc emits nothing for; slide 2 holds a worksheet
+   * whose preview it does emit. The counts no longer line up on either slide,
+   * and the point of this test is the DIRECTION of the failure: a blocker, and
+   * no block of slide 2's published under slide 1's heading. It fails closed
+   * here for slide 1's unspent budget rather than for the preview — this is a
+   * regression guard on that direction, not the pin for the OLE count, which is
+   * the test above.
+   */
+  const { result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', brokenImage: true },
+    { title: 'Two', body: ['Body two'], oleObject: true },
+  ]))
+
+  const finding = result.findings.find((entry) => entry.code === 'presentation-unattributed-content')
+  expect(finding?.severity).toBe('blocker')
+  expect(finding?.message).toContain('missing a picture the deck says')
+  expect(sectionsOf(result.html)[0]!.textContent).not.toContain('Body two')
+})
+
+test('a placeholder whose alt text contains brackets does not refuse the deck', async () => {
+  // A bracket in a figure description is ordinary, and the placeholder's alt
+  // text is interpolated unescaped.
+  const { anydocHtml, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', body: ['Body one'], unpackageableImage: { alt: 'Figure [3] pasted' } },
+  ]))
+
+  expect(anydocHtml).toContain('<span>[Embedded image: Figure [3] pasted]</span>')
+  expect(result.findings).toEqual([])
+  expect(sectionsOf(result.html)[0]!.textContent).toContain('[Embedded image: Figure [3] pasted]')
 })

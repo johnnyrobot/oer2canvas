@@ -418,6 +418,21 @@ test('a counted picture that never arrived refuses instead of lapsing', () => {
   expect(finding.message).toContain('slide 2 is missing a picture the deck says it carries')
 })
 
+test('a placeholder whose alt text contains brackets is still a picture', () => {
+  // `anydoc-html.ts` interpolates the picture's description into the
+  // placeholder without escaping it, and a bracket in a figure description is
+  // ordinary. MEASURED with `descr="Figure [3] pasted"`: a pattern that stopped
+  // at the first `]` read the placeholder as text, and the deck refused.
+  const result = reconcilePresentation({
+    html: '<h2>One</h2><p><span>[Embedded image: Figure [3] pasted]</span></p>',
+    index: index([slide(1, { title: 'One', textRuns: ['One'], images: 1 })]),
+    sourceLabel: 'PPTX',
+  })
+
+  expect(result.findings).toEqual([])
+  expect(result.html).toContain('[Embedded image: Figure [3] pasted]')
+})
+
 test('a picture no slide claims refuses instead of being absorbed', () => {
   // The index says neither slide has a picture, so the block belongs to
   // nobody — and swallowing it would attribute a figure to a slide it was

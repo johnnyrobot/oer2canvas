@@ -116,8 +116,15 @@ const HEADING_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
  * refused the whole deck — on top of the `embedded-content` blocker
  * `anydoc-html.ts` already raises for it, which is the finding that actually
  * tells the author what to do.
+ *
+ * The alt text is matched with `.*` rather than "anything but a bracket",
+ * because `anydoc-html.ts` interpolates the picture's description without
+ * escaping it and a bracket in a figure description is ordinary: measured with
+ * `descr="Figure [3] pasted"`, a stricter pattern read the placeholder as text
+ * and refused the deck. The trailing `]$` still anchors the whole block, so a
+ * paragraph that merely BEGINS with the placeholder is not swallowed.
  */
-const IMAGE_PLACEHOLDER_TEXT = /^\[Embedded image(?::[^\]]*)?\]$/
+const IMAGE_PLACEHOLDER_TEXT = /^\[Embedded image(?::.*)?\]$/
 
 /** The open tag of a heading block, for inserting the slide's id into it. */
 const HEADING_OPEN_TAG = /^<h[1-6](?=[\s/>])/i

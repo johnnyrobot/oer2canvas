@@ -49,7 +49,14 @@ const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationship
 const MC_NS = 'http://schemas.openxmlformats.org/markup-compatibility/2006'
 const DIAGRAM_URI = 'http://schemas.openxmlformats.org/drawingml/2006/diagram'
 const CHART_URI = 'http://schemas.openxmlformats.org/drawingml/2006/chart'
+const OLE_URI = 'http://schemas.openxmlformats.org/presentationml/2006/ole'
 const TABLE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/table'
+/**
+ * PowerPoint's 2010 drawing extensions — artistic picture effects, math inside
+ * a shape. The ONE `mc:Choice` namespace anydoc renders in preference to the
+ * `mc:Fallback`; see `rendersChoiceBranch`.
+ */
+const A14_NS = 'http://schemas.microsoft.com/office/drawing/2010/main'
 const ODF_OFFICE_NS = 'urn:oasis:names:tc:opendocument:xmlns:office:1.0'
 const ODF_TEXT_NS = 'urn:oasis:names:tc:opendocument:xmlns:text:1.0'
 const ODF_DRAW_NS = 'urn:oasis:names:tc:opendocument:xmlns:drawing:1.0'
@@ -339,6 +346,34 @@ function notesBodyText(notesDocument: Document): string | undefined {
 }
 
 /**
+ * Whether anydoc renders THIS `mc:Choice` rather than the `mc:Fallback`.
+ *
+ * MEASURED with real anydoc 0.2.4, nine `Requires` values on an otherwise
+ * identical package: the Choice is rendered when `Requires` is ABSENT, and when
+ * it names `a14` (PowerPoint's 2010 drawing extensions — artistic picture
+ * effects, math inside a shape, which PowerPoint itself writes); the Fallback
+ * is rendered for `p14`, `p15`, `a16`, `cx`, `wps`, `v`, and for a namespace
+ * anydoc has never heard of.
+ *
+ * So neither blanket rule works, and both were tried: preferring the Choice was
+ * wrong for seven of the nine (silent for a picture — PowerPoint writes an ink
+ * annotation as a `p14:contentPart` Choice with an ordinary `p:pic` Fallback,
+ * so the index saw no picture while anydoc emitted one, and that picture was
+ * published under the NEXT slide's heading), and preferring the Fallback is
+ * wrong for the other two.
+ *
+ * `Requires` holds PREFIXES, not URIs, so each is resolved through the element's
+ * own namespace scope — the prefix `a14` is a convention, not a guarantee. A
+ * `Requires` listing several prefixes takes the Choice only if anydoc could
+ * render all of them, which is the conservative reading of "requires".
+ */
+function rendersChoiceBranch(choice: Element): boolean {
+  const requires = choice.getAttribute('Requires')?.trim()
+  if (!requires) return true
+  return requires.split(/\s+/).every((prefix) => choice.lookupNamespaceURI(prefix) === A14_NS)
+}
+
+/**
  * Whether a `p:pic` will actually become a picture in anydoc's output: its
  * `p:blipFill` names a blip, either EMBEDDED (`r:embed`, bytes in the package)
  * or LINKED (`r:link`, a URL). Both were measured emitting an `<img>` — the
@@ -391,9 +426,10 @@ const MAX_GROUP_NESTING_DEPTH = 32
  * - `mc:AlternateContent` (OOXML markup compatibility, used for PowerPoint
  *   constructs newer than a reader might support: online video, 3D models,
  *   ink): its `mc:Choice` element(s) and its optional `mc:Fallback` are
- *   ALTERNATIVE representations of the SAME content, never both real. Walking
- *   the first `mc:Choice` when one exists, or `mc:Fallback` otherwise, and
- *   never both, is what keeps a single diagram from being counted twice.
+ *   ALTERNATIVE representations of the SAME content, never both real. Exactly
+ *   one branch is walked — that is what keeps a single diagram from being
+ *   counted twice — and WHICH one is decided by `rendersChoiceBranch` from the
+ *   `Requires` namespace, because anydoc's own answer depends on it.
  */
 function walkShapes(container: Element, state: ShapeWalkState, depth = 0): void {
   if (depth > MAX_GROUP_NESTING_DEPTH) {
@@ -424,6 +460,25 @@ function walkShapes(container: Element, state: ShapeWalkState, depth = 0): void 
       const uri = data?.getAttribute('uri') ?? ''
       if (uri === DIAGRAM_URI) state.unrepresentable.diagrams += 1
       else if (uri === CHART_URI) state.unrepresentable.charts += 1
+      else if (uri === OLE_URI) {
+        /*
+         * A pasted Excel worksheet, Word table or Visio drawing:
+         * `p:graphicFrame` → `p:oleObj` → a PREVIEW `p:pic`. The preview is all
+         * anydoc ever sees of it, and anydoc emits a picture block for it
+         * (measured: `<p><span>[Embedded image: Worksheet]</span></p>`, since a
+         * preview is usually an EMF this importer cannot package).
+         *
+         * It is counted HERE because the preview sits two levels below the
+         * shape tree, where the `p:pic` branch above — which only ever sees a
+         * shape-level or group-level picture — never reaches it. Counting zero
+         * for it meant a slide could not claim its own worksheet preview, and
+         * measured alongside a broken embed on an earlier slide, slide 2's
+         * content published under slide 1's heading with no blocker at all.
+         */
+        state.images += [...shape.getElementsByTagNameNS(PML_NS, 'pic')]
+          .filter(hasRenderablePicture)
+          .length
+      }
       else if (uri === TABLE_URI) {
         /*
          * A table frame is NOT a loss — anydoc emits it as a real data table
@@ -474,28 +529,21 @@ function walkShapes(container: Element, state: ShapeWalkState, depth = 0): void 
     }
     if (shape.namespaceURI === MC_NS && shape.localName === 'AlternateContent') {
       /*
-       * READ THE `mc:Fallback`, NOT THE `mc:Choice` — because that is the
-       * branch ANYDOC renders, and matching anydoc is the rule this module
-       * runs on. MEASURED with real anydoc 0.2.4:
-       * `<mc:Choice>CHOICE TEXT</mc:Choice><mc:Fallback>FALLBACK TEXT</mc:Fallback>`
-       * comes out as `<p>FALLBACK TEXT</p>`.
+       * ONE branch, chosen the way ANYDOC chooses it — see
+       * `rendersChoiceBranch` for the measurement. Neither "always Choice" nor
+       * "always Fallback" is right: measured across nine `Requires` values on
+       * an otherwise identical package, anydoc renders the Fallback for seven
+       * of them and the Choice for the other two.
        *
-       * An earlier version preferred `mc:Choice`, reasoning from the OOXML
-       * spec's intent (a consumer that understands the `Requires` namespace
-       * takes the Choice). anydoc does not, and for TEXT the disagreement was
-       * invisible because the prefix walk refuses on it — but for a PICTURE it
-       * went silent: PowerPoint writes an ink annotation as a `p14:contentPart`
-       * Choice with an ordinary `p:pic` Fallback, so the index saw no picture
-       * at all while anydoc emitted one, and that picture was published under
-       * the NEXT slide's heading with no finding.
-       *
-       * `mc:Choice` is still read when there is no `mc:Fallback`, which is a
-       * legal shape: nothing is better than nothing.
+       * The first `mc:Choice` anydoc would render wins; otherwise the
+       * `mc:Fallback`; otherwise the first Choice, because an
+       * `mc:AlternateContent` with no Fallback is legal and reading its Choice
+       * beats reading nothing.
        */
       const children = [...shape.children]
-      const choice = children.find((child) => child.namespaceURI === MC_NS && child.localName === 'Choice')
+      const choices = children.filter((child) => child.namespaceURI === MC_NS && child.localName === 'Choice')
       const fallback = children.find((child) => child.namespaceURI === MC_NS && child.localName === 'Fallback')
-      const chosen = fallback ?? choice
+      const chosen = choices.find(rendersChoiceBranch) ?? fallback ?? choices[0]
       if (chosen) walkShapes(chosen, state, depth + 1)
       continue
     }

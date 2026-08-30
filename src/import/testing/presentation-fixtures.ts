@@ -117,13 +117,30 @@ export interface PptxSlideSpec {
    * and `anydoc-html.ts` renders it as an `[Embedded image]` placeholder span
    * (and raises its own `embedded-content` blocker for it).
    */
-  unpackageableImage?: boolean
+  unpackageableImage?: { alt?: string }
+  /**
+   * A pasted Excel worksheet: `p:graphicFrame` → `graphicData uri=…/ole` →
+   * `p:oleObj` → a preview `p:pic`. The preview is the only part of it anydoc
+   * ever sees, and it is a picture — nested two levels below the shape tree,
+   * where a walk that only looks at shapes and groups never reaches it. Its
+   * bytes here are the EMF a real preview usually is (see `unpackageableImage`).
+   */
+  oleObject?: boolean
   /**
    * An `mc:AlternateContent` whose two branches carry DIFFERENT TEXT, so a
    * test can say which branch was read. Measured: anydoc renders the
    * `mc:Fallback`.
    */
-  alternateContentText?: { choice: string; fallback: string }
+  alternateContentText?: {
+    choice: string
+    fallback: string
+    /**
+     * The prefix `mc:Choice` REQUIRES, keyed into `MC_REQUIRES_NAMESPACES`.
+     * `false` omits the attribute entirely, which is legal and which anydoc
+     * treats differently. Defaults to `p14`.
+     */
+    requires?: keyof typeof MC_REQUIRES_NAMESPACES | false
+  }
   /**
    * `mc:AlternateContent` as PowerPoint writes an INK ANNOTATION: the
    * `mc:Choice` is a `p14:contentPart` anydoc cannot render, and the
@@ -164,6 +181,26 @@ export interface PptxSlideSpec {
 const DIAGRAM_URI = 'http://schemas.openxmlformats.org/drawingml/2006/diagram'
 const CHART_URI = 'http://schemas.openxmlformats.org/drawingml/2006/chart'
 const TABLE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/table'
+const OLE_URI = 'http://schemas.openxmlformats.org/presentationml/2006/ole'
+
+/**
+ * The namespaces a real `mc:Choice`'s `Requires` names, by their conventional
+ * prefix. Measured against real anydoc on an otherwise identical package,
+ * anydoc renders the `mc:Fallback` for all of these EXCEPT `a14` — PowerPoint's
+ * 2010 drawing extensions, which it writes for artistic picture effects and
+ * math inside a shape — where it renders the `mc:Choice`, as it does when
+ * `Requires` is absent altogether.
+ */
+export const MC_REQUIRES_NAMESPACES: Record<string, string> = {
+  p14: 'http://schemas.microsoft.com/office/powerpoint/2010/main',
+  p15: 'http://schemas.microsoft.com/office/powerpoint/2012/main',
+  a14: 'http://schemas.microsoft.com/office/drawing/2010/main',
+  a16: 'http://schemas.microsoft.com/office/drawing/2014/main',
+  cx: 'http://schemas.microsoft.com/office/drawing/2014/chartex',
+  wps: 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
+  v: 'urn:schemas-microsoft-com:vml',
+  unknown: 'https://example.invalid/office/2099/unknown',
+}
 const MC_NS = 'http://schemas.openxmlformats.org/markup-compatibility/2006'
 
 function textShape(id: number, name: string, paragraphs: readonly string[], placeholder: string): string {
@@ -286,9 +323,15 @@ function alternateContentDiagram(): string {
  * simplest possible probe for which branch a reader takes, and the one that
  * measured anydoc rendering the `mc:Fallback`.
  */
-function alternateContentTextShapes({ choice, fallback }: { choice: string; fallback: string }): string {
+function alternateContentTextShapes(
+  { choice, fallback, requires = 'p14' }: NonNullable<PptxSlideSpec['alternateContentText']>,
+): string {
+  const prefix = requires === false ? '' : requires
+  const declaration = prefix
+    ? ` xmlns:${prefix}="${MC_REQUIRES_NAMESPACES[prefix]}" Requires="${prefix}"`
+    : ''
   return `<mc:AlternateContent xmlns:mc="${MC_NS}">` +
-    `<mc:Choice xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main" Requires="p14">` +
+    `<mc:Choice${declaration}>` +
     textShape(13, 'AC Choice Text 13', [choice], '') +
     `</mc:Choice><mc:Fallback>` +
     textShape(14, 'AC Fallback Text 14', [fallback], '') +
@@ -386,7 +429,8 @@ function slideXml(spec: PptxSlideSpec): string {
       `<p:spPr/></p:pic>`
     : ''
   const unpackageableImage = spec.unpackageableImage
-    ? `<p:pic><p:nvPicPr><p:cNvPr id="12" name="Pasted Chart 12" descr="A pasted chart"/>` +
+    ? `<p:pic><p:nvPicPr><p:cNvPr id="12" name="Pasted Chart 12" ` +
+      `descr="${xmlEscape(spec.unpackageableImage.alt ?? 'A pasted chart')}"/>` +
       `<p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
       `<p:blipFill><a:blip r:embed="rIdEmf"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
       `<p:spPr/></p:pic>`
@@ -395,6 +439,14 @@ function slideXml(spec: PptxSlideSpec): string {
     ? `<p:pic><p:nvPicPr><p:cNvPr id="11" name="Broken Picture 11"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
       `<p:blipFill><a:blip r:embed="rIdMissingImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
       `<p:spPr/></p:pic>`
+    : ''
+  const oleObject = spec.oleObject
+    ? graphicFrame(17, 'Worksheet 17', OLE_URI,
+        `<p:oleObj spid="_x0000_s1026" name="Worksheet" r:id="rIdOle" imgW="2540000" imgH="1270000" ` +
+        `progId="Excel.Sheet.12"><p:embed/>` +
+        `<p:pic><p:nvPicPr><p:cNvPr id="18" name="Worksheet" descr="Worksheet"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+        `<p:blipFill><a:blip r:embed="rIdEmf"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+        `<p:spPr/></p:pic></p:oleObj>`)
     : ''
   const table = spec.table
     ? graphicFrame(8, 'Table 8', TABLE_URI,
@@ -413,8 +465,8 @@ function slideXml(spec: PptxSlideSpec): string {
 
   const pictures = `${image}${secondImage}${linkedImage}${brokenImage}${unpackageableImage}`
   const shapes = spec.titleLast
-    ? `${body}${pictures}${diagram}${chart}${video}${table}${group}${alternateContent}${nested}${title}`
-    : `${title}${body}${pictures}${diagram}${chart}${video}${table}${group}${alternateContent}${nested}`
+    ? `${body}${pictures}${diagram}${chart}${video}${table}${oleObject}${group}${alternateContent}${nested}${title}`
+    : `${title}${body}${pictures}${diagram}${chart}${video}${table}${oleObject}${group}${alternateContent}${nested}`
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -544,7 +596,10 @@ export async function pptxFixture(
     // One `rIdImage` relationship serves every embedded picture on the slide,
     // including a video's poster frame and a grouped picture — exactly as
     // PowerPoint reuses one relationship for one media part.
-    if (slide.unpackageableImage) {
+    if (slide.oleObject) {
+      rels.push('<Relationship Id="rIdOle" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject" Target="../embeddings/worksheet1.xlsx"/>')
+    }
+    if (slide.unpackageableImage || slide.oleObject) {
       rels.push('<Relationship Id="rIdEmf" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image2.emf"/>')
     }
     if (slide.image || slide.secondImage || slide.video || slide.group?.image || slide.inkInAlternateContent) {
@@ -564,8 +619,13 @@ export async function pptxFixture(
     slide.inkInAlternateContent)) {
     entries.push({ name: 'ppt/media/image1.png', data: EMBEDDED_IMAGE_PNG })
   }
-  if (slides.some((slide) => slide.unpackageableImage)) {
+  if (slides.some((slide) => slide.unpackageableImage || slide.oleObject)) {
     entries.push({ name: 'ppt/media/image2.emf', data: EMF_BYTES })
+  }
+  if (slides.some((slide) => slide.oleObject)) {
+    // The worksheet itself: anydoc never renders it, but a real package always
+    // carries it, and its absence would make the OLE frame unrealistic.
+    entries.push({ name: 'ppt/embeddings/worksheet1.xlsx', data: utf8('worksheet payload placeholder') })
   }
   if (withMacroPart) {
     // Deliberately not valid VBA. Its only job is to exist, so a test can prove
