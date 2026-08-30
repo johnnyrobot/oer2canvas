@@ -4,7 +4,7 @@
 
 **Blocked by:** 13 — Harden and release the core document importer.
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] The evaluation corpus covers multiple worksheets, headings, merged cells, formulas, hidden content, sparse ranges, and large tables.
 - [ ] The browser parser is assessed for worksheet identity, cell order, provenance, displayed values, and resource usage.
