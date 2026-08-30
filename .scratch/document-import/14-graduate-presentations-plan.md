@@ -426,7 +426,7 @@ git commit -m "feat: read named parts out of a zip, refusing before inflating"
 
 **Interfaces:**
 - Consumes: `readZipParts` (Task 1).
-- Produces: `PRESENTATION_PART_PATTERNS`, `wantedPresentationPart(kind, path): boolean`, and the `presentation?: { kind: 'pptx' | 'odp'; parts: Record<string, string> }` field on `ParserProbeResult`.
+- Produces: `wantedPresentationPart(kind, path): boolean`, and the `presentation?: { kind: 'pptx' | 'odp'; parts: Record<string, string> }` field on `ParserProbeResult`.
 
 The Worker holds the transferred bytes and has no `DOMParser`, so it does zip and nothing
 else. Choosing parts is path matching, which needs no parser.
