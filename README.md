@@ -109,6 +109,21 @@ PowerPoint splits that case in two. A chart or diagram inserted in PowerPoint it
 same way. One **pasted in** from Excel or Visio is not: it blocks on its preview picture, and
 nothing says what the object was. OpenDocument names both.
 
+**Spreadsheets and data files are not imported** — `.xlsx`, `.xlsm`, `.xls`, `.ods`, and `.csv`
+are all unavailable, and choosing one says so before you submit it. The reason is accessibility,
+not effort. Nothing in a spreadsheet file records which row is the header row, so the parser has
+to guess from the shape of row one; measured across real workbooks it guessed wrong for the great
+majority of worksheets, and the two ways it fails are both unrecoverable here. A worksheet whose
+header spans two rows, or whose top-left cell is blank — an ordinary matrix table — arrives with
+no header cells at all, and the accessibility queue then refuses every header answer you could
+give it, because a spanning header cannot be applied mechanically without claiming a structure the
+table does not have. A worksheet whose first data row happens to be text gets that row marked up
+as headers, silently. Beyond that, charts and pictures on a worksheet are dropped without being
+reported, an OpenDocument spreadsheet publishes rows, columns, and whole sheets you hid, and a
+`.csv` exported with a title line above its header arrives misaligned. Copy the rows you need into
+a Word document, or paste them into the Markdown tab as a Markdown table where you can mark the
+header row yourself, and import that instead.
+
 A failed or cancelled import says what went wrong, the form stays usable, and nothing from
 the interrupted attempt is kept, so you can correct the input and try again.
 

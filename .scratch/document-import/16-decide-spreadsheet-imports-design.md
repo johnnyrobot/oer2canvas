@@ -42,10 +42,13 @@ Three sources of input, kept distinct because they carry different weight:
 - **Real producer output**: files written by LibreOffice Calc 25.x through its own `calc8`,
   `Calc Office Open XML`, `MS Excel 97` and `Text - txt - csv (StarCalc)` filters, from one
   source document — so the same authoring intent can be compared across four formats.
-- **Real user files on this machine**: 27 readable `.xlsx` (105 worksheets) and 37 `.xls`
-  (141 worksheets), found with `mdfind`. **Nothing from these files appears anywhere in
-  this repository.** Only aggregate counts were recorded; no cell text, no worksheet name,
-  no path. They are somebody's real work.
+- **Real user files on this machine**: **82 readable `.xlsx`** (253 declared worksheets, 252
+  emitted tables) and **37 `.xls`** (141 worksheets), found with `mdfind`. The `.xlsx` corpus
+  arrived in two batches — 27 on local disk and 55 more in OneDrive, whose reads had to be
+  restarted around one file the macOS File Provider never delivered — and both are counted
+  together below unless a fact separates them. **Nothing from these files appears anywhere
+  in this repository.** Only aggregate counts were recorded; no cell text, no worksheet
+  name, no path. They are somebody's real work.
 
 ### Detection and format identity
 
@@ -87,9 +90,11 @@ synthetic workbooks:
 | ODS, 1 sheet | `table` — **no heading** |
 | ODS, 2 sheets | `heading("Alpha") table heading("Beta") table` |
 
-A single-sheet workbook — the ordinary case — produces a nameless table. Across the 27 real
-`.xlsx` files, **6 produced no heading at all**, and heading count matched visible-sheet
-count in only **12 of 27**. An empty worksheet vanishes entirely: neither heading nor table.
+A single-sheet workbook — the ordinary case — produces a nameless table, and it is the
+majority case. Across the 82 real `.xlsx` files, **38 produced no heading at all** (6 of the
+27-file batch, 32 of the 55-file batch), and heading count matched visible-sheet count in
+only **35 of 82**. An empty worksheet vanishes entirely: neither heading nor table, which is
+one reason the two counts disagree.
 
 ### The header row — the fact that decides everything
 
@@ -112,31 +117,40 @@ shape of a matrix table, where A1 is left empty above the row labels — gets **
 all**. And a worksheet whose first data row happens to be all text gets its **data
 announced as headers** to a screen reader.
 
-**On real files this fails far more often than it succeeds.** Over the 27 real `.xlsx`,
-anydoc emitted 104 tables: **94 with `headerRows: 0`** and 10 with `headerRows: 1` — 90%
-with no header cell of any kind. Over the 37 real `.xls`, **141 of 141** tables came back
-`headerRows: 0`. Not one legacy worksheet in the corpus produced a single `<th>`.
+**On real files this fails far more often than it succeeds.** Over the 82 real `.xlsx`,
+anydoc emitted 252 tables: **204 with `headerRows: 0`** and 48 with `headerRows: 1` — **81%
+with no header cell of any kind** (94 of 104 in the first batch, 110 of 148 in the second).
+Over the 37 real `.xls`, **141 of 141** tables came back `headerRows: 0`. Not one legacy
+worksheet in the corpus produced a single `<th>`.
 
-**7. Merged cells are the common case, and they are exactly what turns the header off.**
-**23 of 27** real `.xlsx` files carry `<mergeCell>`; every one of the 14 that carried both a
-merge and a table also produced `headerRows: 0`. On the real LibreOffice-written fixture, a
-genuine two-row group header (`Student` spanning two rows; `Midterm` spanning two columns
-over `Score`/`Grade`) produced `headerRows: 0` and a grid whose origin cells carry
-`rowSpan: 2` and `colSpan: 2`, in both XLSX and ODS.
+**7. Merged cells are common, and every real file that had one lost its header.**
+**33 of the 82** real `.xlsx` files carry a `<mergeCell>`, and **every one of those 33 —
+14 of 14 in the first batch and 19 of 19 in the second — produced at least one table with
+`headerRows: 0`.** Not one exception in either batch. (A namespace-tolerant rescan of the
+first batch found merges in 23 of its 27 files rather than 14; the 33 above uses the same
+plain `<mergeCell` detector on both batches so the two halves are comparable, which makes it
+a floor rather than a total.) On the real LibreOffice-written fixture, a genuine two-row
+group header — `Student` spanning two rows, `Midterm` spanning two columns over
+`Score`/`Grade` — produced `headerRows: 0` and a grid whose origin cells carry `rowSpan: 2`
+and `colSpan: 2`, in both XLSX and ODS.
 
-**8. The only place a spreadsheet *declares* a header row covers 11% of worksheets.**
-SpreadsheetML has exactly one authored statement of header-ness: an `xl/tables/tableN.xml`
-part (Excel's "Format as Table" / ListObject), which carries `headerRowCount` and a
-`<tableColumn name>` per column. Across the 27 real `.xlsx`: **12 of 105 worksheets** carry
-one — 9 files of 27 — and all 12 declare `headerRowCount="1"`. ODS and CSV have no
-equivalent construct at all. So the fact a `<table>` needs most is recorded in about a
-ninth of real worksheets and in none of the other three formats.
+**8. The only place a spreadsheet *declares* a header row covers about a ninth of
+worksheets.** SpreadsheetML has exactly one authored statement of header-ness: an
+`xl/tables/tableN.xml` part (Excel's "Format as Table" / ListObject), which carries
+`headerRowCount` and a `<tableColumn name>` per column. Scanned over the first batch — 27
+files, 105 worksheets — **12 worksheets in 9 files** carry one, and all 12 declare
+`headerRowCount="1"`. ODS and CSV have no equivalent construct at all. So the fact a
+`<table>` needs most is recorded in roughly 11% of real worksheets and in none of the other
+three formats. (Measured on the first batch only; the number is used below as an order of
+magnitude, not as a precise rate.)
 
 ### What else the model does and does not carry
 
-**9. A spreadsheet's charts and pictures vanish without a trace.** Of the 27 real `.xlsx`,
-**11 carry `xl/drawings/`, 9 carry `xl/charts/`, 1 carries `xl/media/`** — and anydoc
-returned `assets: 0` for **all 27**, with no image inline anywhere. Reproduced synthetically:
+**9. A spreadsheet's charts and pictures vanish without a trace.** Of the 82 real `.xlsx`,
+**32 carry `xl/drawings/`, 10 carry `xl/charts/`, and 20 carry actual picture bytes in
+`xl/media/`** — and anydoc returned `assets: 0` for **all 82**, with no image inline
+anywhere. Twenty real workbooks carry pictures and not one pixel of them survives the parse.
+Reproduced synthetically:
 a workbook with `xl/media/image1.png` referenced through a drawing with
 `descr="Enrollment over time"` produced one table of one cell and **no image, no asset, no
 finding**. This is issue 14 fact 6 again, but worse in kind: a slide's diagram is one part
@@ -158,9 +172,10 @@ formula source is never emitted. A cached error yields the error string as ordin
 (`"#VALUE!"`, `"#DIV/0!"`, ODS `"Err:510"`), with nothing marking it as an error.
 
 **12. A formula with no cached value silently becomes an empty cell.** `<c><f>A3+B3</f></c>`
-with no `<v>` produced `""`. Real Excel always caches, so **0 of 27** real files hit this —
-but tools that write XLSX without evaluating (openpyxl's default, several exporters) do
-not, and such a file loses a whole computed column with no finding of any kind.
+with no `<v>` produced `""`. Real Excel always caches, so **0 of 82** real files hit this
+(35 of them do contain formulas) — but tools that write XLSX without evaluating (openpyxl's
+default, several exporters) do not, and such a file loses a whole computed column with no
+finding of any kind.
 
 **13. Two logical tables on one sheet become one `<table>` with a false header.** Rows
 `Term/Students`, `Fall/120`, blank, `Line/Amount`, `Printing/340` arrived as ONE table with
@@ -190,12 +205,16 @@ What anydoc did with each:
 
 The ODS row is a privacy defect with a name: the hidden sheet in that fixture is called
 `Salaries` and holds a salary figure, and anydoc emitted it as `heading("Salaries")` plus a
-table. **1 of 27** real `.xlsx` files carries a hidden sheet, **8** carry a hidden row and
-**1** a hidden column — so this is not a contrived shape.
+table. It is not a contrived shape: real files carry hidden content, and the frequency is
+recorded below the XLSX paragraph.
 
 The XLSX row is *not* simply the good outcome. Dropping hidden content is right for privacy
 and wrong for fidelity, and it happens with no finding either way: an instructor whose grade
 sheet has a hidden helper column gets a table missing a column and is never told.
+
+Across all 82 real `.xlsx`: **1 carries a hidden sheet, 8 a hidden row, 1 a hidden column** —
+all of them in the first batch, none in the second. Uncommon, then, but not rare enough to
+call a corner case, and the ODS behaviour would leak every one of them.
 
 **15. Nothing else leaks, and nothing executes.** Measured on synthetic packages:
 `xl/vbaProject.bin` present → 0 assets, no block, never read; an
@@ -203,8 +222,11 @@ sheet has a hidden helper column gets a table missing a column and is never told
 `TargetMode="External"` → **no fetch**, only the cached value; a formula's *source* is never
 emitted; a `xl/comments1.xml` cell comment ("Bumped from C. Do not tell the class.") →
 `notes: 0` and the text absent. Cell text containing `<script>alert(1)</script>` arrives as
-text and reaches `escapeHtml` in `anydoc-html.ts`. Across the 27 real files: 0 with VBA, 0
-with external links, 2 with comments, 0 with pivot caches, 0 with query tables.
+text and reaches `escapeHtml` in `anydoc-html.ts`. Across all 82 real files: **0 with a VBA
+part and 0 with an external link**; the 27-file batch additionally showed 2 with comments, 0
+with pivot caches and 0 with query tables. So the constructs the issue's fourth criterion
+names are all handled safely, and the two most alarming of them do not occur in this
+corpus at all.
 
 One residual worth naming and not blocking on: a cell whose text begins `=`, `+`, `-` or
 `@` is a **CSV/Excel formula-injection** payload if the rendered table is ever pasted back
@@ -278,10 +300,23 @@ every enabled format at **4,229 ms** with a high-water WASM allocation of **97,8
 bytes**. A legal spreadsheet is five times slower and thirteen times larger than the worst
 document this release has ever measured.
 
-For scale on real files, none of this is what a real spreadsheet looks like: the largest
-worksheet in the 27-file corpus is **588 rows × 7 columns**, and the slowest real parse was
-**39 ms**. The hazard is a legal file, not a typical one — which is exactly the kind of
-budget question this project settles before shipping, not after.
+**20. And real spreadsheets do reach that territory, unlike real documents.** The 27-file
+batch made the hazard look hypothetical — its largest worksheet was 588 rows × 7 columns and
+its slowest parse 39 ms. The 55-file batch corrected that. Its worst cases:
+
+| | measured |
+| --- | --- |
+| largest worksheet | **26,384 rows** |
+| widest worksheet | **146 columns** |
+| slowest parse | **2,878 ms**, on a 1.08 MiB file holding 218,416 cells |
+| largest document model from one workbook | **38,486,597 bytes** of JSON |
+
+Nothing here refused, and nothing here is near the 30 s timeout. But 2,878 ms is already
+two-thirds of issue 13's slowest-ever measured parse across every enabled format
+(4,229 ms) — on a file of one megabyte, from somebody's ordinary working folder. And a
+**38 MB** document model becomes an HTML page of comparable size, proposed as a single Canvas
+page. So fact 19's ceiling is not a contrived worst case reachable only by an attacker; it is
+the same curve, a few doublings further along, and real files already sit on it.
 
 ## The accessibility policy
 
@@ -305,9 +340,9 @@ it cannot:
 
 | worksheet shape | what the audit does | measured frequency |
 | --- | --- | --- |
-| header row anydoc recognised | `<th scope="col">`; no queue item | 10 of 104 real xlsx tables |
-| any header row it did not | queued for a human | 94 of 104; 141 of 141 xls |
-| merged group header (rowspan) | queued, then **REFUSED** — "a cell spans more than one row" | 14 of 14 merge-bearing files |
+| header row anydoc recognised | `<th scope="col">`; no queue item | 48 of 252 real xlsx tables |
+| any header row it did not | queued for a human | **204 of 252**; 141 of 141 xls |
+| merged group header (rowspan) | queued, then **REFUSED** — "a cell spans more than one row" | **33 of 33** merge-bearing files lost their header |
 | ragged rows (CSV title line, ODS blank row) | queued, then **REFUSED** — "the rows are not all the same width" | every CSV with a title line |
 | first data row happens to be text | `<th scope="col">` on **data** — no queue item, no way to notice | not measurable from the file |
 
@@ -377,7 +412,7 @@ Judged independently, as issue 14 judged PPTX and ODP.
 
 | format | verdict | the measurement that decides it |
 | --- | --- | --- |
-| **xlsx** | **disabled** | fact 6: 94 of 104 real worksheets produce a table with no header cell, and the audit's own refusal rule (rowspan, ragged) leaves those items queued with no answer the instructor can give. Fact 19: a legal 10.8 MiB workbook allocates 1,204 MiB of WASM memory against a 128 MiB budget that cannot be checked until after the allocation. |
+| **xlsx** | **disabled** | fact 6: **204 of 252** real worksheets produce a table with no header cell, and fact 7: **33 of 33** real files carrying a merged cell lost their header, which is the case the audit's own rule then refuses outright. Fact 19: a legal 10.8 MiB workbook allocates 1,204 MiB of WASM memory against a 128 MiB budget that cannot be checked until after the allocation — and fact 20 shows real files already on that curve. |
 | **xls** | **disabled** | fact 2: it parses, and reports itself as `xlsx`, so it inherits every xlsx finding. Fact 6 is worse here: **141 of 141** real legacy worksheets produced `headerRows: 0` — not one `<th>` in the entire corpus. |
 | **ods** | **disabled** | fact 14: LibreOffice's own hidden sheet, hidden row and hidden column are all **published**. A privacy leak that the format's own producer expects to be honoured is a blocker on its own, before the shared header and raggedness (fact 17) findings are counted. |
 | **csv** | **disabled** | fact 16: one title line above the header turns the whole file into a ragged grid — the exact shape `refusalToPromote` refuses. Fact 3 compounds it: CSV has no content signature, so it is the only format whose identity would rest on the filename, and `document.ts`'s `formatDetection === 'content'` guard could never pass. |
@@ -441,9 +476,15 @@ None of the four formats meets criterion 1 today. `ods` additionally fails 2, al
 
 - The real-file corpus is one machine's, and it is a college IT and instructional-design
   workload. It is a real distribution, not a representative one.
-- 84 further `.xlsx` files live in OneDrive on this machine; reading them stalls in the
-  macOS File Provider. Whatever fraction of them was measured is recorded in the issue's
-  `## Answer` rather than assumed here.
+- **28 of the 110 real `.xlsx` files found were never measured.** They live in OneDrive, and
+  reading them stalled in the macOS File Provider on one file that never arrived; the run was
+  restarted from the file after it, which recovered 55 of the remaining 84. The 82 measured
+  files are therefore a 75% sample of what was found, and the missing 28 are contiguous in
+  directory order rather than randomly distributed — so they may share properties with each
+  other that the measured set under-represents.
+- Fact 8's declared-header rate was scanned over the first 27-file batch only, not all 82. It
+  is used as an order of magnitude in the tracer argument below and nothing turns on its
+  precision.
 - There are no `.ods` files on this machine at all, so every ODS fact rests on synthetic
   packages plus one file LibreOffice Calc wrote through its own `calc8` filter. That is
   producer-real, but it is one producer.

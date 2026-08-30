@@ -229,7 +229,7 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
    * `.scratch/document-import/16-decide-spreadsheet-imports-design.md` and
    * pinned by `spreadsheet-evidence.browser.test.ts`. The one fact that decides
    * all four: `Table.headerRows` is a HEURISTIC on the shape of row 1, not a
-   * fact any spreadsheet format records. It comes back 0 for 94 of 104 real
+   * fact any spreadsheet format records. It comes back 0 for 204 of 252 real
    * `.xlsx` worksheets and for 141 of 141 real legacy `.xls` worksheets, so the
    * table reaches `engine/compile/steps/tables.ts` with no `<th>` at all; and
    * it comes back 1 for a data row that merely happens to be text, marking data
@@ -274,11 +274,12 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
      * reports `xlsx` for every real legacy file (design fact 2: 37 of 37 OLE2
      * workbooks on the measuring machine). The pptx entry folds its family onto
      * one row because those extensions SHARE a verdict and a released import
-     * path; this one is split because `.xls` has its own row in the README and
-     * its own evidence — every one of its 141 measured worksheets produced a
-     * table with no header cell, which is worse than the modern format, not
-     * merely equal to it. Nothing routes a parse through this entry, so the
-     * format collapse costs nothing here.
+     * path; this one is split because `.xls` has its OWN evidence — every one
+     * of its 141 measured worksheets produced a table with no header cell,
+     * which is worse than the modern format, not merely equal to it — and
+     * because the note a user reads should name the format they actually chose.
+     * Nothing routes a parse through this entry, so the format collapse costs
+     * nothing here.
      */
     extensions: ['.xls'],
     mediaTypes: ['application/vnd.ms-excel'],

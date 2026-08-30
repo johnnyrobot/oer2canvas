@@ -56,7 +56,7 @@ test('one capability table distinguishes shipped formats from parser probes', ()
   //
   // The four spreadsheet formats are parked by issue 16's measurement, not by
   // nobody having got to them: `Table.headerRows` is a heuristic on the shape
-  // of row 1, it came back 0 for 94 of 104 real `.xlsx` worksheets and 141 of
+  // of row 1, it came back 0 for 204 of 252 real `.xlsx` worksheets and 141 of
   // 141 real `.xls` ones, and the header answers that would fix those tables
   // are refused outright by `engine/compile/steps/tables.ts`. See
   // `spreadsheet-evidence.browser.test.ts`, which pins every fact behind that.
