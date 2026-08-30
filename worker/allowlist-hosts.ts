@@ -89,7 +89,24 @@ export function isPressbooksTarget(url: URL): boolean {
   return PRESSBOOKS_PATTERNS.some((pattern) => pattern.test(host))
 }
 
-export function normalizeSelfHostedCanvasOrigin(raw: string | undefined): string | undefined {
+/**
+ * The rule an operator-pinned origin must satisfy, written once.
+ *
+ * Two capabilities pin an exact origin at build time — Canvas push, and the
+ * self-hosted web extractor of issue 17 — and they have to agree about what a
+ * pinnable origin IS. A second copy of these checks would drift, and the drift
+ * would be silent: both copies would keep accepting every origin anyone tested.
+ *
+ * `localhost`, `*.local`, `*.internal` and IP literals are refused, and for the
+ * extractor that is not merely defence in depth. Measured 2026-08-30 against
+ * this repository's own Chromium 151: an HTTPS page cannot reach a loopback
+ * origin at all — the request is refused with "Permission was denied for this
+ * request to access the `loopback` address space" — and any other plain-HTTP
+ * target is refused as mixed content before it becomes a request. Refusing
+ * these at BUILD time turns a runtime failure nobody can diagnose into a build
+ * failure that names the variable.
+ */
+export function normalizePinnedHttpsOrigin(raw: string | undefined): string | undefined {
   if (raw === undefined || raw.trim() === '') return undefined
 
   try {
@@ -111,6 +128,16 @@ export function normalizeSelfHostedCanvasOrigin(raw: string | undefined): string
   } catch {
     return undefined
   }
+}
+
+/**
+ * The Canvas origin, which is `normalizePinnedHttpsOrigin` under the name the
+ * relay and its tests already use. Kept as a named function rather than an
+ * alias export so that a future Canvas-only rule has somewhere to go without
+ * changing what the extractor accepts.
+ */
+export function normalizeSelfHostedCanvasOrigin(raw: string | undefined): string | undefined {
+  return normalizePinnedHttpsOrigin(raw)
 }
 
 export function isAllowedTarget(raw: string, selfHostedCanvasOrigin?: string): TargetCheck {

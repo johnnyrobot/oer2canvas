@@ -76,7 +76,13 @@ export interface ImportFinding {
 }
 
 export interface ImportReport {
-  parser: 'native' | 'anydoc' | 'pdf-inspector' | 'firecrawl'
+  /*
+   * `self-hosted-extractor` is the one member with no vendor in its name, and
+   * that is deliberate: which extraction service an operator runs is their
+   * choice and is not a fact about this app's output. See
+   * `src/import/self-hosted-extractor.ts`.
+   */
+  parser: 'native' | 'anydoc' | 'pdf-inspector' | 'firecrawl' | 'self-hosted-extractor'
   parserVersion?: string
   format: ImportedFormat
   originalName?: string

@@ -133,27 +133,74 @@ async function main() {
     throw new Error(`dist parser assets are incomplete: ${parserAssets.join(', ') || 'none'}`)
   }
   /*
-   * One URL, one page — asserted against the SHIPPED bundle, not just the
-   * source. Criterion 3 of issue 12 is a claim about what does not exist, so it
-   * is checked the way this file already checks absence.
+   * ONE URL, ONE PAGE — AND ONE EXTRACTION ENDPOINT PER BUILT ARTIFACT.
    *
-   * Both halves matter. The forbidden list catches a crawler arriving later;
-   * requiring `/v2/scrape` to be present catches the opposite failure — a check
-   * that passes because the whole feature was tree-shaken out is not a check.
+   * Asserted against the SHIPPED bundle, not just the source. Issue 12's third
+   * criterion is a claim about what does not exist, so it is checked the way
+   * this file already checks absence — and issue 17 turned it into a claim
+   * about which of TWO deployment modes was built.
+   *
+   * Every half matters, in both directions:
+   *
+   *  - the forbidden list catches a crawler arriving later;
+   *  - requiring the mode's own endpoint to be PRESENT catches the opposite
+   *    failure, because a check that passes because the whole feature was
+   *    tree-shaken out is not a check;
+   *  - requiring the OTHER mode's endpoint to be ABSENT is what "compiled out
+   *    entirely" means. Measured 2026-08-30 against both real artifacts: a
+   *    public build carries no `/crawl` and no `/health`, and a self-hosted
+   *    build carries no `/v2/scrape`, no `api.firecrawl.dev` and no
+   *    `Firecrawl API key`. A folded module-scope constant is enough for that;
+   *    no dynamic import was needed, and this assertion is what would notice if
+   *    a future refactor made one necessary.
+   *
+   * `/crawl` is safe as a marker: the only `crawl` substrings in a public
+   * bundle come from `firecrawl`, `firecrawl.dev` and `firecrawl-api-key`, none
+   * of which carry a leading slash (checked 2026-08-30).
    */
-  const forbiddenFirecrawlPaths = ['/v2/crawl', '/v2/map', '/v2/search', '/v2/batch', '/v2/agent']
-  let sawScrapeEndpoint = false
+  const selfHostedExtractor = process.env.OER2CANVAS_EXPECT_SELF_HOSTED_EXTRACTOR_ORIGIN?.trim()
+  const extraction = selfHostedExtractor
+    ? { mode: 'self-hosted extractor', required: '/crawl', absent: ['/v2/scrape', 'api.firecrawl.dev'] }
+    : { mode: 'firecrawl', required: '/v2/scrape', absent: ['/crawl', '/health'] }
+  const forbiddenExtractionPaths = [
+    // Firecrawl's, from `src/import/firecrawl.ts`.
+    '/v2/crawl', '/v2/map', '/v2/search', '/v2/batch', '/v2/agent',
+    // The self-hosted service's, from `src/import/self-hosted-extractor.ts`.
+    // `/crawl/stream` rather than `/crawl`, which is this mode's own endpoint.
+    '/crawl/stream', '/execute_js', '/screenshot', '/config/dump', '/hooks/info',
+  ]
+  let sawExtractionEndpoint = false
   for (const asset of builtAssets.filter((name) => name.endsWith('.js'))) {
     const chunk = await readFile(join(DIST, 'assets', asset), 'utf8')
-    if (chunk.includes('/v2/scrape')) sawScrapeEndpoint = true
-    for (const path of forbiddenFirecrawlPaths) {
+    if (chunk.includes(extraction.required)) sawExtractionEndpoint = true
+    for (const path of forbiddenExtractionPaths) {
       if (chunk.includes(path)) {
-        throw new Error(`dist chunk ${asset} names the forbidden Firecrawl endpoint ${path}`)
+        throw new Error(`dist chunk ${asset} names the forbidden extraction endpoint ${path}`)
+      }
+    }
+    for (const path of extraction.absent) {
+      if (chunk.includes(path)) {
+        throw new Error(
+          `dist chunk ${asset} names ${path}, which belongs to the other deployment mode; `
+          + `this is a ${extraction.mode} build and that path should be compiled out`,
+        )
       }
     }
   }
-  if (!sawScrapeEndpoint) {
-    throw new Error('no dist chunk names https://api.firecrawl.dev/v2/scrape; web import was dropped from the build')
+  if (!sawExtractionEndpoint) {
+    throw new Error(
+      `no dist chunk names ${extraction.required}; web import was dropped from this `
+      + `${extraction.mode} build`,
+    )
+  }
+  if (selfHostedExtractor) {
+    const namesOrigin = await Promise.all(
+      builtAssets.filter((name) => name.endsWith('.js'))
+        .map(async (asset) => (await readFile(join(DIST, 'assets', asset), 'utf8')).includes(selfHostedExtractor)),
+    )
+    if (!namesOrigin.some(Boolean)) {
+      throw new Error(`no dist chunk names the pinned extractor origin ${selfHostedExtractor}`)
+    }
   }
 
   if (!serviceWorker.includes('oer2canvas-document-parsers-v1')) {
@@ -305,6 +352,38 @@ async function main() {
     // this proves the production UI actually connects parsing to audit, Plan,
     // and the same cartridge writer used by publisher content.
     await page.getByRole('button', { name: /A cartridge file/i }).click()
+
+    /*
+     * The web-extraction boundary, seen the way a user sees it.
+     *
+     * The chunk grep above proves the endpoint was compiled out; this proves
+     * the SCREEN matches, which is the half issue 17's second criterion is
+     * actually about — "the key UI is absent rather than merely hidden". Run
+     * against the built artifact for the same reason the Canvas block above is:
+     * a source-level conditional that deployment configuration accidentally
+     * enables or drops cannot pass unnoticed.
+     */
+    await page.getByRole('tab', { name: 'Web page' }).click()
+    const keyField = page.getByLabel('Firecrawl API key')
+    const passwordInputs = page.locator('input[type="password"]')
+    if (selfHostedExtractor) {
+      if (await keyField.count()) failures.push('self-hosted extractor build still asks for a Firecrawl key')
+      if (await passwordInputs.count()) failures.push('self-hosted extractor build still renders a credential field')
+      if (await page.getByRole('button', { name: /Forget key/i }).count()) {
+        failures.push('self-hosted extractor build still offers Forget key')
+      }
+      if (!await page.getByText(selfHostedExtractor, { exact: false }).count()) {
+        failures.push('self-hosted extractor build does not disclose the pinned extraction origin')
+      }
+    } else {
+      // Present, not merely absent elsewhere: a check that passes because the
+      // whole Web page tab disappeared is not a check.
+      if (await keyField.count() !== 1) failures.push('public build has no Firecrawl key field')
+      if (!await page.getByText('api.firecrawl.dev', { exact: false }).count()) {
+        failures.push('public build does not disclose the Firecrawl destination')
+      }
+    }
+
     await page.getByRole('tab', { name: 'Document' }).click()
     await page.getByLabel('Document file').setInputFiles({
       name: 'production-reader.epub',

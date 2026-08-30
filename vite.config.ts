@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import tailwindcss from '@tailwindcss/vite'
 import { normalizeSelfHostedCanvasOrigin } from './worker/allowlist-hosts.js'
+import { selfHostedExtractorOrigin } from './vite.deployment.js'
 
 function selfHostedCanvasOrigin(): string {
   const mode = process.env.OER2CANVAS_DEPLOYMENT_MODE?.trim() || 'public-cartridge-only'
@@ -26,13 +27,23 @@ function selfHostedCanvasOrigin(): string {
 }
 
 const canvasOrigin = selfHostedCanvasOrigin()
+const extractorOrigin = selfHostedExtractorOrigin(process.env)
 
 export default defineConfig({
   // Direct Canvas access is absent from the default/public UI. A self-host
   // operator opts in by pinning the one Canvas origin they also administer;
   // the Worker independently enforces the same origin at runtime.
+  //
+  // Web extraction is the same shape on a separate axis (issue 17). Empty here
+  // means the public build: the Firecrawl path, with the user's own key. An
+  // exact HTTPS origin means the operator runs the extraction service and their
+  // users need no account and no key. The relay is not involved either way —
+  // the extractor sits BESIDE it, because a Cloudflare Worker cannot reach an
+  // operator's own machine and because one allowlisted host that fetches any
+  // URL named in a POST body is an open proxy with an extra hop.
   define: {
     __OER2CANVAS_SELF_HOSTED_CANVAS_ORIGIN__: JSON.stringify(canvasOrigin),
+    __OER2CANVAS_SELF_HOSTED_EXTRACTOR_ORIGIN__: JSON.stringify(extractorOrigin),
   },
   server: {
     proxy: {

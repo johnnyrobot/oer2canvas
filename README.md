@@ -5,7 +5,9 @@ fetch, repair, audit, and compliance queue in the browser. The server component 
 stateless Cloudflare Worker used only where browser CORS prevents a direct request — which is
 why web page import does not use it. Firecrawl's API answers cross-origin browser requests
 directly, so that call is made from the browser and the user's key never reaches this project's
-infrastructure.
+infrastructure. A self-hosting operator can instead point web page import at an extraction
+service they run themselves, in which case their users need no account and no key at all; see
+[Optional self-hosted web extraction](#optional-self-hosted-web-extraction).
 
 ## Release scope
 
@@ -236,6 +238,91 @@ app, reads a semantic fixture back after Canvas sanitization, and restores the o
 set in cleanup. Canvas documents that manually generated scopes are ignored when the
 instance's default developer key does not enable scopes; the verifier reports that condition
 as an open least-privilege gate rather than treating scope metadata as enforcement.
+
+## Optional self-hosted web extraction
+
+By default, importing a web page requires the user's own Firecrawl account and API key. An
+operator who self-hosts this app can instead point web page import at an extraction service
+they run themselves, so their users import a URL with no third-party account and no key. It is
+a separate opt-in from Canvas push and neither requires the other. The public build has this
+compiled out entirely.
+
+The two builds share everything except the fetch. The public-HTTPS check on the address, the
+refusal of a 404 delivered inside a successful extraction, the PDF refusal, the redirect
+disclosure, sanitization, the image refusal, provenance, and the rights ceremony are one
+implementation used by both, so the two deployments cannot disagree about what a page is. What
+differs is what the extractor extracts: this mode has no equivalent of Firecrawl's
+main-content-only option, so an imported page carries more of the site's navigation and footer
+than the same URL does on the public build. It is visible in the preview and editable in the
+page plan.
+
+### The extraction service must serve HTTPS. Localhost will not work.
+
+This is the part most likely to cost a day, so it is stated first. A local extractor
+conventionally listens on `http://localhost:11235`, and an HTTPS page cannot reach it. Measured
+2026-08-30 against Chromium 151:
+
+```
+Access to fetch at 'http://127.0.0.1:63631/probe' from origin 'https://oer2canvas.example'
+has been blocked by CORS policy: Permission was denied for this request to access the
+`loopback` address space.
+```
+
+That is Local Network Access, not mixed content, and the permission is denied by default. Any
+*other* plain-HTTP address fails earlier still, as mixed content, before the request is even
+made. The same requests from a page served over plain HTTP succeeded, which is what rules out
+every other explanation. `http://localhost` would also serve only the one machine sitting at
+it, which is not what a campus deployment needs.
+
+So the build refuses a loopback, private, IP-literal, or plain-HTTP origin, with the same
+validator the pinned Canvas origin uses. The failure is a build error naming the variable
+rather than a runtime failure nobody can diagnose.
+
+**The extractor is not behind the relay, and the relay is unchanged.** A Cloudflare Worker at
+the edge cannot reach a machine on the operator's own network, so routing through the relay
+would not solve the localhost problem — it would make it unsolvable. And allowlisting one
+destination that then fetches whatever URL is named in its request body would be an open proxy
+with an extra hop, which is exactly what the relay's host allowlist exists to prevent.
+
+### What the operator runs
+
+The extraction service is [crawl4ai](https://github.com/unclecode/crawl4ai)'s Docker REST
+server, version `0.9.x`. Earlier versions cannot report the status of a page reached through a
+redirect, so this app's version handshake refuses them rather than importing pages whose status
+it cannot check.
+
+The service binds loopback by default and its own configuration tells operators to put a
+TLS-terminating reverse proxy in front of it for any other exposure. That proxy does three
+jobs:
+
+1. **Terminates TLS** at the origin pinned in the build, e.g. `https://extract.example.edu`.
+2. **Answers CORS** for the app's origin. crawl4ai 0.9 ships `cors_allow_origins: []` and
+   installs no CORS middleware until an origin is listed, so a browser-direct call to an
+   unconfigured service fails at the preflight.
+3. **Supplies the service's own credential**, if it has one. crawl4ai refuses to start on a
+   non-loopback bind without `CRAWL4AI_API_TOKEN`. That token belongs to the operator's proxy;
+   this app never asks for it, never holds it, and never sends one.
+
+### Building it
+
+```sh
+# A frontend build only. There is no Worker variable for this mode, because the
+# relay is not in this path at all — see above.
+OER2CANVAS_WEB_EXTRACTION=self-hosted-extractor \
+OER2CANVAS_SELF_HOSTED_EXTRACTOR_ORIGIN=https://extract.example.edu \
+npm run build
+OER2CANVAS_EXPECT_SELF_HOSTED_EXTRACTOR_ORIGIN=https://extract.example.edu npm run test:dist
+```
+
+Both variables are required together and the build fails closed in both directions: the mode
+with no origin is an error, and an origin with no mode is an error too, because a variable that
+is set and silently ignored is how a capability appears to be on while it is off. The origin
+must be a bare public HTTPS origin with no path, no query, and no credentials.
+
+`npm run test:dist` checks the artifact rather than the source: the self-hosted bundle must
+name the extraction endpoint and must NOT name `api.firecrawl.dev`, `/v2/scrape`, or a Firecrawl
+API key field, and the default public bundle must be the exact mirror of that. Run it both ways
+after changing either side.
 
 ## Canvas token handling in optional self-host mode
 
