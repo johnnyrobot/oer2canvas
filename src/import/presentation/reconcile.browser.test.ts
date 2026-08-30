@@ -1103,7 +1103,7 @@ test('an ODP page with no embedded object reports no unrepresentable content', a
   expect(result.findings.map((finding) => finding.code)).toEqual([])
 })
 
-test('an ODP chart with the GDI metafile preview LibreOffice really writes names the chart AND blocks on the preview', async () => {
+test('an ODP chart is still named when it carries the GDI metafile preview LibreOffice really writes', async () => {
   /*
    * THE FILE A USER ACTUALLY HAS. Measured on LibreOffice's own `impress8`
    * output: the `ObjectReplacements/` preview beside an embedded object is a

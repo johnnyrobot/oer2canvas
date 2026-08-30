@@ -830,3 +830,140 @@ test('an odp picture inside speaker notes is not recorded as a picture on the sl
   expect(index.slides[0]!.pictureOrigins).toEqual(['Pictures/image1.png'])
   expect(index.slides[1]!.pictureOrigins).toEqual([])
 })
+
+/*
+ * ===== The ODF embedded-object classifier ==================================
+ *
+ * These drive `readPresentationIndex` on hand-written parts rather than
+ * through `odpFixture`, because every case below is about a package the
+ * fixture cannot author: a manifest that is absent, a reference that leaves
+ * the package, or a frame whose two accounts of what it holds disagree. They
+ * live in the fast WASM-free project because none of them needs anydoc — the
+ * classifier is a join between two XML parts and nothing else.
+ */
+const odfContent = (frames: string) =>
+  '<?xml version="1.0" encoding="UTF-8"?>' +
+  '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" ' +
+  'xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" ' +
+  'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" ' +
+  'xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0" ' +
+  'xmlns:xlink="http://www.w3.org/1999/xlink" office:version="1.2">' +
+  '<office:body><office:presentation>' +
+  '<draw:page draw:name="Slide 1">' +
+  '<draw:frame presentation:class="title"><draw:text-box><text:p>One</text:p></draw:text-box></draw:frame>' +
+  frames +
+  '</draw:page></office:presentation></office:body></office:document-content>'
+
+const odfManifest = (rows: string) =>
+  '<?xml version="1.0" encoding="UTF-8"?>' +
+  '<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" ' +
+  'manifest:version="1.2">' +
+  '<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.presentation"/>' +
+  rows + '</manifest:manifest>'
+
+const objectFrame = (href: string) =>
+  `<draw:frame draw:name="Object"><draw:object xlink:href="${href}" xlink:type="simple" ` +
+  'xlink:show="embed" xlink:actuate="onLoad"/></draw:frame>'
+
+const chartRow = (path: string) =>
+  `<manifest:file-entry manifest:full-path="${path}" ` +
+  'manifest:media-type="application/vnd.oasis.opendocument.chart"/>'
+
+const unrepresentableOf = (frames: string, rows: string | undefined) =>
+  readPresentationIndex('odp', {
+    'content.xml': odfContent(frames),
+    ...(rows === undefined ? {} : { 'META-INF/manifest.xml': odfManifest(rows) }),
+  }).slides[0]!.unrepresentable
+
+test('an embedded object is classified by its manifest media type', () => {
+  expect(unrepresentableOf(objectFrame('./Object%201'), chartRow('Object 1/')))
+    .toMatchObject({ charts: 1, diagrams: 0 })
+  expect(unrepresentableOf(objectFrame('./Object%201'),
+    '<manifest:file-entry manifest:full-path="Object 1/" ' +
+    'manifest:media-type="application/vnd.oasis.opendocument.graphics"/>'))
+    .toMatchObject({ charts: 0, diagrams: 1 })
+})
+
+test('the manifest key is matched with and without its trailing slash', () => {
+  // ODF writes the directory WITH a trailing slash and LibreOffice does too,
+  // but a converter may write it without, and an href resolves to neither form
+  // on its own. Both are looked up rather than assuming the producer.
+  expect(unrepresentableOf(objectFrame('./Object%201'), chartRow('Object 1/')).charts).toBe(1)
+  expect(unrepresentableOf(objectFrame('./Object%201'), chartRow('Object 1')).charts).toBe(1)
+})
+
+test('an ABSENT manifest classifies nothing rather than refusing the deck', () => {
+  /*
+   * `readZipParts` returns only the parts the archive actually held, and a
+   * converter-produced `.odp` may carry no manifest at all. That yields the
+   * pre-fix behaviour — nothing classified — which is a strictly no-worse
+   * fallback. Refusing a whole deck over a missing bookkeeping part would be a
+   * large penalty for a small omission, and it is not what the reconciler's
+   * own text and picture accounting would do either.
+   */
+  expect(unrepresentableOf(objectFrame('./Object%201'), undefined))
+    .toMatchObject({ charts: 0, diagrams: 0 })
+})
+
+test('an object reference that leaves the package is classified as nothing', () => {
+  // An absolute URL names no part of THIS package, so no manifest row can
+  // describe it, and the classifier says nothing rather than reaching out.
+  expect(unrepresentableOf(objectFrame('https://example.edu/chart'), chartRow('Object 1/')).charts).toBe(0)
+  // A reference resolving to the package root is not a part name either — the
+  // empty string is exactly the origin `parsers/anydoc-html.ts` writes for
+  // something it could not identify, and letting it match anything was a
+  // measured misattribution on the picture path.
+  expect(unrepresentableOf(objectFrame('.'), chartRow('Object 1/')).charts).toBe(0)
+})
+
+test('a traversal-shaped object reference is CLAMPED to the package, not escaped', () => {
+  /*
+   * MEASURED, and the opposite of what this test was first written to assert:
+   * `../../Object 1` does not resolve outside the package and is not refused —
+   * URL resolution clamps `..` at the origin root, so it names the ordinary
+   * in-package part `Object 1` and is classified as the chart it is.
+   *
+   * That IS the safety property, stated the right way round. The guarantee
+   * `resolvePackagePath` gives is not "traversal is rejected" but "no
+   * reference can ever name anything outside the package", which is what
+   * matters for a reader of hostile input — and it is the same guarantee, from
+   * the same function, that the picture path already relies on.
+   */
+  expect(unrepresentableOf(objectFrame('../../Object%201'), chartRow('Object 1/')).charts).toBe(1)
+  // And it still cannot invent a part the manifest does not describe.
+  expect(unrepresentableOf(objectFrame('../../Elsewhere'), chartRow('Object 1/')).charts).toBe(0)
+})
+
+test('an unknown manifest media type is counted as nothing, not guessed at', () => {
+  expect(unrepresentableOf(objectFrame('./Object%201'),
+    '<manifest:file-entry manifest:full-path="Object 1/" ' +
+    'manifest:media-type="application/vnd.oasis.opendocument.text"/>').charts).toBe(0)
+})
+
+test('an object declaring a media mime is counted ONCE, as media', () => {
+  /*
+   * The `isOdfMediaMime` skip in the classifier, exercised. It needs a package
+   * whose two accounts of one frame disagree — `draw:mime-type` says video
+   * while the manifest says chart — which `odpFixture` cannot author, because
+   * `odpMedia` writes a `draw:plugin` and never a `draw:object`. Contradictory
+   * input like this comes from converters rather than from Impress, and the
+   * point of the skip is that it resolves to ONE loss rather than two: without
+   * it the same frame would be reported as a video AND a chart, inflating a
+   * count a user reads.
+   */
+  const frame = '<draw:frame draw:name="Object">' +
+    '<draw:object xlink:href="./Object%201" draw:mime-type="video/mp4" xlink:type="simple" ' +
+    'xlink:show="embed" xlink:actuate="onLoad"/></draw:frame>'
+
+  expect(unrepresentableOf(frame, chartRow('Object 1/')))
+    .toMatchObject({ media: 1, charts: 0, diagrams: 0 })
+})
+
+test('an object inside speaker notes is not a loss on the page', () => {
+  // Same rule the rest of this module applies everywhere: anydoc publishes
+  // nothing from the notes, so content lost there is not content lost from the
+  // page, and counting it would leave the reconciler expecting a block that
+  // can never arrive.
+  const notes = `<presentation:notes>${objectFrame('./Object%201')}</presentation:notes>`
+  expect(unrepresentableOf(notes, chartRow('Object 1/')).charts).toBe(0)
+})

@@ -102,8 +102,12 @@ OpenDocument Presentation (`.odp`) imports the same way, through the same reconc
 one ODF-specific note. Impress stores an inserted chart or diagram as an embedded object whose
 kind is recorded only in the package manifest, and it saves a preview picture beside it in a
 format this importer cannot package — so a deck with a chart both names the chart as
-unimportable and blocks on the preview, the same way a PowerPoint deck with a pasted chart does.
-Delete the object, or replace it with a PNG, JPEG, GIF, or WebP picture, before importing.
+unimportable and blocks on the preview. Delete the object, or replace it with a PNG, JPEG, GIF,
+or WebP picture, before importing.
+
+PowerPoint splits that case in two. A chart or diagram inserted in PowerPoint itself is named the
+same way. One **pasted in** from Excel or Visio is not: it blocks on its preview picture, and
+nothing says what the object was. OpenDocument names both.
 
 A failed or cancelled import says what went wrong, the form stays usable, and nothing from
 the interrupted attempt is kept, so you can correct the input and try again.

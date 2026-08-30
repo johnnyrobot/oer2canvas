@@ -81,6 +81,72 @@ test('an odp deck names an embedded chart on its own page', async () => {
   }))
 })
 
+test('an Impress chart names the chart AND blocks on its preview, both in one ImportResult', async () => {
+  /*
+   * THE FILE A USER ACTUALLY HAS, asserted where BOTH halves are visible.
+   *
+   * `reconcile.browser.test.ts` can only see the reconciler's own findings;
+   * the unpackageable-image blocker is raised upstream by
+   * `parsers/anydoc-html.ts` and only meets the reconciler's findings here, on
+   * `ImportResult`. A test that named both halves and could structurally check
+   * only one is the same defect as a guard that cannot go red, so the claim is
+   * made in the one place that can carry it.
+   *
+   * Measured on LibreOffice's own `impress8` output: the `ObjectReplacements/`
+   * preview beside an embedded object is a VCL GDI metafile
+   * (`application/x-openoffice-gdimetafile`), which this importer cannot
+   * package. So a real Impress deck with a chart does not import until the
+   * object is removed or replaced — and it says WHY on both counts.
+   */
+  const bytes = await odpFixture([
+    { title: 'Process overview', embeddedObjects: [{ kind: 'chart', replacement: 'gdi-metafile' }] },
+  ])
+  const file = new File([bytes], 'lecture.odp', {
+    type: 'application/vnd.oasis.opendocument.presentation',
+  })
+  const result = await importStructuredDocument(file, { metadata })
+
+  expect(result.report.findings).toContainEqual(expect.objectContaining({
+    code: 'presentation-unrepresentable', severity: 'warning', sourcePage: 1,
+    message: expect.stringContaining('1 chart'),
+  }))
+  expect(result.report.findings).toContainEqual(expect.objectContaining({
+    code: 'embedded-content', severity: 'blocker',
+  }))
+})
+
+test('a PPTX pasted chart blocks on its preview and never names the chart — the asymmetry, measured', async () => {
+  /*
+   * ODP IS BETTER THAN PPTX ON THIS CONSTRUCT, and that is worth a test rather
+   * than an assumption, because the obvious reading of the two formats'
+   * `limitations` is that they behave alike here.
+   *
+   * A chart pasted into PowerPoint is an OLE embedding
+   * (`p:graphicFrame > p:oleObj` plus an EMF preview), NOT the
+   * `graphicData` chart uri design fact 6 measured. `pptxIndex` counts the uri,
+   * so a native PowerPoint chart IS named — but an OLE-embedded one is not:
+   * the deck raises only the unpackageable-image blocker for its EMF preview,
+   * and nothing anywhere says a chart was what the slide held.
+   *
+   * ODP has no such split. Every embedded object goes through the manifest, so
+   * a chart is named whatever produced it.
+   *
+   * This is a LIMITATION and not a bar failure: criterion 2 requires design
+   * fact 6's constructs to be named, and for PPTX they are. It is stated in
+   * `capability.ts`'s pptx `limitations` and pinned here so it cannot quietly
+   * become untrue in either direction.
+   */
+  const bytes = await pptxFixture([{ title: 'Process overview', oleObject: true }])
+  const result = await importStructuredDocument(deckFile(bytes), { metadata })
+
+  expect(result.report.findings.map((finding) => finding.code)).toEqual(['embedded-content'])
+  expect(result.report.findings[0]!.severity).toBe('blocker')
+  // The half that matters: no finding mentions a chart at all.
+  for (const finding of result.report.findings) {
+    expect(finding.message).not.toContain('chart')
+  }
+})
+
 test('a deck reconcilePresentation blocks on is refused, not published with a misattributed guess', async () => {
   /*
    * `missingMediaImage` declares a relationship pointing at a media part the

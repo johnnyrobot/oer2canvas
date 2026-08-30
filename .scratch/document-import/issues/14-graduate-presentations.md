@@ -81,20 +81,51 @@ the same `resolvePackagePath` the picture path already uses, and classifies
 
 **The guard is now real.** The chart measurement is pinned in
 `presentation/reconcile.browser.test.ts` and was mutation-tested three ways: removing
-`META-INF/manifest.xml` from `ODP_PATTERNS` fails 5 rows; dropping the trailing-slash manifest
-key fails 5; misclassifying a diagram as a chart fails 1. The fixture writes the sub-document and
-its manifest row, so the datum a correct fix reads is actually present — the omission that let
-the previous version pass against a working fix.
+`META-INF/manifest.xml` from `ODP_PATTERNS`, dropping the trailing-slash manifest key lookup, and
+misclassifying a diagram as a chart. Each goes red. The fixture writes the sub-document and its
+manifest row, so the datum a correct fix reads is actually present — the omission that let an
+earlier version of this guard pass against a working fix.
+
+**And `odp-unrepresentable` was itself vacuous for exactly the half it was added to close.** The
+corpus asserted warning CODES, and `presentation-unrepresentable` is ONE code covering diagrams,
+charts, media and unimportable pictures — so with the chart and diagram classifier deleted, the
+page's video alone kept the case green. Measured: all three classifier mutations left it passing,
+while this Answer cited it as criterion 2's measurement. That is the same defect as a guard test
+that cannot go red, one level up, and it is the third time this issue has produced it.
+
+`pptx-unrepresentable` had the identical weakness — delete PPTX's diagram and chart counts and
+its video still raises the code — so the fix is general rather than local: a corpus case can now
+declare `expectFindingMessages`, asserting that the finding's MESSAGE names each construct, and
+both cases assert `1 diagram, 1 chart, 1 media`. A chart-only ODP case would have closed one
+instance of a defect present in both formats. Re-run against the same three mutations, the corpus
+now goes **red every time**, where it was green every time.
 
 **One ODF-specific limitation, stated rather than hidden.** The `ObjectReplacements/` preview
 LibreOffice saves beside an embedded object is a VCL GDI metafile this importer cannot package,
 so a real Impress deck containing a chart raises BOTH the `presentation-unrepresentable` warning
 naming the chart AND the ordinary unpackageable-image blocker naming the preview, and does not
-import until the object is removed or replaced. That is the **same pair** a PowerPoint deck with
-a pasted chart produces through its EMF preview — a shared rule, symmetric across the formats,
-already stated in both `limitations` lists. It refuses rather than losing anything silently,
+import until the object is removed or replaced. It refuses rather than losing anything silently,
 which is the behaviour this workflow wants. It is a limitation, not a bar failure: criterion 2
 asks that the construct be named, and it is.
+
+**The formats are NOT symmetric here, and an earlier draft of this Answer said they were.**
+Measured end to end, both formats, and pinned in `presentation.browser.test.ts`:
+
+| Deck | Findings |
+| --- | --- |
+| ODP: chart plus GDI preview | `presentation-unrepresentable` ("1 chart", `sourcePage: 1`) **and** the `embedded-content` blocker |
+| PPTX: chart pasted from Excel (`p:graphicFrame > p:oleObj` plus EMF preview) | the `embedded-content` blocker **only** — `result.findings` is `[]` at the reconciler, already pinned at `reconcile.browser.test.ts` |
+
+So a PowerPoint **pasted** chart never names the chart. The reason is that design fact 6's chart
+is the `graphicData` chart uri — what PowerPoint writes for a chart INSERTED in PowerPoint — and
+`pptxIndex` counts that uri, while a pasted chart is an OLE embedding that takes a different
+path. ODP has no such split: every embedded object goes through the manifest, so a chart is named
+whatever produced it.
+
+**On this construct ODP is now better than PPTX.** That is a PPTX limitation, not a bar failure —
+criterion 2 requires design fact 6's constructs to be named, and for PPTX they are — but it is
+written into `capability.ts`'s pptx `limitations` rather than left as an asymmetry a reader would
+assume away, and it is pinned in both directions.
 
 ### Residuals stated as limitations, not as bar failures
 
@@ -137,6 +168,14 @@ decks. The one measurement taken from a file LibreOffice actually wrote overturn
 verdict. Design fact 9 was worth its cost for the same reason, and the pattern is the same one
 this whole issue keeps re-learning: for these two formats, a claim about what a producer writes
 is worth nothing until a producer has written it.
+
+**And the disclosure that made that risk visible still stands, so it is repeated here rather than
+retired now that the verdict improved.** NO REAL `.odp` WRITTEN BY IMPRESS EXISTS IN THIS
+REPOSITORY. `odpFixture` writes synthetic ODF, authored to match what LibreOffice was measured to
+write; the real file was driven through the importer out of band during review and was never
+committed. Hand-built ODF produced the wrong verdict once. Dropping this sentence at the moment
+the verdict got better would be exactly the wrong direction, which is why an earlier draft of
+this Answer losing it is itself recorded.
 
 ### Criteria
 

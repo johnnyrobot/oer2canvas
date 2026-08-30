@@ -47,9 +47,12 @@ const utf8 = (value: string) => new TextEncoder().encode(value)
  * "name every fact-6 construct" criterion vacuously). `pptx-slideshow-container` and
  * `pptx-macro-container` cover the PPTX-family container variants
  * (`presentation.browser.test.ts` covers the remaining `.ppsm` extension
- * directly). Every one of these six also asserts `expectFindings`, not just
+ * directly). Every one of these seven also asserts `expectFindings`, not just
  * `expectInHtml`: an importer that silently dropped the finding a construct
  * is supposed to raise would still pass a check that only looked at the html.
+ * The two `unrepresentable` cases go further and assert
+ * `expectFindingMessages`, because their one code covers three different
+ * constructs and a code check alone cannot tell which of them were counted.
  *
  * `pptx-packaged-image` is the SEVENTH pptx case (there are seven
  * `format: 'pptx'` cases in this file; the `odp-*` cases below are ODP, not
@@ -115,6 +118,24 @@ export interface CorpusCase {
    * limitations", which an assertion that only checks blockers cannot carry.
    */
   expectFindings?: readonly string[]
+  /**
+   * A substring each named finding's MESSAGE must contain.
+   *
+   * `expectFindings` checks CODES, and a code is not always specific enough to
+   * carry the claim a case is making. `presentation-unrepresentable` is one
+   * code covering diagrams, charts, media and unimportable pictures, so an
+   * `unrepresentable` case authoring all three constructs still raises that one
+   * code if TWO of the three stopped being counted — which made both
+   * `pptx-unrepresentable` and `odp-unrepresentable` pass a mutation that
+   * deleted the diagram and chart classifiers outright, while the Answer cited
+   * them as the measurement for the bar's "every construct in design fact 6 is
+   * named" criterion. That is the same defect as a guard test that cannot go
+   * red, one level up.
+   *
+   * Keyed by code rather than positional, so a case says which finding it means
+   * and the assertion fails by name when that finding is absent.
+   */
+  expectFindingMessages?: Readonly<Record<string, string>>
 }
 
 // Four times the 1,000-paragraph fixture `document.browser.test.ts` already
@@ -346,6 +367,12 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     // finding in `reconcile.ts` and confirming the corpus went green without
     // it, which is exactly the gap `expectFindings` exists to close.
     expectFindings: ['presentation-unrepresentable'],
+    // The code alone is NOT this case's claim. One code covers all three
+    // constructs, so `expectFindings` stays green if the diagram and chart
+    // counts are deleted and only the video survives — which is exactly the
+    // vacuity the bar's "every construct in design fact 6 is named" criterion
+    // cannot be measured through. The message names each construct it counted.
+    expectFindingMessages: { 'presentation-unrepresentable': '1 diagram, 1 chart, 1 media' },
   },
   {
     id: 'pptx-slideshow-container',
@@ -454,6 +481,13 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     // compared on identical evidence rather than on whichever case each
     // happened to get. Verified empirically against the real reconciler.
     expectFindings: ['presentation-unrepresentable'],
+    // THE ASSERTION THIS CASE EXISTS FOR. The code alone was measured to stay
+    // green with the chart and diagram classifier deleted, because this page
+    // also carries a video and one code covers all three — so the case added
+    // to close a vacuity was itself vacuous for the half it was added to
+    // prove. The message is what distinguishes "a chart was named" from
+    // "something was named".
+    expectFindingMessages: { 'presentation-unrepresentable': '1 diagram, 1 chart, 1 media' },
   },
 
   // ===== Structural properties, on DOCX and EPUB only =================

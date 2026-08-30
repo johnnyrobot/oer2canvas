@@ -1324,8 +1324,19 @@ function odpIndex(parts: Record<string, string>): PresentationIndex {
     const odfObjectKindCounts = { chart: 0, diagram: 0 }
     for (const object of page.getElementsByTagNameNS(ODF_DRAW_NS, 'object')) {
       if (excludedRoots.some((root) => root.contains(object))) continue
-      // A media object is already counted as media below; classifying it again
-      // here would report one embedded video as a video AND a diagram.
+      /*
+       * A media object is already counted as media below, so classifying it
+       * again here would report ONE embedded video as a video AND a chart,
+       * inflating a count a user reads.
+       *
+       * DEFENSIVE, and reachable only from a package whose two accounts of one
+       * frame disagree: `draw:mime-type` saying video while the manifest says
+       * chart. Impress never writes that — it writes a `draw:plugin` for media
+       * and a `draw:object` for an embedded document — so the shape comes from
+       * a converter rather than from the editor. `index.test.ts` builds it by
+       * hand and pins that the answer is one loss, not two; `odpFixture`
+       * cannot author it, which is why the test is hand-written parts.
+       */
       if (isOdfMediaMime(object.getAttributeNS(ODF_DRAW_NS, 'mime-type'))) continue
       const kind = odfObjectKind(object.getAttributeNS(XLINK_NS, 'href'), manifestMediaTypes)
       if (kind) odfObjectKindCounts[kind] += 1

@@ -161,6 +161,7 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
       'A slide with no title is titled by its number so you can rename it.',
       'An equation blocks import; equation rendering is not supported yet.',
       'An image not in a format this importer can package (PNG, JPEG, GIF, or WebP) blocks import — a pasted chart, a Visio drawing, or legacy clip art is often saved this way; replace it with one of those formats first.',
+      'A chart or drawing PASTED in from Excel or Visio is not named as a chart: it blocks import as an unpackageable image (its preview), and nothing says what the object was. A chart or diagram INSERTED in PowerPoint itself is named. OpenDocument decks name both.',
       "A slide whose content cannot be matched to the deck's own outline blocks import outright, because publishing it could put content under the wrong slide.",
       'Macros are never read or run.',
     ],

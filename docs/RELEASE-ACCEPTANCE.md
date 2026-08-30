@@ -68,9 +68,14 @@ if an instructor wants that.
 kind only in the package manifest, and saves a preview beside it as a VCL GDI metafile — a
 format this importer cannot package. So a real Impress deck containing a chart produces BOTH the
 `presentation-unrepresentable` warning naming the chart AND the ordinary unpackageable-image
-blocker naming the preview, and does not import until the object is removed or replaced. That is
-the same pair a PowerPoint deck with a pasted chart produces through its EMF preview. Expected
-behaviour, not a bug to report.
+blocker naming the preview, and does not import until the object is removed or replaced.
+Expected behaviour, not a bug to report.
+
+A PowerPoint deck with a chart **pasted in** from Excel produces only the second of those: it
+blocks on the EMF preview and never names the chart, because a pasted chart is an OLE embedding
+rather than the native chart shape the index counts. Measured, and pinned in
+`src/import/presentation.browser.test.ts`. On this one construct ODP is better than PPTX; do not
+read the two formats' limitations as describing identical behaviour here.
 
 ## 1. Live Canvas push
 

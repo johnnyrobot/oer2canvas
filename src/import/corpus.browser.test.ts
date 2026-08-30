@@ -63,4 +63,18 @@ test.each(CORPUS_CASES)('$id imports and keeps the structure it stands in for', 
     .map((finding) => finding.code)
     .sort()
   expect(warningCodes, `${entry.id} warning codes`).toEqual([...(entry.expectFindings ?? [])].sort())
+
+  // A CODE IS NOT ALWAYS THE CLAIM. `presentation-unrepresentable` is one code
+  // covering diagrams, charts, media and unimportable pictures, so a case
+  // authoring all three constructs still raises it when two of the three stop
+  // being counted — measured: deleting the ODP chart/diagram classifier left
+  // `odp-unrepresentable` GREEN, while the issue's Answer cited that case as
+  // the measurement for "every construct in design fact 6 is named". This
+  // closes that, and it is asserted for whichever cases declare it rather than
+  // for all, because most codes ARE their own claim.
+  for (const [code, text] of Object.entries(entry.expectFindingMessages ?? {})) {
+    const finding = imported.report.findings.find((candidate) => candidate.code === code)
+    expect(finding, `${entry.id} raised no ${code} to check the message of`).toBeDefined()
+    expect(finding!.message, `${entry.id} ${code} message`).toContain(text)
+  }
 })
