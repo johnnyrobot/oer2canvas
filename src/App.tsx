@@ -30,9 +30,9 @@ import { AppShell } from './shell/AppShell'
 import { DestinationScreen, ResultScreen } from './shell/screens'
 import { PlanScreen } from './shell/PlanScreen'
 import { downloadCartridge } from './engine/export/download'
-import { createDefaultCanvasClient } from './canvas/client'
 import { createCredentialStore, migratePersistedTokens } from './canvas/credentials'
 import { createIdbStore } from './canvas/idb'
+import { createDefaultCanvasClient } from './canvas/client'
 import { useCanvasConnection } from './shell/useCanvasConnection'
 import { runPush } from './shell/push-session'
 import type { PushReport } from './shell/screens'
@@ -298,15 +298,25 @@ export default function App() {
 
   const canvas = useCanvasConnection({
     store: credentials,
-    createClient: (baseUrl, token) =>
-      createDefaultCanvasClient(baseUrl, token, (ms) => {
-        /*
-         * §7's rule: surface a wait only when it is long enough to be worth a
-         * sentence. Narrating every sub-five-second hiccup reads as a broken app,
-         * and the backoff continues automatically either way.
-         */
-        if (ms >= 5000) setBusy(`Canvas is rate-limiting. Waiting ${Math.round(ms / 1000)} s, then continuing automatically.`)
-      }),
+    /*
+     * A DYNAMIC IMPORT INSIDE A CONSTANT-FOLDED BRANCH, which is what keeps
+     * `/api/v1/courses` out of a public artifact (issue 22). `SELF_HOSTED_CANVAS_ORIGIN`
+     * folds to `''` on a public build, so Rollup drops this arm and never emits
+     * the chunk; a plain `await import()` would still emit one, and the string
+     * would still ship. The other arm can only be reached by a caller that does
+     * not exist there: no Canvas destination is rendered to invoke it.
+     */
+    createClient: selfHostedCanvasOrigin
+      ? (baseUrl, token) =>
+          createDefaultCanvasClient(baseUrl, token, (ms) => {
+            /*
+             * §7's rule: surface a wait only when it is long enough to be worth a
+             * sentence. Narrating every sub-five-second hiccup reads as a broken app,
+             * and the backoff continues automatically either way.
+             */
+            if (ms >= 5000) setBusy(`Canvas is rate-limiting. Waiting ${Math.round(ms / 1000)} s, then continuing automatically.`)
+          })
+      : () => { throw new Error('This build has no Canvas destination.') },
   })
 
   /**

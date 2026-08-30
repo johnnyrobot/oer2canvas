@@ -193,6 +193,35 @@ async function main() {
       + `${extraction.mode} build`,
     )
   }
+
+  /*
+   * THE CANVAS CAPABILITY, HELD TO THE SAME BUNDLE BAR AS THE EXTRACTOR ABOVE.
+   *
+   * The rendered check further down already proves a public build shows no
+   * Canvas destination. That is a RUNTIME guarantee: `App.tsx` reads the folded
+   * build constant and renders nothing. This is the BUILD guarantee the
+   * extractor already has and Canvas did not — that a public artifact does not
+   * CONTAIN the token UI or the Canvas API paths at all.
+   *
+   * The difference matters because the two failure modes are different. A
+   * runtime gate that regresses ships a token field to every public visitor; an
+   * absent module cannot, whatever the gate does.
+   */
+  const selfHostedCanvas = process.env.OER2CANVAS_EXPECT_SELF_HOSTED_CANVAS_ORIGIN?.trim()
+  if (!selfHostedCanvas) {
+    const canvasMarkers = ['Canvas address', 'Access token', '/api/v1/courses']
+    for (const asset of builtAssets.filter((name) => name.endsWith('.js'))) {
+      const chunk = await readFile(join(DIST, 'assets', asset), 'utf8')
+      for (const marker of canvasMarkers) {
+        if (chunk.includes(marker)) {
+          throw new Error(
+            `dist chunk ${asset} names ${JSON.stringify(marker)}, which belongs to the `
+            + 'self-hosted Canvas capability; a public build should not contain it',
+          )
+        }
+      }
+    }
+  }
   if (selfHostedExtractor) {
     const namesOrigin = await Promise.all(
       builtAssets.filter((name) => name.endsWith('.js'))

@@ -112,6 +112,14 @@ export default defineConfig({
         define: {
           ...PUBLIC_BUILD_DEFINES,
           __OER2CANVAS_SELF_HOSTED_EXTRACTOR_ORIGIN__: JSON.stringify('https://extract.example.edu'),
+          /*
+           * The Canvas capability joined this project in issue 22, for the same
+           * reason the extractor was here first: it is a `define`, so it cannot
+           * be switched on from inside a test, and injecting a prop instead
+           * would keep the branch alive and carry the token UI into the public
+           * bundle — which `scripts/smoke-dist.mjs` now refuses.
+           */
+          __OER2CANVAS_SELF_HOSTED_CANVAS_ORIGIN__: JSON.stringify('https://canvas.example.edu'),
         },
         test: {
           name: 'unit-self-hosted',

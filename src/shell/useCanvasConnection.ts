@@ -3,6 +3,18 @@ import type { CanvasClient, CanvasCourse, CanvasPage, CanvasUser } from '../canv
 import type { CredentialStore } from '../canvas/credentials'
 import { normalizeBaseUrl } from '../canvas/transport'
 
+/*
+ * Folded locally, for the reason spelled out in `screens.tsx` (issue 22): it is
+ * what makes the reference below statically dead on a public build, so Rollup
+ * shakes `canvas/transport` — and its "Canvas address" messages — out of the
+ * artifact. `connect` is unreachable on such a build in any case: its only
+ * caller is `CanvasConnect`, which that build does not contain.
+ */
+const CANVAS_ENABLED =
+  (typeof __OER2CANVAS_SELF_HOSTED_CANVAS_ORIGIN__ === 'string'
+    ? __OER2CANVAS_SELF_HOSTED_CANVAS_ORIGIN__
+    : '') !== ''
+
 /**
  * The Destination screen's Canvas half, as a state machine with a network in it.
  *
@@ -32,7 +44,13 @@ export interface CanvasConnection {
 export interface CanvasConnectionDeps {
   store: CredentialStore
   /** Injected so tests never construct a transport, let alone a fetch. */
-  createClient(baseUrl: string, token: string): CanvasClient
+  /*
+   * May return a promise: on a self-hosted build `App.tsx` loads
+   * `canvas/client` with a dynamic `import()` so the module is absent from a
+   * public artifact entirely (issue 22). `connect` is already async, so
+   * awaiting costs nothing when the factory is synchronous.
+   */
+  createClient(baseUrl: string, token: string): CanvasClient | Promise<CanvasClient>
 }
 
 /*
@@ -86,8 +104,8 @@ export function useCanvasConnection(deps: CanvasConnectionDeps): CanvasConnectio
       try {
         // Throws on a plaintext or malformed address, in the words of the field
         // that took it, before anything is sent anywhere.
-        const baseUrl = normalizeBaseUrl(address)
-        const fresh = deps.createClient(baseUrl, token)
+        const baseUrl = CANVAS_ENABLED ? normalizeBaseUrl(address) : ''
+        const fresh = await deps.createClient(baseUrl, token)
         const who = await fresh.verify()
 
         // The base URL is a harmless convenience; the token remains held only in

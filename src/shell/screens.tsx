@@ -1,6 +1,24 @@
 import { useState } from 'react'
 import { AlertTriangle, CheckCircle2, Compass, Download, Info, Plus, RefreshCw, School } from 'lucide-react'
 import { CanvasConnect } from './CanvasConnect'
+
+/*
+ * FOLDED HERE RATHER THAN IMPORTED FROM A SHARED MODULE, and that is the whole
+ * mechanism (issue 22). Vite's `define` replaces the constant with `""` inside
+ * THIS module, so esbuild folds the guard below to `false`, the JSX subtree
+ * referencing `CanvasConnect` disappears, and Rollup then shakes the now
+ * unreferenced import out of a public artifact entirely.
+ *
+ * Measured 2026-08-30: routing the same value through an exported `const` in a
+ * shared module does NOT work. Rollup will not propagate it across the module
+ * boundary, the guard stays live, and "Canvas address" and "Access token" ship
+ * to every public visitor. `WebArticleImporter.tsx` folds its own extractor
+ * origin locally for the same reason; this follows that precedent.
+ */
+const CANVAS_ENABLED =
+  (typeof __OER2CANVAS_SELF_HOSTED_CANVAS_ORIGIN__ === 'string'
+    ? __OER2CANVAS_SELF_HOSTED_CANVAS_ORIGIN__
+    : '') !== ''
 import type { CompiledChapter } from '../contracts/index'
 import type { PushedPage, PushStop } from '../canvas/push'
 import type { Destination } from './phases'
@@ -52,8 +70,8 @@ export function DestinationScreen({
         and not a fallback for people without a token. A card styled as the
         lesser option would misrepresent the supported output paths.
       */}
-      <div className={`mt-6 grid gap-4 ${canvas ? 'sm:grid-cols-2' : ''}`}>
-        {canvas && (
+      <div className={`mt-6 grid gap-4 ${canvas && CANVAS_ENABLED ? 'sm:grid-cols-2' : ''}`}>
+        {canvas && CANVAS_ENABLED && (
           <button
             type="button"
             onClick={() => setOpened('canvas')}
@@ -97,7 +115,7 @@ export function DestinationScreen({
         </button>
       </div>
 
-      {opened === 'canvas' && canvas && (
+      {opened === 'canvas' && canvas && CANVAS_ENABLED && (
         <CanvasConnect
           {...canvas}
           onPickCourse={(id) => {

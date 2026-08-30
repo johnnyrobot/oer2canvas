@@ -25,6 +25,7 @@
 | [19 — One refusal, one screen](issues/19-one-refusal-one-screen.md) | ready-for-agent | — |
 | [20 — Surface or remove `retryable`](issues/20-surface-or-remove-retryable.md) | ready-for-agent | — |
 | [21 — State the PDF text ceiling](issues/21-state-the-pdf-text-ceiling.md) | ready-for-agent | — |
+| [22 — Canvas out of the public bundle](issues/22-canvas-out-of-the-public-bundle.md) | resolved | — |
 
 **Everything once carried here now has an issue.** The two-screens refusal carried from 14 is
 issue 19; issue 13's `retryable` residual is issue 20 and its PDF-ceiling residual is issue 21;
