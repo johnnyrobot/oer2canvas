@@ -4,7 +4,7 @@
 
 **Blocked by:** 13 — Harden and release the core document importer; 14 — Graduate presentation formats through the document workflow.
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] A dedicated corpus covers representative DOC and PPT content, malformed files, large files, and known conversion ambiguities.
 - [ ] Browser parsing, cancellation, resource use, and extraction quality are measured against the established import budgets.
