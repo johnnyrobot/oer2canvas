@@ -496,22 +496,57 @@ test("an odp table's cells reach textRuns through the flat paragraph query", asy
   expect(index.slides[0]!.textRuns).toEqual(['Data', 'Body text', 'Stage', 'Location', 'Calvin cycle', 'Stroma'])
 })
 
-test('a pptx picture is counted as an image while a video is counted as lost media', async () => {
+test('a pptx picture is counted as an image, because anydoc emits a block for it', async () => {
   // The reconciler cannot attribute a picture by its text, because anydoc emits
   // it as a block with none. The count is what tells an image-only slide apart
   // from a gap.
   const index = await indexOf(await pptxFixture([
-    { title: 'Pictures', image: { alt: 'A cell' }, video: true },
+    { title: 'Pictures', image: { alt: 'A cell' }, secondImage: { alt: 'Another cell' } },
   ]))
 
-  expect(index.slides[0]!.images).toBe(1)
-  expect(index.slides[0]!.unrepresentable.media).toBe(1)
+  expect(index.slides[0]!.images).toBe(2)
+  expect(index.slides[0]!.unrepresentable.media).toBe(0)
 })
 
-test('an odp picture is counted, and one inside speaker notes is not', async () => {
+test("a video's poster frame is BOTH a lost medium and a picture anydoc emits", async () => {
+  /*
+   * PowerPoint writes a media `p:pic` with a poster frame — the still shown
+   * before the video plays — as an ordinary embedded blip in the same shape,
+   * and MEASURED with real anydoc 0.2.4 that poster comes out as
+   * `<p><img …></p>`. Counting the shape as media ALONE left the poster block
+   * unclaimable, and a deck with one video refused to import at all.
+   */
+  const index = await indexOf(await pptxFixture([
+    { title: 'Lecture', body: ['Body text'], video: true },
+  ]))
+
+  expect(index.slides[0]!.unrepresentable.media).toBe(1)
+  expect(index.slides[0]!.images).toBe(1)
+})
+
+test('a linked picture is counted, and a picture with no blip reference is not', async () => {
+  // MEASURED: a linked blip (`r:link`, no bytes in the package) still emits an
+  // `<img src="https://…">` alongside an `external-image` warning, so its slide
+  // must be able to claim it. A `p:pic` naming no blip at all has no image data
+  // for anydoc to emit, and counting it would leave a budget nothing can spend.
+  const linked = await indexOf(await pptxFixture([{ title: 'One', linkedImage: true }]))
+  expect(linked.slides[0]!.images).toBe(1)
+
+  const withoutBlip = await indexOf(await pptxFixture([{ title: 'One' }]))
+  expect(withoutBlip.slides[0]!.images).toBe(0)
+})
+
+test('an odp picture inside speaker notes is not counted as a picture on the slide', async () => {
+  /*
+   * anydoc publishes nothing from the notes — MEASURED: the notes picture
+   * produces no block at all — so counting it would leave the reconciler
+   * holding a budget no block can spend, which is now a refusal. The page below
+   * carries a picture ONLY inside its notes, so the count can only be zero if
+   * the exclusion actually runs.
+   */
   const index = await odpIndexOf(await odpFixture([
     { title: 'Pictures', image: { alt: 'A cell' } },
-    { title: 'None', notes: 'A note.' },
+    { title: 'Notes only', notes: 'A note.', notesImage: true },
   ]))
 
   expect(index.slides[0]!.images).toBe(1)

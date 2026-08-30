@@ -297,7 +297,7 @@ test('a slide whose text anydoc never produced refuses instead of importing an e
 
   const finding = only(result, 'presentation-unattributed-content')
   expect(finding.severity).toBe('blocker')
-  expect(finding.message).toContain('slides 1 and 2 are missing text the deck says they carry')
+  expect(finding.message).toContain('slides 1 and 2 are missing content the deck says they carry')
 })
 
 test('a partly-produced slide refuses rather than publishing what survived', () => {
@@ -309,7 +309,7 @@ test('a partly-produced slide refuses rather than publishing what survived', () 
 
   const finding = only(result, 'presentation-unattributed-content')
   expect(finding.severity).toBe('blocker')
-  expect(finding.message).toContain('slide 1 is missing text the deck says it carries')
+  expect(finding.message).toContain('slide 1 is missing content the deck says it carries')
 })
 
 test("an untitled slide gets its own h2, and anydoc's h1 is demoted beneath it", () => {
@@ -388,6 +388,30 @@ test('a titled slide still takes its own picture', () => {
 
   expect(result.html.split('<section')[1]).toContain('<img')
   expect(result.findings).toEqual([])
+})
+
+test('a counted picture that never arrived refuses instead of lapsing', () => {
+  /*
+   * MEASURED with a `p:pic` whose `r:embed` names an undefined relationship:
+   * anydoc emits nothing for it and raises no finding of its own, so slide 1
+   * carried an unspent budget straight into slide 2's picture — slide 1 took
+   * the image, slide 2 shipped holding only its generated heading, and the only
+   * finding was `presentation-untitled-slide`. An unspent budget is the same
+   * kind of disagreement as unmatched text, and refuses the same way.
+   */
+  const result = reconcilePresentation({
+    html: '<h2>One</h2><p><img src="cell.png" alt="A cell"></p><h2>Three</h2>',
+    index: index([
+      slide(1, { title: 'One', textRuns: ['One'], images: 1 }),
+      slide(2, { images: 1 }),
+      slide(3, { title: 'Three', textRuns: ['Three'] }),
+    ]),
+    sourceLabel: 'PPTX',
+  })
+
+  const finding = only(result, 'presentation-unattributed-content')
+  expect(finding.severity).toBe('blocker')
+  expect(finding.message).toContain('missing content the deck says')
 })
 
 test('a picture no slide claims refuses instead of being absorbed', () => {

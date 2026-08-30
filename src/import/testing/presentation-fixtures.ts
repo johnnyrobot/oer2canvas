@@ -77,6 +77,25 @@ export interface PptxSlideSpec {
   titleLast?: boolean
   /** A picture, with `descr` as its alt text (omit for an undescribed image). */
   image?: { alt?: string }
+  /**
+   * A SECOND picture on the same slide, sharing the first one's relationship.
+   * Two pictures on one slide is the shape that proves the reconciler's image
+   * budget is a COUNT and not a flag.
+   */
+  secondImage?: { alt?: string }
+  /**
+   * A picture whose blip is LINKED (`r:link` to an external target) with no
+   * `r:embed` at all — PowerPoint's "Link to File" insert. The package carries
+   * no bytes for it, so anydoc has nothing to emit.
+   */
+  linkedImage?: boolean
+  /**
+   * A picture whose `r:embed` names a relationship the package does not
+   * declare. anydoc emits nothing and raises no finding of its own, so the
+   * only account of the missing picture is the index's count — which is why an
+   * unspent image budget has to be a disagreement rather than a silence.
+   */
+  brokenImage?: boolean
   /** Content anydoc drops entirely — design fact 6. */
   diagram?: boolean
   chart?: boolean
@@ -88,7 +107,7 @@ export interface PptxSlideSpec {
    * diagram or grouped media, so the index must descend too, or the loss
    * (and the grouped text) is invisible (fix-review Important 2).
    */
-  group?: { text?: string; diagram?: boolean; video?: boolean }
+  group?: { text?: string; diagram?: boolean; video?: boolean; image?: boolean }
   /**
    * A diagram wrapped in `mc:AlternateContent`, the OOXML markup-compatibility
    * wrapper PowerPoint uses for newer constructs (online video, 3D models,
@@ -178,7 +197,7 @@ function nestedGroups(depth: number): string {
  * SmartArt diagram frame, and a video-carrying picture, so a test can prove the
  * index descends into it instead of treating the group as opaque.
  */
-function groupShape({ text, diagram, video }: NonNullable<PptxSlideSpec['group']>): string {
+function groupShape({ text, diagram, video, image }: NonNullable<PptxSlideSpec['group']>): string {
   const textPart = text
     ? `<p:sp><p:nvSpPr><p:cNvPr id="21" name="Grouped Text 21"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
       `<p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/>` +
@@ -195,8 +214,14 @@ function groupShape({ text, diagram, video }: NonNullable<PptxSlideSpec['group']
       `<p:nvPr><a:videoFile r:link="rIdGroupedVideo"/></p:nvPr></p:nvPicPr>` +
       `<p:blipFill><a:blip/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr/></p:pic>`
     : ''
+  const imagePart = image
+    ? `<p:pic><p:nvPicPr><p:cNvPr id="24" name="Grouped Picture 24" descr="Grouped cell"/>` +
+      `<p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+      `<p:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+      `<p:spPr/></p:pic>`
+    : ''
   return `<p:grpSp><p:nvGrpSpPr><p:cNvPr id="20" name="Group 20"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
-    `<p:grpSpPr/>${textPart}${diagramPart}${videoPart}</p:grpSp>`
+    `<p:grpSpPr/>${textPart}${diagramPart}${videoPart}${imagePart}</p:grpSp>`
 }
 
 /**
@@ -264,10 +289,37 @@ function slideXml(spec: PptxSlideSpec): string {
         '<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" ' +
         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rIdChart"/>')
     : ''
+  /*
+   * A media `p:pic` AS POWERPOINT WRITES ONE: the `a:videoFile` link that makes
+   * it media, AND a POSTER FRAME — an ordinary embedded picture in the
+   * `p:blipFill` — because a video on a slide always shows a still. An earlier
+   * version of this fixture wrote `<a:blip/>` with no `r:embed`, which is not a
+   * shape PowerPoint produces, and that omission hid a defect twice over:
+   * anydoc emits `<p><img …></p>` for the poster, so a deck with a video was
+   * refused for a block no slide would claim.
+   */
   const video = spec.video
     ? `<p:pic><p:nvPicPr><p:cNvPr id="7" name="Lecture clip"/><p:cNvPicPr/>` +
       `<p:nvPr><a:videoFile r:link="rIdVideo"/></p:nvPr></p:nvPicPr>` +
-      `<p:blipFill><a:blip/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr/></p:pic>`
+      `<p:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+      `<p:spPr/></p:pic>`
+    : ''
+  const secondImage = spec.secondImage
+    ? `<p:pic><p:nvPicPr><p:cNvPr id="9" name="Picture 9"` +
+      `${spec.secondImage.alt === undefined ? '' : ` descr="${xmlEscape(spec.secondImage.alt)}"`}/>` +
+      `<p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+      `<p:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+      `<p:spPr/></p:pic>`
+    : ''
+  const linkedImage = spec.linkedImage
+    ? `<p:pic><p:nvPicPr><p:cNvPr id="10" name="Linked Picture 10"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+      `<p:blipFill><a:blip r:link="rIdLinkedImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+      `<p:spPr/></p:pic>`
+    : ''
+  const brokenImage = spec.brokenImage
+    ? `<p:pic><p:nvPicPr><p:cNvPr id="11" name="Broken Picture 11"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+      `<p:blipFill><a:blip r:embed="rIdMissingImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+      `<p:spPr/></p:pic>`
     : ''
   const table = spec.table
     ? graphicFrame(8, 'Table 8', TABLE_URI,
@@ -282,9 +334,10 @@ function slideXml(spec: PptxSlideSpec): string {
   const alternateContent = spec.diagramInAlternateContent ? alternateContentDiagram() : ''
   const nested = spec.nestedGroupDepth ? nestedGroups(spec.nestedGroupDepth) : ''
 
+  const pictures = `${image}${secondImage}${linkedImage}${brokenImage}`
   const shapes = spec.titleLast
-    ? `${body}${image}${diagram}${chart}${video}${table}${group}${alternateContent}${nested}${title}`
-    : `${title}${body}${image}${diagram}${chart}${video}${table}${group}${alternateContent}${nested}`
+    ? `${body}${pictures}${diagram}${chart}${video}${table}${group}${alternateContent}${nested}${title}`
+    : `${title}${body}${pictures}${diagram}${chart}${video}${table}${group}${alternateContent}${nested}`
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -410,8 +463,14 @@ export async function pptxFixture(
         data: utf8(notesXml(segments, { omitPlaceholderType: slide.notesOmitPlaceholderType })),
       })
     }
-    if (slide.image) {
+    // One `rIdImage` relationship serves every embedded picture on the slide,
+    // including a video's poster frame and a grouped picture — exactly as
+    // PowerPoint reuses one relationship for one media part.
+    if (slide.image || slide.secondImage || slide.video || slide.group?.image) {
       rels.push('<Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>')
+    }
+    if (slide.linkedImage) {
+      rels.push('<Relationship Id="rIdLinkedImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="https://example.edu/cell.png" TargetMode="External"/>')
     }
     if (rels.length > 0) {
       entries.push({ name: `ppt/slides/_rels/slide${index + 1}.xml.rels`, data: utf8(
@@ -420,7 +479,7 @@ export async function pptxFixture(
     }
   })
 
-  if (slides.some((slide) => slide.image)) {
+  if (slides.some((slide) => slide.image || slide.secondImage || slide.video || slide.group?.image)) {
     entries.push({ name: 'ppt/media/image1.png', data: EMBEDDED_IMAGE_PNG })
   }
   if (withMacroPart) {
@@ -506,6 +565,13 @@ export interface OdpPageSpec {
   /** Emit the title frame LAST in the page — ODP's form of design fact 4. */
   titleLast?: boolean
   image?: { alt?: string }
+  /**
+   * A `draw:image` INSIDE `presentation:notes`. anydoc publishes nothing from
+   * the notes, so a picture in there is not a picture on the slide, and
+   * counting it would leave the reconciler holding a budget no block can ever
+   * spend — which is now a refusal.
+   */
+  notesImage?: boolean
   /**
    * A shape drawn from the toolbar (rectangle, callout, arrow, connector) —
    * `draw:custom-shape` — holding typed text as a DIRECT `text:p` child, with
@@ -654,6 +720,13 @@ function odpHeading(text: string): string {
  */
 function odpNotesContentXml(page: OdpPageSpec): string {
   const heading = page.notesHeadingText ? odpHeading(page.notesHeadingText) : ''
+  if (page.notesImage) {
+    const picture = `<draw:frame draw:name="Notes picture" svg:width="1cm" svg:height="1cm">` +
+      `<draw:image xlink:href="Pictures/image1.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
+      `</draw:frame>`
+    if (page.notes !== undefined) return `${heading}<text:p>${xmlEscape(page.notes)}</text:p>${picture}`
+    return `${heading}${picture}`
+  }
   if (page.notesRuns) return `${heading}<text:p>${odpParagraphSegmentsXml(page.notesRuns)}</text:p>`
   if (page.notes !== undefined) return `${heading}<text:p>${xmlEscape(page.notes)}</text:p>`
   return heading
@@ -705,13 +778,13 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
       `<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">` +
       `<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.presentation"/>` +
       `<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>` +
-      (pages.some((page) => page.image)
+      (pages.some((page) => page.image || page.notesImage)
         ? `<manifest:file-entry manifest:full-path="Pictures/image1.png" manifest:media-type="image/png"/>`
         : '') +
       `</manifest:manifest>`) },
     { name: 'content.xml', data: utf8(content) },
   ]
-  if (pages.some((page) => page.image)) {
+  if (pages.some((page) => page.image || page.notesImage)) {
     entries.push({ name: 'Pictures/image1.png', data: EMBEDDED_IMAGE_PNG })
   }
   return writeZip(entries) as Promise<Uint8Array<ArrayBuffer>>

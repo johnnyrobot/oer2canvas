@@ -308,14 +308,25 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
     }
 
     /*
-     * A slide whose text anydoc never produced in full. The deck says the slide
-     * carries text this HTML does not account for, so something was lost or
-     * reordered, and every later slide's attribution is now a guess. This is
-     * the refusal that makes the walk's promise true — without it, total
-     * content loss (`html: ''` against a fully populated deck) produced a page
-     * of empty sections and NO finding at all.
+     * A slide whose content anydoc never produced in full — text the
+     * accumulation never reached, or a picture the index counted that no block
+     * ever spent. The deck says the slide carries something this HTML does not
+     * account for, so something was lost or reordered, and every later slide's
+     * attribution is now a guess. This is the refusal that makes the walk's
+     * promise true — without it, total content loss (`html: ''` against a
+     * fully populated deck) produced a page of empty sections and NO finding.
+     *
+     * UNSPENT IMAGE BUDGET IS THE SAME KIND OF DISAGREEMENT AS UNMATCHED TEXT,
+     * and is counted here rather than being left to lapse. A slide holding a
+     * budget it never spent will otherwise spend it on the NEXT slide's
+     * picture: measured with a `p:pic` whose `r:embed` names an undefined
+     * relationship — anydoc emits nothing and raises no finding of its own —
+     * slide 1 took slide 2's image, slide 2 shipped holding only its generated
+     * heading, and the only finding was `presentation-untitled-slide`. Refusing
+     * on the unspent budget closes that whole class ("a counted picture anydoc
+     * did not emit") rather than the one trigger that exposed it.
      */
-    if (accumulated !== expected) incomplete.push(slide.number)
+    if (accumulated !== expected || imagesLeft > 0) incomplete.push(slide.number)
 
     const title = slide.title?.trim() || `Slide ${slide.number}`
     if (!slide.title?.trim()) untitled.push(slide.number)
@@ -412,7 +423,7 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
   if (incomplete.length > 0 || orphaned > 0) {
     const problems = [
       incomplete.length > 0
-        ? `${slidesPhrase(incomplete).toLowerCase()} ${incomplete.length === 1 ? 'is' : 'are'} missing text the deck says ${incomplete.length === 1 ? 'it carries' : 'they carry'}`
+        ? `${slidesPhrase(incomplete).toLowerCase()} ${incomplete.length === 1 ? 'is' : 'are'} missing content the deck says ${incomplete.length === 1 ? 'it carries' : 'they carry'}`
         : '',
       orphaned > 0
         ? `${orphaned === 1 ? '1 block of content belongs' : `${orphaned} blocks of content belong`} to no slide`

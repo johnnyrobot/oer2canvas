@@ -338,6 +338,21 @@ function notesBodyText(notesDocument: Document): string | undefined {
   return collapse(paragraphs.join(' ')) || undefined
 }
 
+/**
+ * Whether a `p:pic` will actually become a picture in anydoc's output: its
+ * `p:blipFill` names a blip, either EMBEDDED (`r:embed`, bytes in the package)
+ * or LINKED (`r:link`, a URL). Both were measured emitting an `<img>` — the
+ * linked one alongside an `external-image` warning — and a `p:pic` naming
+ * neither has no image data at all, so counting it would leave the reconciler
+ * holding a budget nothing can spend.
+ */
+function hasRenderablePicture(shape: Element): boolean {
+  const fill = shape.getElementsByTagNameNS(PML_NS, 'blipFill')[0]
+  const blip = fill?.getElementsByTagNameNS(DRAWING_NS, 'blip')[0]
+  return blip !== undefined &&
+    (blip.getAttributeNS(R_NS, 'embed') !== null || blip.getAttributeNS(R_NS, 'link') !== null)
+}
+
 interface ShapeWalkState {
   textRuns: string[]
   title: string | undefined
@@ -433,13 +448,24 @@ function walkShapes(container: Element, state: ShapeWalkState, depth = 0): void 
       continue
     }
     if (shape.namespaceURI === PML_NS && shape.localName === 'pic') {
-      // A picture carrying `a:videoFile` (or `a:audioFile`) is media, which
-      // anydoc drops entirely. A plain picture is an ordinary image and
-      // travels the existing asset path.
+      /*
+       * A picture carrying `a:videoFile` (or `a:audioFile`) is media, which
+       * anydoc drops entirely. A plain picture is an ordinary image and travels
+       * the existing asset path.
+       *
+       * THESE ARE NOT EXCLUSIVE, and treating them as if they were made a deck
+       * with a video unimportable. PowerPoint writes a media `p:pic` with a
+       * POSTER FRAME — the still shown before the video plays — as an ordinary
+       * embedded blip in the same shape's `p:blipFill`, and anydoc emits
+       * `<p><img …></p>` for that poster (measured, real anydoc 0.2.4). So the
+       * shape is BOTH: one media loss to report, and one picture the reconciler
+       * must let its slide claim, or the poster block belongs to nobody and the
+       * whole import refuses.
+       */
       const isMedia = shape.getElementsByTagNameNS(DRAWING_NS, 'videoFile').length > 0 ||
         shape.getElementsByTagNameNS(DRAWING_NS, 'audioFile').length > 0
       if (isMedia) state.unrepresentable.media += 1
-      else state.images += 1
+      if (hasRenderablePicture(shape)) state.images += 1
       continue
     }
     if (shape.namespaceURI === PML_NS && shape.localName === 'grpSp') {

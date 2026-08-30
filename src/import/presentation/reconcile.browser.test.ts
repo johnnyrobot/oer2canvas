@@ -156,3 +156,65 @@ test("one slide's text:h does not demote every slide title on the page", async (
     .toEqual(['Titled', 'Second'])
   expect(result.findings).toEqual([])
 })
+
+test('a deck with a video imports it, poster frame and all', async () => {
+  /*
+   * PowerPoint writes a media `p:pic` with a poster frame, and anydoc emits
+   * that poster as an ordinary picture block. Counting the shape as media alone
+   * left the poster belonging to nobody, and one video anywhere in a lecture
+   * deck refused the whole import.
+   */
+  const { anydocHtml, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', body: ['Body one'], video: true },
+    { title: 'Two', body: ['Body two'] },
+  ]))
+
+  expect(anydocHtml).toContain('<img')
+  const sections = sectionsOf(result.html)
+  expect(sections[0]!.querySelector('img')).not.toBeNull()
+  expect(sections[1]!.querySelector('img')).toBeNull()
+  // The medium itself is still reported lost: the poster is not the video.
+  expect(result.findings.map((finding) => finding.code)).toEqual(['presentation-unrepresentable'])
+  expect(result.findings[0]!.message).toContain('1 media')
+})
+
+test('a counted picture anydoc never emitted refuses rather than taking the next slide\'s', async () => {
+  // A `p:pic` whose `r:embed` names an undefined relationship: anydoc emits
+  // nothing for it and raises no finding, so nothing but the index's own count
+  // knows the picture is missing.
+  const { anydocHtml, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', brokenImage: true },
+    { image: { alt: 'A cell' } },
+    { title: 'Three', body: ['Body three'] },
+  ]))
+
+  expect(anydocHtml.match(/<img/g)).toHaveLength(1)
+  const finding = result.findings.find((entry) => entry.code === 'presentation-unattributed-content')
+  expect(finding?.severity).toBe('blocker')
+  expect(finding?.message).toContain('missing content the deck says')
+})
+
+test.each([
+  ['a titled slide with its own picture', async () => pptxFixture([
+    { title: 'One', body: ['Body one'], image: { alt: 'A cell' } },
+    { title: 'Two', body: ['Body two'] },
+  ])],
+  ['two pictures on one slide', async () => pptxFixture([
+    { title: 'One', image: { alt: 'First' }, secondImage: { alt: 'Second' } },
+  ])],
+  ['consecutive image-only slides', async () => pptxFixture([
+    { title: 'One', body: ['Body one'] },
+    { image: { alt: 'A' } },
+    { image: { alt: 'B' } },
+  ])],
+  ['a grouped picture', async () => pptxFixture([{ title: 'One', group: { image: true } }])],
+  ['a linked picture', async () => pptxFixture([{ title: 'One', linkedImage: true }])],
+] as const)('%s spends its budget and does not refuse', async (_name, fixture) => {
+  // Refusing on an unspent budget is only safe if every ordinary picture shape
+  // actually spends one.
+  const { result } = await reconcileBytes('pptx', await fixture())
+
+  expect(result.findings.map((finding) => finding.code))
+    .not.toContain('presentation-unattributed-content')
+  expect(result.html).toContain('<img')
+})
