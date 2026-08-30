@@ -23,7 +23,7 @@ import { mergeQueues } from './engine/compile/index'
 import { TABLE_REFUSAL } from './engine/compile/steps/tables'
 import type { CompiledChapter, CompiledSection, QueueItem } from './contracts/index'
 import { semanticDocxFixture } from './import/testing/docx-fixture'
-import { pptxFixture } from './import/testing/presentation-fixtures'
+import { pptxFixture, odpFixture } from './import/testing/presentation-fixtures'
 // The screens under audit are styled by App.css — it is what carries the WCAG 2.2
 // SC 2.5.8 target sizes. Imported explicitly rather than relying on `App` pulling
 // it in, so that auditing a component in isolation still sees the real styling.
@@ -284,47 +284,75 @@ test('screen 1c — the document form and its page plan have no accessibility vi
  * the title is an `h2`) — so a screen-reader user can move from slide to slide
  * with heading navigation instead of reading one undifferentiated page.
  *
+ * PPTX AND ODP, both at this same level, not a PPTX-only screen with an ODP
+ * assumption bolted on: `document.ts` routes both formats through the same
+ * `reconcilePresentation`, so a second, whole screen for ODP would duplicate
+ * every assertion below rather than add a new one — `test.each` gets the
+ * identical property checked independently for both formats at the cost of
+ * one parameterised fixture builder, which is the cheap form the brief asked
+ * for. `pptxFixture` and `odpFixture` accept the same `{ title?, body? }`
+ * slide-spec shape, which is what makes one shared test body possible at all.
+ *
  * THREE slides, not two, and the middle one deliberately untitled — the same
- * shape `testing/corpus.ts`'s `pptx-untitled-slide` case uses. A titled slide
- * gets its heading id from anydoc itself (WASM this repo does not control, so
- * mutating it to prove this test catches a regression is not possible from
- * here); an untitled slide's heading id is `reconcile.ts`'s OWN fallback
- * (`id="slide-${slide.number}"`, written only when anydoc produced no id of
- * its own) — a real first-party code path this test CAN and does prove is
- * load-bearing (see the mutation note in the task report). `#slide-N` is
+ * shape `testing/corpus.ts`'s `pptx-untitled-slide` case uses. A titled
+ * slide's heading id comes from anydoc itself (WASM this repo does not
+ * control, so mutating it to prove this test catches a regression is not
+ * possible from here); an untitled slide's heading id is `reconcile.ts`'s OWN
+ * fallback (`id="slide-${slide.number}"`, written only when anydoc produced no
+ * id of its own) — a real first-party code path this test CAN and does prove
+ * is load-bearing (see the mutation note in the task report). `#slide-N` is
  * therefore correct for the untitled slide, but is NOT a general-purpose
  * per-slide anchor: asserting a `slide-` prefix on every heading would wrongly
  * pin a fallback the two ordinarily-titled slides never take. What actually
  * makes a heading a valid in-page target is that it carries SOME id, which is
  * asserted directly below rather than assumed for any particular slide.
  */
-test('screen 1c-deck — an imported deck exposes each slide as a labelled, reachable section', async () => {
-  const { container } = render(<ImportFlow form={(onImported) => <DocumentImporter onImported={onImported} />} />)
+test.each([
+  {
+    format: 'pptx',
+    mediaType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    build: pptxFixture,
+  },
+  {
+    format: 'odp',
+    mediaType: 'application/vnd.oasis.opendocument.presentation',
+    build: odpFixture,
+  },
+] as const)(
+  'screen 1c-deck ($format) — an imported deck exposes each slide as a labelled, reachable section',
+  async ({ format, mediaType, build }) => {
+    const { container } = render(<ImportFlow form={(onImported) => <DocumentImporter onImported={onImported} />} />)
 
-  const file = new File([await pptxFixture([
-    { title: 'Cell structure', body: ['The nucleus stores DNA.'] },
-    { body: ['A slide with only a text box, and so no title placeholder at all.'] },
-    { title: 'Cell function', body: ['Mitochondria produce energy.'] },
-  ])], 'cells.pptx', {
-    type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  })
-  fireEvent.change(screen.getByLabelText('Document file'), { target: { files: [file] } })
-  fireEvent.click(screen.getByRole('radio', { name: 'I created or own this content' }))
-  fireEvent.click(screen.getByRole('checkbox', { name: /I am responsible for rights/i }))
-  fireEvent.click(screen.getByRole('button', { name: 'Inspect document' }))
-  await screen.findByRole('heading', { name: 'Page plan: cells' })
-  fireEvent.click(screen.getByText('Preview cells'))
-  await screen.findByText('Mitochondria produce energy.')
+    const file = new File([await build([
+      { title: 'Cell structure', body: ['The nucleus stores DNA.'] },
+      { body: ['A slide with only a text box, and so no title placeholder at all.'] },
+      { title: 'Cell function', body: ['Mitochondria produce energy.'] },
+    ])], `cells.${format}`, { type: mediaType })
+    fireEvent.change(screen.getByLabelText('Document file'), { target: { files: [file] } })
+    fireEvent.click(screen.getByRole('radio', { name: 'I created or own this content' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /I am responsible for rights/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect document' }))
+    await screen.findByRole('heading', { name: 'Page plan: cells' })
+    fireEvent.click(screen.getByText('Preview cells'))
+    await screen.findByText('Mitochondria produce energy.')
 
-  const headings = [...container.querySelectorAll('section[data-slide] > h2')]
-  // Slide 2's own title is empty, so `reconcile.ts` names it by number — the
-  // same "Slide 2" text `pptx-untitled-slide` measures in `testing/corpus.ts`.
-  expect(headings.map((heading) => heading.textContent)).toEqual(['Cell structure', 'Slide 2', 'Cell function'])
-  expect(headings.every((heading) => heading.id.length > 0)).toBe(true)
+    const sections = [...container.querySelectorAll('section[data-slide]')]
+    const headings = [...container.querySelectorAll('section[data-slide] > h2')]
+    // EVERY section, not just however many headings happen to exist: a
+    // regression that emitted a fourth `section[data-slide]` with no heading
+    // at all would still pass a length-3 check on `headings` alone. Equal
+    // lengths is what actually proves "each section carries A heading" rather
+    // than "these particular headings exist somewhere among the sections."
+    expect(sections).toHaveLength(headings.length)
+    // Slide 2's own title is empty, so `reconcile.ts` names it by number — the
+    // same "Slide 2" text `pptx-untitled-slide` measures in `testing/corpus.ts`.
+    expect(headings.map((heading) => heading.textContent)).toEqual(['Cell structure', 'Slide 2', 'Cell function'])
+    expect(headings.every((heading) => heading.id.length > 0)).toBe(true)
 
-  expect(await violationsIn(container)).toEqual([])
-  expect(duplicateIds(container)).toEqual([])
-})
+    expect(await violationsIn(container)).toEqual([])
+    expect(duplicateIds(container)).toEqual([])
+  },
+)
 
 /**
  * Issue 12 added the Web page tab and no accessibility screen for it — this

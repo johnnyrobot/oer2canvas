@@ -49,11 +49,14 @@ const utf8 = (value: string) => new TextEncoder().encode(value)
  * `expectInHtml`: an importer that silently dropped the finding a construct
  * is supposed to raise would still pass a check that only looked at the html.
  *
- * `pptx-packaged-image` is the eighth PPTX case, and it is placed FIRST
- * among them rather than after `pptx-semantic` for a reason specific to
+ * `pptx-packaged-image` is the SEVENTH pptx case (there are seven
+ * `format: 'pptx'` cases in this file; `odp-speaker-notes` below is ODP, not
+ * PPTX), and `odp-packaged-image` is one of THREE `format: 'odp'` cases. Both
+ * are placed FIRST among their format's cases rather than after
+ * `pptx-semantic`/`odp-semantic`, for a reason specific to
  * `cartridge-artifact.browser.test.ts`: that suite runs the real export
  * pipeline and a real `unzip` against only the FIRST case per format, so a
- * described image has to lead the PPTX cases for the real
+ * described image has to lead each format's cases for the real
  * parse-compile-cartridge-zip path to ever package a slide's own picture, not
  * merely the synthetic asset `engine/export/cartridge.test.ts` already
  * unit-tests. See that suite's own module comment for the full reasoning.
@@ -264,7 +267,15 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     format: 'pptx',
     standsInFor: 'A deck with a described image, proving slide media packages into web_resources like every other format — exercised end to end (real parse, real compile, real cartridge, real unzip) rather than only at the unit level `cartridge.test.ts` already covers with a synthetic asset.',
     bytes: () => pptxFixture([{ title: 'Diagram slide', image: { alt: 'A labelled chloroplast' } }]),
-    expectInHtml: ['Diagram slide', '<img'],
+    // `<img` alone would also pass for an UNpackaged reference (a raw
+    // openstax.org-style URL); `$IMS-CC-FILEBASE$/oer2canvas/` (`FILEBASE` in
+    // `import/assets.ts`) is the token `prepareAssets` writes only once a
+    // picture has actually been packaged, so its presence is what actually
+    // proves this. The alt text is pinned too: it is what carries the image
+    // past the accessibility audit's decorative/alt gate into the cartridge
+    // at all — an image `expectInHtml` proved present but whose alt silently
+    // regressed to empty would still block the audit, not merely look wrong.
+    expectInHtml: ['Diagram slide', '<img', '$IMS-CC-FILEBASE$/oer2canvas/', 'A labelled chloroplast'],
   },
   {
     id: 'pptx-semantic',
@@ -363,6 +374,26 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     // imported html would mean the macro's own bytes reached a published
     // page rather than merely being carried, unread, inside the zip.
     expectNotInHtml: ['macro payload placeholder'],
+  },
+  {
+    /*
+     * Placed BEFORE `odp-semantic` deliberately, mirroring
+     * `pptx-packaged-image`'s placement ahead of `pptx-semantic` above and for
+     * the identical reason: `cartridge-artifact.browser.test.ts` takes only
+     * the FIRST case per format, and ODP needs its own described-image case
+     * leading its cases for that suite's real export-and-`unzip` path to ever
+     * package an ODP slide's own picture.
+     */
+    id: 'odp-packaged-image',
+    format: 'odp',
+    standsInFor: 'The same described-image property as pptx-packaged-image, carried through ODF\'s own `draw:frame`/`draw:image` picture shape instead of a PPTX `p:pic` — proving the SAME shared reconciler and asset-packaging path that pptx-packaged-image exercises also holds for the ODP import path, independently rather than assumed from the PPTX case.',
+    bytes: () => odpFixture([{ title: 'Diagram slide', image: { alt: 'A labelled chloroplast' } }]),
+    // Same three-part proof as `pptx-packaged-image`: the image survived
+    // (`<img`), it is a PACKAGED reference rather than an unpackaged one
+    // (`$IMS-CC-FILEBASE$/oer2canvas/`, `FILEBASE` in `import/assets.ts`), and
+    // its alt text survived (the text that carries it past the accessibility
+    // audit's decorative/alt gate into the cartridge at all).
+    expectInHtml: ['Diagram slide', '<img', '$IMS-CC-FILEBASE$/oer2canvas/', 'A labelled chloroplast'],
   },
   {
     id: 'odp-semantic',
