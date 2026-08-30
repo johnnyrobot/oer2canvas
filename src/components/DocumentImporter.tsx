@@ -113,7 +113,18 @@ export function DocumentImporter({ onImported }: { onImported: (result: ImportRe
         </span>
         {selectedCapability && (
           <p id="document-file-limitations" className="mt-2 text-sm text-neutral-700 dark:text-neutral-300">
-            <strong>{selectedCapability.label} limitation:</strong>{' '}
+            {/*
+              * "limitation" is the wrong word for a format this release cannot
+              * import at all — issue 16 parked four spreadsheet formats as
+              * `probe-only`, and a user who force-selects one past the picker's
+              * `accept` deserves to read that it is unavailable BEFORE they
+              * submit and meet a generic refusal. The limitation strings
+              * themselves say why; this only labels them truthfully.
+              */}
+            <strong>
+              {selectedCapability.label}
+              {selectedCapability.status === 'enabled' ? ' limitation' : ' is not available in this release'}:
+            </strong>{' '}
             {selectedCapability.limitations.join(' ')}
           </p>
         )}

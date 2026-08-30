@@ -1,6 +1,6 @@
 # Document import map
 
-**Frontier:** 16 — Decide spreadsheet imports.
+**Frontier:** none — 01 through 17 are all resolved. What remains is carried-forward debt with no issue of its own, below.
 
 | Issue | Status | Blocked by |
 | --- | --- | --- |
@@ -19,7 +19,7 @@
 | [13 — Release core document importer](issues/13-release-core-document-importer.md) | resolved | 09, 10, 11, 12 |
 | [14 — Graduate presentations](issues/14-graduate-presentations.md) | resolved (PPTX and ODP enabled) | 04, 09, 10 |
 | [15 — Evaluate legacy DOC/PPT](issues/15-evaluate-legacy-doc-ppt.md) | resolved (DOC and PPT both disabled) | 13, 14 |
-| [16 — Decide spreadsheet imports](issues/16-decide-spreadsheet-imports.md) | ready-for-agent | 13 |
+| [16 — Decide spreadsheet imports](issues/16-decide-spreadsheet-imports.md) | resolved (all four formats disabled) | 13 |
 | [17 — Extract web articles self-hosted](issues/17-extract-web-articles-self-hosted.md) | resolved | 12 |
 
 **Carried forward from 14, with no issue of its own yet.** A deck refused for an unpackageable
