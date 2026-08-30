@@ -15,6 +15,8 @@ import type {
 } from '../parsers/probe'
 import { normalizeAnyDocDocument } from '../parsers/anydoc-html'
 import { prepareAssets } from '../assets'
+import { readZipParts } from '../zip-read'
+import { wantedPresentationPart } from '../presentation/parts'
 
 const ANYDOC_VERSION = '0.2.4'
 const workerScope = self as DedicatedWorkerGlobalScope
@@ -59,7 +61,7 @@ function failure(error: unknown): { code: ParserProbeFailureCode; message: strin
     ? 'needs-ocr'
     : rawCode === 'resourceLimit'
       ? 'resource-limit'
-      : rawCode === 'unsupported' || rawCode === 'unsupported-version' || rawCode === 'malformed' || rawCode === 'encrypted'
+      : rawCode === 'unsupported' || rawCode === 'unsupported-version' || rawCode === 'malformed' || rawCode === 'encrypted' || rawCode === 'resource-limit'
         ? rawCode
         : 'parse-failed'
   const message = typeof candidate?.message === 'string' && candidate.message.trim()
@@ -115,6 +117,18 @@ workerScope.addEventListener('message', (event: MessageEvent<ParserProbeRequest>
         (largest, asset) => Math.max(largest, asset.data.byteLength),
         0,
       )
+
+      // The deck's own account of itself, alongside anydoc's. A failure to read it
+      // is NOT fatal here: the main thread decides what an unreadable package means,
+      // and `document.ts` refuses a presentation with no index rather than the
+      // Worker deciding for every format at once.
+      let presentation: { kind: 'pptx' | 'odp'; parts: Record<string, string> } | undefined
+      if (detectedFormat === 'pptx' || detectedFormat === 'odp') {
+        const kind = detectedFormat
+        const parts = await readZipParts(bytes, (path) => wantedPresentationPart(kind, path))
+        presentation = { kind, parts: Object.fromEntries(parts) }
+      }
+
       send({
         kind: 'result',
         requestId: request.requestId,
@@ -135,6 +149,7 @@ workerScope.addEventListener('message', (event: MessageEvent<ParserProbeRequest>
             detectedFormat ?? 'document',
             await prepareAssets(document.assets),
           ),
+          presentation,
         },
       })
     } catch (error) {

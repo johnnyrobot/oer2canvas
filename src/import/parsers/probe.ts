@@ -126,6 +126,12 @@ export interface ParserProbeResult {
   layoutComplex?: boolean
   hasEncodingIssues?: boolean
   normalized?: ParserProbeNormalizedContent
+  /**
+   * Presentations only. The deck's own XML parts, inflated in the Worker because
+   * that is where the transferred bytes live, and parsed on the main thread
+   * because that is where `DOMParser` lives. Keys are package paths.
+   */
+  presentation?: { kind: 'pptx' | 'odp'; parts: Record<string, string> }
   /** PDF only. The module's classification, before any extraction happened. */
   detection?: ParserDetection
   /**
