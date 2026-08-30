@@ -355,6 +355,7 @@ test('a deck carrying a path-traversal entry is refused outright, not quietly in
   )).rejects.toMatchObject({
     name: 'ParserProbeError',
     code: 'malformed',
+    retryable: true,
     message: expect.stringMatching(/path escapes the package \(\.\.\/evil\.xml\)/),
   })
 })

@@ -30,7 +30,13 @@ test('refuses a package with more entries than the ceiling', async () => {
     { length: PRESENTATION_PACKAGE_LIMITS.maximumPackageEntries + 1 },
     (_unused, index) => ({ name: `part${index}.xml`, data: utf8('<x/>') }),
   )
-  const bytes = await writeZip(entries)
+  // The ceiling is read from the EOCD record's entry count before any
+  // central-directory walk or inflation runs, so the compression method is
+  // irrelevant to what this test exercises. `compress: false` skips a
+  // `CompressionStream` round trip per entry for a 4-byte payload that gains
+  // nothing from deflating anyway — measured ~270ms with compression versus
+  // ~43ms without, on 4,097 entries.
+  const bytes = await writeZip(entries, { compress: false })
 
   await expect(readZipParts(bytes, () => true)).rejects.toMatchObject({
     name: 'ZipReadError',
