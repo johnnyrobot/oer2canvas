@@ -11,6 +11,20 @@ const xmlEscape = (value: string) =>
 const EMBEDDED_IMAGE_PNG = RASTER_FIXTURES.png.bytes
 
 /**
+ * A minimal EMF header — record type 1, and the ` EMF` signature at byte 40.
+ * `prepareAssets` sniffs magic bytes and packages PNG, JPEG, GIF and WebP only,
+ * so these bytes are a picture the importer cannot package: exactly what
+ * PowerPoint writes for a pasted chart or legacy clip art.
+ */
+const EMF_BYTES = (() => {
+  const bytes = new Uint8Array(88)
+  bytes[0] = 1
+  bytes[4] = 88
+  bytes.set([0x20, 0x45, 0x4d, 0x46], 40)
+  return bytes
+})()
+
+/**
  * One paragraph segment: a run's text, `{ break: true }` for an `a:br` soft
  * line break (Shift+Enter) — still inside the SAME paragraph, not a new
  * one — or `{ indent: true }` for raw whitespace text a formatter, repair
@@ -96,6 +110,27 @@ export interface PptxSlideSpec {
    * unspent image budget has to be a disagreement rather than a silence.
    */
   brokenImage?: boolean
+  /**
+   * A picture whose bytes are an EMF — what PowerPoint writes for a pasted
+   * chart, a Visio drawing, or legacy clip art. `prepareAssets` sniffs magic
+   * bytes and packages only PNG/JPEG/GIF/WebP, so this one cannot be packaged,
+   * and `anydoc-html.ts` renders it as an `[Embedded image]` placeholder span
+   * (and raises its own `embedded-content` blocker for it).
+   */
+  unpackageableImage?: boolean
+  /**
+   * An `mc:AlternateContent` whose two branches carry DIFFERENT TEXT, so a
+   * test can say which branch was read. Measured: anydoc renders the
+   * `mc:Fallback`.
+   */
+  alternateContentText?: { choice: string; fallback: string }
+  /**
+   * `mc:AlternateContent` as PowerPoint writes an INK ANNOTATION: the
+   * `mc:Choice` is a `p14:contentPart` anydoc cannot render, and the
+   * `mc:Fallback` is an ordinary embedded `p:pic`. Reading the Choice branch
+   * meant the index saw no picture at all while anydoc emitted one.
+   */
+  inkInAlternateContent?: boolean
   /** Content anydoc drops entirely — design fact 6. */
   diagram?: boolean
   chart?: boolean
@@ -247,6 +282,40 @@ function alternateContentDiagram(): string {
 }
 
 /**
+ * `mc:AlternateContent` with a different TEXT SHAPE in each branch — the
+ * simplest possible probe for which branch a reader takes, and the one that
+ * measured anydoc rendering the `mc:Fallback`.
+ */
+function alternateContentTextShapes({ choice, fallback }: { choice: string; fallback: string }): string {
+  return `<mc:AlternateContent xmlns:mc="${MC_NS}">` +
+    `<mc:Choice xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main" Requires="p14">` +
+    textShape(13, 'AC Choice Text 13', [choice], '') +
+    `</mc:Choice><mc:Fallback>` +
+    textShape(14, 'AC Fallback Text 14', [fallback], '') +
+    `</mc:Fallback></mc:AlternateContent>`
+}
+
+/**
+ * `mc:AlternateContent` as PowerPoint writes an ink annotation: a
+ * `p14:contentPart` in the `mc:Choice` and an ordinary embedded picture in the
+ * `mc:Fallback`. anydoc renders the picture; a reader preferring the Choice
+ * sees no picture at all.
+ */
+function alternateContentInk(): string {
+  return `<mc:AlternateContent xmlns:mc="${MC_NS}">` +
+    `<mc:Choice xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main" Requires="p14">` +
+    `<p14:contentPart xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ` +
+    `p14:bwMode="auto" r:id="rIdInk"><p14:nvContentPartPr><p14:cNvPr id="15" name="Ink 15"/>` +
+    `<p14:cNvContentPartPr/><p14:nvPr/></p14:nvContentPartPr></p14:contentPart>` +
+    `</mc:Choice><mc:Fallback>` +
+    `<p:pic><p:nvPicPr><p:cNvPr id="16" name="Ink Fallback 16" descr="Ink annotation"/>` +
+    `<p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+    `<p:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+    `<p:spPr/></p:pic>` +
+    `</mc:Fallback></mc:AlternateContent>`
+}
+
+/**
  * The `idx` a type-less title placeholder would carry. A slide layout writes
  * its title placeholder as `<p:ph type="title"/>` with `idx` OMITTED, and
  * ECMA-376's schema default for `CT_Placeholder/@idx` is 0 — so 0 is the only
@@ -316,6 +385,12 @@ function slideXml(spec: PptxSlideSpec): string {
       `<p:blipFill><a:blip r:link="rIdLinkedImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
       `<p:spPr/></p:pic>`
     : ''
+  const unpackageableImage = spec.unpackageableImage
+    ? `<p:pic><p:nvPicPr><p:cNvPr id="12" name="Pasted Chart 12" descr="A pasted chart"/>` +
+      `<p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+      `<p:blipFill><a:blip r:embed="rIdEmf"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+      `<p:spPr/></p:pic>`
+    : ''
   const brokenImage = spec.brokenImage
     ? `<p:pic><p:nvPicPr><p:cNvPr id="11" name="Broken Picture 11"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
       `<p:blipFill><a:blip r:embed="rIdMissingImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
@@ -331,10 +406,12 @@ function slideXml(spec: PptxSlideSpec): string {
     : ''
 
   const group = spec.group ? groupShape(spec.group) : ''
-  const alternateContent = spec.diagramInAlternateContent ? alternateContentDiagram() : ''
+  const alternateContent = (spec.diagramInAlternateContent ? alternateContentDiagram() : '') +
+    (spec.alternateContentText ? alternateContentTextShapes(spec.alternateContentText) : '') +
+    (spec.inkInAlternateContent ? alternateContentInk() : '')
   const nested = spec.nestedGroupDepth ? nestedGroups(spec.nestedGroupDepth) : ''
 
-  const pictures = `${image}${secondImage}${linkedImage}${brokenImage}`
+  const pictures = `${image}${secondImage}${linkedImage}${brokenImage}${unpackageableImage}`
   const shapes = spec.titleLast
     ? `${body}${pictures}${diagram}${chart}${video}${table}${group}${alternateContent}${nested}${title}`
     : `${title}${body}${pictures}${diagram}${chart}${video}${table}${group}${alternateContent}${nested}`
@@ -433,6 +510,7 @@ export async function pptxFixture(
       `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
       `<Default Extension="xml" ContentType="application/xml"/>` +
       `<Default Extension="png" ContentType="image/png"/>` +
+      `<Default Extension="emf" ContentType="image/x-emf"/>` +
       `<Default Extension="bin" ContentType="application/vnd.ms-office.vbaProject"/>` +
       `<Override PartName="/ppt/presentation.xml" ContentType="${PPTX_CONTENT_TYPES[container]}"/>` +
       `${overrides}${notesOverrides}</Types>`) },
@@ -466,7 +544,10 @@ export async function pptxFixture(
     // One `rIdImage` relationship serves every embedded picture on the slide,
     // including a video's poster frame and a grouped picture — exactly as
     // PowerPoint reuses one relationship for one media part.
-    if (slide.image || slide.secondImage || slide.video || slide.group?.image) {
+    if (slide.unpackageableImage) {
+      rels.push('<Relationship Id="rIdEmf" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image2.emf"/>')
+    }
+    if (slide.image || slide.secondImage || slide.video || slide.group?.image || slide.inkInAlternateContent) {
       rels.push('<Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>')
     }
     if (slide.linkedImage) {
@@ -479,8 +560,12 @@ export async function pptxFixture(
     }
   })
 
-  if (slides.some((slide) => slide.image || slide.secondImage || slide.video || slide.group?.image)) {
+  if (slides.some((slide) => slide.image || slide.secondImage || slide.video || slide.group?.image ||
+    slide.inkInAlternateContent)) {
     entries.push({ name: 'ppt/media/image1.png', data: EMBEDDED_IMAGE_PNG })
+  }
+  if (slides.some((slide) => slide.unpackageableImage)) {
+    entries.push({ name: 'ppt/media/image2.emf', data: EMF_BYTES })
   }
   if (withMacroPart) {
     // Deliberately not valid VBA. Its only job is to exist, so a test can prove
@@ -565,6 +650,19 @@ export interface OdpPageSpec {
   /** Emit the title frame LAST in the page — ODP's form of design fact 4. */
   titleLast?: boolean
   image?: { alt?: string }
+  /**
+   * A `draw:plugin` carrying a media mime type — the shape Impress writes for
+   * an inserted video — optionally with a `draw:image` POSTER in the same
+   * frame. anydoc emits nothing for the plugin and an ordinary picture for the
+   * poster, so without counting the plugin a video imports as a still with
+   * nothing saying a video was ever there.
+   */
+  video?: { poster?: boolean }
+  /**
+   * The `text:outline-level` of `headingText`. Level 2 makes anydoc emit an
+   * `<h2>`, which would otherwise ship as a SIBLING of the slide title.
+   */
+  headingLevel?: number
   /**
    * A `draw:image` INSIDE `presentation:notes`. anydoc publishes nothing from
    * the notes, so a picture in there is not a picture on the slide, and
@@ -706,11 +804,25 @@ function odpTable(name: string): string {
 }
 
 /** A `text:h` heading paragraph — see `headingText` on `OdpPageSpec`. */
-function odpHeading(text: string): string {
+function odpHeading(text: string, level = 1): string {
   // `text:outline-level="1"` is the top level a presentation body uses;
-  // anydoc's heading level is not this fixture's concern, only that a
-  // `text:h` exists for the index to find.
-  return `<text:h text:outline-level="1">${xmlEscape(text)}</text:h>`
+  // level 2 is what makes anydoc emit an `h2`, the level a slide title itself
+  // occupies.
+  return `<text:h text:outline-level="${level}">${xmlEscape(text)}</text:h>`
+}
+
+/**
+ * A `draw:frame` holding a `draw:plugin` with a media mime type — Impress's
+ * inserted video — and optionally a `draw:image` poster in the same frame.
+ */
+function odpMedia(name: string, poster: boolean | undefined): string {
+  return `<draw:frame draw:name="${name}" svg:width="8cm" svg:height="5cm" svg:x="2cm" svg:y="6cm">` +
+    `<draw:plugin xlink:href="Media/media1.mp4" xlink:type="simple" xlink:show="embed" ` +
+    `xlink:actuate="onLoad" draw:mime-type="application/vnd.sun.star.media"/>` +
+    (poster
+      ? `<draw:image xlink:href="Pictures/image1.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>`
+      : '') +
+    `</draw:frame>`
 }
 
 /**
@@ -739,7 +851,7 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
       : odpFrame(`Title ${index + 1}`, 'title', `<text:p>${xmlEscape(page.title)}</text:p>`)
     const outlineContent = `${odpParagraphsXml(page)}${page.bulletList ? odpBulletListXml(page.bulletList) : ''}` +
       (page.nestedSpanDepth ? odpNestedSpans(page.nestedSpanDepth, 'Deeply nested') : '') +
-      (page.headingText ? odpHeading(page.headingText) : '')
+      (page.headingText ? odpHeading(page.headingText, page.headingLevel) : '')
     const outline = outlineContent ? odpFrame(`Body ${index + 1}`, 'outline', outlineContent) : ''
     const image = page.image
       ? `<draw:frame draw:name="Diagram ${index + 1}" svg:width="1cm" svg:height="1cm">` +
@@ -752,6 +864,7 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
       ? odpGroup(`Group ${index + 1}`, odpCustomShape(`Grouped Custom Shape ${index + 1}`, page.groupedCustomShapeText))
       : ''
     const table = page.table ? odpTable(`Table ${index + 1}`) : ''
+    const media = page.video ? odpMedia(`Video ${index + 1}`, page.video.poster) : ''
     const nestedFrame = page.nestedFrameText
       ? odpNestedFrame(`Outer Frame ${index + 1}`, `Inner Frame ${index + 1}`, page.nestedFrameText)
       : ''
@@ -761,7 +874,7 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
       : ''
     // A direct child of draw:page, the same level presentation:notes sits at.
     const comment = page.commentText ? odpAnnotation(`Comment ${index + 1}`, page.commentText) : ''
-    const extras = `${customShape}${groupedCustomShape}${nestedFrame}${table}`
+    const extras = `${customShape}${groupedCustomShape}${nestedFrame}${table}${media}`
     const frames = page.titleLast ? `${outline}${image}${extras}${title}` : `${title}${outline}${image}${extras}`
     return `<draw:page draw:name="Slide ${index + 1}" draw:master-page-name="Default">${frames}${notes}${comment}</draw:page>`
   }).join('')
@@ -778,13 +891,13 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
       `<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">` +
       `<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.presentation"/>` +
       `<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>` +
-      (pages.some((page) => page.image || page.notesImage)
+      (pages.some((page) => page.image || page.notesImage || page.video?.poster)
         ? `<manifest:file-entry manifest:full-path="Pictures/image1.png" manifest:media-type="image/png"/>`
         : '') +
       `</manifest:manifest>`) },
     { name: 'content.xml', data: utf8(content) },
   ]
-  if (pages.some((page) => page.image || page.notesImage)) {
+  if (pages.some((page) => page.image || page.notesImage || page.video?.poster)) {
     entries.push({ name: 'Pictures/image1.png', data: EMBEDDED_IMAGE_PNG })
   }
   return writeZip(entries) as Promise<Uint8Array<ArrayBuffer>>

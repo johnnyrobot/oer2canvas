@@ -473,10 +473,29 @@ function walkShapes(container: Element, state: ShapeWalkState, depth = 0): void 
       continue
     }
     if (shape.namespaceURI === MC_NS && shape.localName === 'AlternateContent') {
+      /*
+       * READ THE `mc:Fallback`, NOT THE `mc:Choice` — because that is the
+       * branch ANYDOC renders, and matching anydoc is the rule this module
+       * runs on. MEASURED with real anydoc 0.2.4:
+       * `<mc:Choice>CHOICE TEXT</mc:Choice><mc:Fallback>FALLBACK TEXT</mc:Fallback>`
+       * comes out as `<p>FALLBACK TEXT</p>`.
+       *
+       * An earlier version preferred `mc:Choice`, reasoning from the OOXML
+       * spec's intent (a consumer that understands the `Requires` namespace
+       * takes the Choice). anydoc does not, and for TEXT the disagreement was
+       * invisible because the prefix walk refuses on it — but for a PICTURE it
+       * went silent: PowerPoint writes an ink annotation as a `p14:contentPart`
+       * Choice with an ordinary `p:pic` Fallback, so the index saw no picture
+       * at all while anydoc emitted one, and that picture was published under
+       * the NEXT slide's heading with no finding.
+       *
+       * `mc:Choice` is still read when there is no `mc:Fallback`, which is a
+       * legal shape: nothing is better than nothing.
+       */
       const children = [...shape.children]
       const choice = children.find((child) => child.namespaceURI === MC_NS && child.localName === 'Choice')
       const fallback = children.find((child) => child.namespaceURI === MC_NS && child.localName === 'Fallback')
-      const chosen = choice ?? fallback
+      const chosen = fallback ?? choice
       if (chosen) walkShapes(chosen, state, depth + 1)
       continue
     }
@@ -622,6 +641,18 @@ function documentOrder(a: Element, b: Element): number {
   return 0
 }
 
+/**
+ * A `draw:mime-type` naming audio or video. `application/vnd.sun.star.media`
+ * is the one LibreOffice writes for its own media player object; a converter
+ * writes the concrete type (`video/mp4`, `audio/mpeg`) instead, so both forms
+ * are recognised rather than only the one Impress happens to use.
+ */
+function isOdfMediaMime(mimeType: string | null): boolean {
+  if (!mimeType) return false
+  return mimeType.startsWith('video/') || mimeType.startsWith('audio/') ||
+    mimeType === 'application/vnd.sun.star.media'
+}
+
 function odpIndex(parts: Record<string, string>): PresentationIndex {
   const content = parts['content.xml']
   if (!content) {
@@ -736,11 +767,31 @@ function odpIndex(parts: Record<string, string>): PresentationIndex {
         .filter((image) => !excludedRoots.some((root) => root.contains(image)))
         .length,
       titleOutOfOrder: false,
-      // ODF carries charts and media as embedded objects rather than as the
-      // distinct frame kinds PPTX uses. Nothing in the corpus exercises one
-      // yet, so nothing is claimed: this reports zero rather than guessing, and
-      // Task 12's verdict records it as a known limit of the ODP evidence.
-      unrepresentable: { diagrams: 0, charts: 0, media: 0 },
+      /*
+       * ODF carries a chart or a diagram as an embedded OBJECT rather than as
+       * the distinct frame kinds PPTX uses, and nothing in the corpus
+       * exercises one yet, so those two still report zero rather than guess.
+       *
+       * MEDIA is no longer among them. Impress writes an inserted video as a
+       * `draw:plugin` carrying a media mime type, optionally with a
+       * `draw:image` poster in the same frame, and measured against real
+       * anydoc BOTH shapes are silent: with a poster the deck imports as an
+       * ordinary picture with nothing saying a video was ever there — the
+       * worse case, since the reader sees a still and has no reason to
+       * suspect otherwise — and without one it vanishes entirely. Reporting
+       * nothing is not the same as declining to guess.
+       */
+      unrepresentable: {
+        diagrams: 0,
+        charts: 0,
+        media: [
+          ...page.getElementsByTagNameNS(ODF_DRAW_NS, 'plugin'),
+          ...page.getElementsByTagNameNS(ODF_DRAW_NS, 'object'),
+        ]
+          .filter((element) => !excludedRoots.some((root) => root.contains(element)))
+          .filter((element) => isOdfMediaMime(element.getAttributeNS(ODF_DRAW_NS, 'mime-type')))
+          .length,
+      },
     }
   })
 

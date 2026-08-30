@@ -104,15 +104,64 @@ test('shapes nested in a group are visited: diagram and video counted, grouped t
   expect(index.slides[0]!.textRuns).toEqual(['Cellular respiration', 'Overview', 'Grouped caption'])
 })
 
-test('a diagram inside mc:AlternateContent is counted exactly once, from mc:Choice not mc:Fallback (fix-review Important 3)', async () => {
-  // The fixture's `mc:Fallback` branch holds a CHART rather than a second
-  // diagram, so a reader that (wrongly) walked both branches would be caught
-  // by a phantom chart count rather than an indistinguishable doubled count.
+test('content inside mc:AlternateContent is counted exactly once, from the branch anydoc renders', async () => {
+  // ONE branch, never both: the fixture's `mc:Fallback` holds a CHART where its
+  // `mc:Choice` holds a diagram, so a reader that walked both would be caught by
+  // a phantom count rather than by an indistinguishable doubled one. The branch
+  // read is the FALLBACK — see the test below for the measurement that settles
+  // which one anydoc renders.
   const index = await indexOf(await pptxFixture([
     { title: 'Newer PowerPoint construct', diagramInAlternateContent: true },
   ]))
 
-  expect(index.slides[0]!.unrepresentable).toEqual({ diagrams: 1, charts: 0, media: 0 })
+  expect(index.slides[0]!.unrepresentable).toEqual({ diagrams: 0, charts: 1, media: 0 })
+})
+
+test('mc:AlternateContent is read from the Fallback branch, because that is what anydoc renders', async () => {
+  /*
+   * MEASURED with real anydoc 0.2.4:
+   * `<mc:Choice>CHOICE TEXT</mc:Choice><mc:Fallback>FALLBACK TEXT</mc:Fallback>`
+   * comes out as `<p>FALLBACK TEXT</p>`. Preferring the Choice — which is what
+   * the OOXML spec's intent suggests, and what an earlier version did — made
+   * the index disagree with the page for text (a self-refusal) and go SILENT
+   * for pictures: PowerPoint writes an ink annotation as a `p14:contentPart`
+   * Choice with an ordinary `p:pic` Fallback, so the index saw no picture while
+   * anydoc emitted one.
+   */
+  const index = await indexOf(await pptxFixture([
+    { title: 'One', alternateContentText: { choice: 'CHOICE TEXT', fallback: 'FALLBACK TEXT' } },
+  ]))
+
+  expect(index.slides[0]!.textRuns).toEqual(['One', 'FALLBACK TEXT'])
+})
+
+test("an ink annotation's fallback picture is counted, so the page's own image is not orphaned", async () => {
+  const index = await indexOf(await pptxFixture([
+    { title: 'One', inkInAlternateContent: true },
+  ]))
+
+  expect(index.slides[0]!.images).toBe(1)
+})
+
+test('an odp draw:plugin carrying media is reported lost, with or without a poster frame', async () => {
+  /*
+   * MEASURED: Impress writes an inserted video as a `draw:plugin` with a media
+   * mime type, and anydoc emits nothing for it. WITH a poster the deck imports
+   * as an ordinary picture and nothing says a video was ever there — the worse
+   * case, because the reader sees a still and has no reason to suspect
+   * otherwise; WITHOUT one it vanishes entirely.
+   */
+  const withPoster = await odpIndexOf(await odpFixture([
+    { title: 'One', body: ['Body one'], video: { poster: true } },
+  ]))
+  expect(withPoster.slides[0]!.unrepresentable.media).toBe(1)
+  expect(withPoster.slides[0]!.images).toBe(1)
+
+  const withoutPoster = await odpIndexOf(await odpFixture([
+    { title: 'One', body: ['Body one'], video: {} },
+  ]))
+  expect(withoutPoster.slides[0]!.unrepresentable.media).toBe(1)
+  expect(withoutPoster.slides[0]!.images).toBe(0)
 })
 
 test('a run split mid-word AND a soft line break in the same paragraph are both handled correctly (fix-review round-2 Important A)', async () => {

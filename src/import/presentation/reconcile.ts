@@ -37,8 +37,9 @@ import type { PresentationIndex, PresentationSlideIndex } from './index'
  *
  * Output is one `<section data-slide="N">` per slide. `section` and `data-*` are
  * both already on the Canvas allowlist (`engine/allowlist.ts`). Slide titles stay
- * at the `h2` anydoc already emits for them, and an `h1` anydoc emits of its own
- * for an ODP `text:h` body heading (measured) is DEMOTED TO `h3` — see the
+ * at the `h2` anydoc already emits for them, and a body heading anydoc emits of
+ * its own for an ODP `text:h` — `<h1>` at outline level 1, `<h2>` at level 2,
+ * both measured — is DEMOTED TO `h3` beneath its slide's title. See the
  * demotion below for why that is this module's business rather than the
  * allowlist's.
  *
@@ -102,29 +103,48 @@ const SOFT_BREAK_TEXT = ' '
 
 const HEADING_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
 
+/**
+ * The placeholder THIS REPO'S OWN normalizer puts in place of a picture it
+ * could not package — `<span>[Embedded image: alt]</span>` from
+ * `parsers/anydoc-html.ts`. PowerPoint writes an EMF for a pasted chart, a
+ * Visio drawing or legacy clip art, and `prepareAssets` packages only
+ * PNG/JPEG/GIF/WebP, so this is ordinary content in real teaching decks.
+ *
+ * It is a PICTURE for attribution purposes, not stray text: the slide the
+ * index counted that picture on is the slide it belongs to. Treating its text
+ * as content instead made it unattributable, and one unpackageable image
+ * refused the whole deck — on top of the `embedded-content` blocker
+ * `anydoc-html.ts` already raises for it, which is the finding that actually
+ * tells the author what to do.
+ */
+const IMAGE_PLACEHOLDER_TEXT = /^\[Embedded image(?::[^\]]*)?\]$/
+
 /** The open tag of a heading block, for inserting the slide's id into it. */
 const HEADING_OPEN_TAG = /^<h[1-6](?=[\s/>])/i
 
-const H1_OPEN_TAG = /^<h1(?=[\s/>])/i
-const H1_CLOSE_TAG = /<\/h1>$/i
+const OUTRANKING_HEADING_OPEN_TAG = /^<h[12](?=[\s/>])/i
+const OUTRANKING_HEADING_CLOSE_TAG = /<\/h[12]>$/i
 
 /**
- * An `h1` anydoc emitted INSIDE a slide becomes an `h3`. anydoc emits one for
- * an ODP `text:h` body heading (measured), and such a heading is content
- * subordinate to the slide's own `h2` title, so `h3` is the level that says
- * what it is.
+ * A heading anydoc emitted INSIDE a slide that would outrank or tie the
+ * slide's own `h2` title becomes an `h3`. Both levels were measured on
+ * ordinary Impress content: an ODP `text:h` at outline level 1 comes out as
+ * `<h1>`, and at level 2 as `<h2>`. Either way the heading is content
+ * SUBORDINATE to the slide it sits on, so `h3` is the level that says what it
+ * is. Level 3 and deeper already nest correctly and are left alone.
  *
- * This is not something to hand downstream. `engine/allowlist.ts` turns on
- * `shiftHeadings` whenever any content `h1` is present and demotes EVERY
- * heading a level, so one stray `text:h` anywhere in a deck would push every
- * slide title on the page from `h2` to `h3` — a whole document's heading
- * structure changed by one paragraph in one slide. Fixing it here, where the
- * enclosing `h2` is known, is the only place the correct level can be worked
- * out at all.
+ * Neither case can be handed downstream. `engine/allowlist.ts` turns on
+ * `shiftHeadings` only when a content `h1` is present, and then demotes EVERY
+ * heading a level — so one stray level-1 `text:h` would push every slide title
+ * on the page from `h2` to `h3`, while a level-2 one would ship as a SIBLING
+ * of the slide title, a phantom slide to anything walking `h2`s (a table of
+ * contents, a screen-reader outline) with nothing downstream to correct it.
+ * Here, where the enclosing title's level is known, is the only place the
+ * right level can be worked out at all.
  */
-function demoteH1(html: string): string {
-  if (!H1_OPEN_TAG.test(html)) return html
-  return html.replace(H1_OPEN_TAG, '<h3').replace(H1_CLOSE_TAG, '</h3>')
+function demoteHeading(html: string): string {
+  if (!OUTRANKING_HEADING_OPEN_TAG.test(html)) return html
+  return html.replace(OUTRANKING_HEADING_OPEN_TAG, '<h3').replace(OUTRANKING_HEADING_CLOSE_TAG, '</h3>')
 }
 
 function escapeAttribute(value: string): string {
@@ -151,8 +171,13 @@ interface BlockFacts {
   /** An id anydoc already chose (`anchor`-derived) — never overwritten. */
   hasId: boolean
   isQuote: boolean
-  /** Carries a picture: the only text-free block a slide can claim. */
-  hasImage: boolean
+  /**
+   * How many pictures this block carries — an `<img>`, or a placeholder
+   * standing in for one that could not be packaged. Claimed against the
+   * slide's own image count, which is the only thing that can say which slide
+   * a picture came from.
+   */
+  pictures: number
 }
 
 function readBlock(html: string): BlockFacts {
@@ -161,6 +186,13 @@ function readBlock(html: string): BlockFacts {
     lineBreak.replaceWith(parsed.createTextNode(SOFT_BREAK_TEXT))
   }
   const element = parsed.body.firstElementChild
+  // Placeholder spans are REMOVED before the text is read, so a picture that
+  // could not be packaged reads as a picture rather than as text no slide
+  // claims — and so a paragraph carrying both a placeholder and real text still
+  // matches on the text the deck actually has.
+  const placeholders = [...parsed.body.getElementsByTagName('span')]
+    .filter((span) => IMAGE_PLACEHOLDER_TEXT.test(collapse(span.textContent ?? '')))
+  for (const placeholder of placeholders) placeholder.remove()
   const text = collapse(parsed.body.textContent ?? '')
   return {
     html,
@@ -169,7 +201,7 @@ function readBlock(html: string): BlockFacts {
     isHeading: element !== null && HEADING_TAGS.has(element.localName),
     hasId: element !== null && element.hasAttribute('id'),
     isQuote: element !== null && element.localName === 'blockquote',
-    hasImage: parsed.body.getElementsByTagName('img').length > 0,
+    pictures: parsed.body.getElementsByTagName('img').length + placeholders.length,
   }
 }
 
@@ -182,6 +214,16 @@ export function formatSlideList(numbers: readonly number[]): string {
   const parts = numbers.map((number) => String(number))
   if (parts.length <= 2) return parts.join(' and ')
   return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`
+}
+
+/**
+ * The blocker's clauses as one sentence — `a`, `a, and b`, `a, b, and c`. The
+ * same serial comma `formatSlideList` uses, because three clauses joined with
+ * "and" twice reads as two sentences run together.
+ */
+function joinClauses(clauses: readonly string[]): string {
+  if (clauses.length <= 2) return clauses.join(', and ')
+  return `${clauses.slice(0, -1).join(', ')}, and ${clauses[clauses.length - 1]}`
 }
 
 /** `Slide 3` or `Slides 3, 7, and 12`, agreeing with how many there are. */
@@ -237,7 +279,8 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
   const withNotes: number[] = []
   const outOfOrder: number[] = []
   const lossy: number[] = []
-  const incomplete: number[] = []
+  const missingText: number[] = []
+  const missingPictures: number[] = []
   const lostTotals = { diagrams: 0, charts: 0, media: 0 }
 
   for (const slide of slides) {
@@ -274,8 +317,8 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
       }
 
       /*
-       * A TEXT-FREE BLOCK IS CLAIMED AGAINST THE SLIDE'S IMAGE COUNT, never
-       * absorbed because it happens to be next. anydoc emits a picture as
+       * A PICTURE IS CLAIMED AGAINST THE SLIDE'S IMAGE COUNT, never absorbed
+       * because it happens to be next. anydoc emits a picture as
        * `<p><img …></p>` — measured — which carries no text for the
        * accumulation to test, so an earlier version let ANY text-free block
        * through unconditionally. Measured on a three-slide deck whose middle
@@ -286,22 +329,21 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
        * The index's per-slide image count is what disambiguates it, and it has
        * to be a count rather than a position: a titled slide with its own
        * picture must still take that picture, and nothing about where the block
-       * sits distinguishes that from the next slide's. A text-free block this
-       * slide has no budget for — or one carrying no picture at all — ends the
-       * slide and becomes the refusal below rather than being swallowed.
+       * sits distinguishes that from the next slide's.
        */
-      if (!block.squeezed) {
-        if (!block.hasImage || imagesLeft <= 0) break
-        imagesLeft -= 1
-        taken.push(block)
-        at += 1
-        continue
-      }
+      if (block.pictures > imagesLeft) break
 
       // A block that would take the accumulation off the slide's own text ends
       // the slide: it belongs to the next one, or to nobody, and the checks
       // below decide which.
-      if (!expected.startsWith(accumulated + block.squeezed)) break
+      if (block.squeezed && !expected.startsWith(accumulated + block.squeezed)) break
+
+      // Nothing left to claim it by: no text this slide is still expecting, and
+      // no picture either. It ends the slide and becomes the refusal below,
+      // rather than being swallowed into a section it may not belong to.
+      if (!block.squeezed && block.pictures === 0) break
+
+      imagesLeft -= block.pictures
       accumulated += block.squeezed
       taken.push(block)
       at += 1
@@ -325,8 +367,15 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
      * heading, and the only finding was `presentation-untitled-slide`. Refusing
      * on the unspent budget closes that whole class ("a counted picture anydoc
      * did not emit") rather than the one trigger that exposed it.
+     *
+     * The two are recorded SEPARATELY so the refusal can say which kind of
+     * content is missing: "missing text" sends an author to look at a slide's
+     * words, "missing a picture" sends them to look at its pictures, and a
+     * message that says only "content" sends them hunting for absent text on a
+     * slide whose text is all present.
      */
-    if (accumulated !== expected || imagesLeft > 0) incomplete.push(slide.number)
+    if (accumulated !== expected) missingText.push(slide.number)
+    if (imagesLeft > 0) missingPictures.push(slide.number)
 
     const title = slide.title?.trim() || `Slide ${slide.number}`
     if (!slide.title?.trim()) untitled.push(slide.number)
@@ -365,7 +414,7 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
       const html = block === titleBlock && !block.hasId
         ? block.html.replace(HEADING_OPEN_TAG, (open) => `${open} id="slide-${slide.number}"`)
         : block.html
-      return block === titleBlock ? html : demoteH1(html)
+      return block === titleBlock ? html : demoteHeading(html)
     }).join('')
     const label = slide.title?.trim() ? `Slide ${slide.number}: ${title}` : `Slide ${slide.number}`
     sections.push(
@@ -411,19 +460,24 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
 
   /*
    * ONE blocker for the whole disagreement, whichever side it fell on: slides
-   * missing text the deck says they carry, blocks belonging to no slide, or
-   * both. It DESCRIBES the mismatch without reproducing any of the content —
-   * an earlier version quoted 60 characters of the orphaned block, which for a
-   * failed notes match is the presenter's private note itself, copied into a
-   * finding that may be logged, exported, or shared. A feature whose purpose is
-   * not publishing private notes must not publish them through its own error
-   * reporting either.
+   * missing text, slides missing a picture, blocks belonging to no slide, or
+   * any combination. It NAMES THE KIND of content that is missing, because
+   * "missing content" sends an author hunting for absent text on a slide whose
+   * text is all present — and unlike quoting the content itself there is no
+   * privacy cost in saying which kind, since a picture cannot be a private
+   * note. It still reproduces none of it: an earlier version quoted 60
+   * characters of the orphaned block, which for a failed notes match is the
+   * presenter's private note, copied into a finding that may be logged,
+   * exported, or shared.
    */
   const orphaned = blocks.length - at
-  if (incomplete.length > 0 || orphaned > 0) {
+  if (missingText.length > 0 || missingPictures.length > 0 || orphaned > 0) {
     const problems = [
-      incomplete.length > 0
-        ? `${slidesPhrase(incomplete).toLowerCase()} ${incomplete.length === 1 ? 'is' : 'are'} missing content the deck says ${incomplete.length === 1 ? 'it carries' : 'they carry'}`
+      missingText.length > 0
+        ? `${slidesPhrase(missingText).toLowerCase()} ${missingText.length === 1 ? 'is' : 'are'} missing text the deck says ${missingText.length === 1 ? 'it carries' : 'they carry'}`
+        : '',
+      missingPictures.length > 0
+        ? `${slidesPhrase(missingPictures).toLowerCase()} ${missingPictures.length === 1 ? 'is' : 'are'} missing a picture the deck says ${missingPictures.length === 1 ? 'it carries' : 'they carry'}`
         : '',
       orphaned > 0
         ? `${orphaned === 1 ? '1 block of content belongs' : `${orphaned} blocks of content belong`} to no slide`
@@ -433,7 +487,7 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
       code: 'presentation-unattributed-content',
       severity: 'blocker',
       message:
-        `This ${options.sourceLabel} and the slides it declares do not agree: ${problems.join(', and ')}. ` +
+        `This ${options.sourceLabel} and the slides it declares do not agree: ${joinClauses(problems)}. ` +
         'Publishing content under the wrong slide would be a silent error, so this file must be resolved before it can be imported.',
     })
   }

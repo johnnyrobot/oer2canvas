@@ -191,7 +191,12 @@ test('a counted picture anydoc never emitted refuses rather than taking the next
   expect(anydocHtml.match(/<img/g)).toHaveLength(1)
   const finding = result.findings.find((entry) => entry.code === 'presentation-unattributed-content')
   expect(finding?.severity).toBe('blocker')
-  expect(finding?.message).toContain('missing content the deck says')
+  // Named by KIND: every slide's text is present and only a picture is missing,
+  // so "missing content" would send the author looking in the wrong place. The
+  // slide it names is the one left SHORT — slide 1 spent its budget on the
+  // picture anydoc did emit — which is as much as a forward-only walk can say
+  // without guessing which picture was meant for which slide.
+  expect(finding?.message).toContain('slide 2 is missing a picture the deck says it carries')
 })
 
 test.each([
@@ -217,4 +222,88 @@ test.each([
   expect(result.findings.map((finding) => finding.code))
     .not.toContain('presentation-unattributed-content')
   expect(result.html).toContain('<img')
+})
+
+test("an ink annotation's picture stays on the slide that carries it", async () => {
+  /*
+   * PowerPoint writes an ink annotation as `mc:AlternateContent` with a
+   * `p14:contentPart` Choice and an ordinary `p:pic` Fallback. MEASURED: anydoc
+   * renders the FALLBACK, so a reader preferring the Choice saw no picture at
+   * all — and slide 1's picture was published under slide 2's heading with no
+   * finding whatsoever.
+   */
+  const { anydocHtml, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', inkInAlternateContent: true },
+    { title: 'Two', body: ['Body two'] },
+  ]))
+
+  expect(anydocHtml).toContain('alt="Ink annotation"')
+  const sections = sectionsOf(result.html)
+  expect(sections[0]!.querySelector('img')).not.toBeNull()
+  expect(sections[1]!.querySelector('img')).toBeNull()
+  expect(result.findings).toEqual([])
+})
+
+test('a picture that could not be packaged is attributed, not refused', async () => {
+  /*
+   * An EMF — what PowerPoint writes for a pasted chart, a Visio drawing, or
+   * legacy clip art — cannot be packaged, so THIS REPO'S normalizer renders an
+   * `[Embedded image]` placeholder and raises its own `embedded-content`
+   * blocker. Treating that placeholder's text as content made it unattributable
+   * and refused the whole deck on top of a finding that already said what was
+   * wrong.
+   */
+  const bytes = await pptxFixture([
+    { title: 'One', body: ['Body one'], unpackageableImage: true },
+    { title: 'Two', body: ['Body two'] },
+  ])
+  const parsed = await probeParser({ parser: 'anydoc', bytes: bytes.buffer as ArrayBuffer, formatHint: 'pptx' })
+  const index = readPresentationIndex('pptx', parsed.presentation!.parts)
+  const result = reconcilePresentation({ html: parsed.normalized!.html, index, sourceLabel: 'PPTX' })
+
+  expect(parsed.normalized!.html).toContain('<span>[Embedded image: A pasted chart]</span>')
+  // The loss is already reported, by the parser, with the actionable message.
+  expect(parsed.normalized!.findings.map((finding) => finding.code)).toContain('embedded-content')
+  // So the reconciler adds no second refusal, and the placeholder sits in the
+  // section of the slide the index counted that picture on.
+  expect(result.findings).toEqual([])
+  expect(sectionsOf(result.html)[0]!.textContent).toContain('[Embedded image')
+  expect(sectionsOf(result.html)[1]!.textContent).not.toContain('[Embedded image')
+})
+
+test('an odp video is reported lost even when its poster frame imports', async () => {
+  // The poster is the dangerous case: the reader sees a still and has no reason
+  // to suspect a video was ever there.
+  const { result } = await reconcileFixture([
+    { title: 'One', body: ['Body one'], video: { poster: true } },
+  ])
+
+  expect(sectionsOf(result.html)[0]!.querySelector('img')).not.toBeNull()
+  const finding = result.findings.find((entry) => entry.code === 'presentation-unrepresentable')
+  expect(finding?.message).toContain('1 media')
+})
+
+test('an odp video with no poster is reported lost rather than vanishing', async () => {
+  const { anydocHtml, result } = await reconcileFixture([
+    { title: 'One', body: ['Body one'], video: {} },
+  ])
+
+  expect(anydocHtml).not.toContain('<img')
+  expect(result.findings.map((finding) => finding.code)).toEqual(['presentation-unrepresentable'])
+})
+
+test('a level-two text:h does not ship as a sibling of the slide title', async () => {
+  // MEASURED: `text:outline-level="2"` makes anydoc emit `<h2>`, which
+  // `allowlist.ts` never shifts (it triggers on `h1` alone), so anything walking
+  // `h2` elements — a table of contents, a screen-reader outline — would see a
+  // phantom slide.
+  const { anydocHtml, result } = await reconcileFixture([
+    { title: 'Titled', headingText: 'A level two heading', headingLevel: 2, body: ['Body text'] },
+    { title: 'Second', body: ['Body two'] },
+  ])
+
+  expect(anydocHtml).toContain('<h2 id="A-level-two-heading">')
+  expect(result.html).toContain('<h3 id="A-level-two-heading">A level two heading</h3>')
+  expect([...new DOMParser().parseFromString(result.html, 'text/html').querySelectorAll('h2')]
+    .map((heading) => heading.textContent)).toEqual(['Titled', 'Second'])
 })

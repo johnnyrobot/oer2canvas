@@ -222,9 +222,11 @@ test('titles out of reading order on several slides produce ONE warning', () => 
   expect(finding.sourcePage).toBeUndefined()
 })
 
-test('two headings on one slide do not repeat the slide id', () => {
+test('two headings on one slide do not repeat the slide id, and the second is demoted', () => {
   // A duplicate `id` is invalid HTML and breaks in-page navigation, so only the
-  // first heading of a section is given the slide's id.
+  // slide's own title heading is given the slide's id. The second heading is a
+  // heading WITHIN the slide, not another slide, so it is demoted beneath the
+  // title rather than shipping as its sibling.
   const result = reconcilePresentation({
     html: '<h2>Title</h2><h2>Subheading</h2>',
     index: index([slide(1, { title: 'Title', textRuns: ['Title', 'Subheading'] })]),
@@ -233,7 +235,7 @@ test('two headings on one slide do not repeat the slide id', () => {
 
   expect(result.html).toBe(
     '<section data-slide="1" data-plan-label="Slide 1: Title">' +
-    '<h2 id="slide-1">Title</h2><h2>Subheading</h2></section>',
+    '<h2 id="slide-1">Title</h2><h3>Subheading</h3></section>',
   )
 })
 
@@ -297,7 +299,7 @@ test('a slide whose text anydoc never produced refuses instead of importing an e
 
   const finding = only(result, 'presentation-unattributed-content')
   expect(finding.severity).toBe('blocker')
-  expect(finding.message).toContain('slides 1 and 2 are missing content the deck says they carry')
+  expect(finding.message).toContain('slides 1 and 2 are missing text the deck says they carry')
 })
 
 test('a partly-produced slide refuses rather than publishing what survived', () => {
@@ -309,7 +311,7 @@ test('a partly-produced slide refuses rather than publishing what survived', () 
 
   const finding = only(result, 'presentation-unattributed-content')
   expect(finding.severity).toBe('blocker')
-  expect(finding.message).toContain('slide 1 is missing content the deck says it carries')
+  expect(finding.message).toContain('slide 1 is missing text the deck says it carries')
 })
 
 test("an untitled slide gets its own h2, and anydoc's h1 is demoted beneath it", () => {
@@ -411,7 +413,9 @@ test('a counted picture that never arrived refuses instead of lapsing', () => {
 
   const finding = only(result, 'presentation-unattributed-content')
   expect(finding.severity).toBe('blocker')
-  expect(finding.message).toContain('missing content the deck says')
+  // The message names the KIND of content that is missing, so an author is not
+  // sent hunting for absent text on a slide whose text is all present.
+  expect(finding.message).toContain('slide 2 is missing a picture the deck says it carries')
 })
 
 test('a picture no slide claims refuses instead of being absorbed', () => {
