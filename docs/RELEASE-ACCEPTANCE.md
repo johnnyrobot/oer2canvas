@@ -180,6 +180,16 @@ import form (`DocumentImporter.tsx`, tested in `src/App.a11y.browser.test.tsx` a
 Using VoiceOver or NVDA, complete one full document import end to end: the form, the findings,
 the page plan, and the export.
 
+**A worksheet exists so this is a confirmation, not an exploration.**
+`node scripts/screen-reader-worksheet.mjs` prints, in order, every control, heading and live-region
+announcement on this path, captured from the running app — including the three status phrases the
+progress region actually emits. Running it **records nothing and closes nothing**: every item it
+prints is one a screen reader would voice whether or not it means anything, which is the only
+question §3 asks. Two things it surfaced that are worth listening for specifically: the destination
+buttons concatenate their label and their explanation into one accessible name with no separator
+("A Canvas coursePushes pages straight into a course you choose…"), and the workflow steps do the
+same with their state ("Content— choose where this goes first").
+
 **Steps:**
 
 1. Turn on VoiceOver (macOS) or NVDA (Windows) and open the app.
