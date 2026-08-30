@@ -112,6 +112,20 @@ export const RELEASED_SOURCES: readonly ReleasedSource[] = [
     limitations: capabilityFor('pdf').limitations,
   },
   {
+    format: 'pptx',
+    kind: 'file',
+    label: capabilityFor('pptx').label,
+    maximumBytes: DOCUMENT_IMPORT_LIMITS.maximumInputBytes,
+    limitations: capabilityFor('pptx').limitations,
+  },
+  {
+    format: 'odp',
+    kind: 'file',
+    label: capabilityFor('odp').label,
+    maximumBytes: DOCUMENT_IMPORT_LIMITS.maximumInputBytes,
+    limitations: capabilityFor('odp').limitations,
+  },
+  {
     format: 'web',
     kind: 'url',
     label: 'Web page',

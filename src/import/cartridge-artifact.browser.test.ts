@@ -28,16 +28,16 @@ import { writeZip } from '../engine/export/zip'
  * `zip.test.ts` gives: a zip verified only by its own writer is marking its
  * own homework.
  *
- * ONE CASE PER RELEASED FORMAT (eight), NOT THE WHOLE CORPUS (twenty) — the
+ * ONE CASE PER RELEASED FORMAT (ten), NOT THE WHOLE CORPUS (twenty-two) — the
  * cartridge builder in `engine/export/cartridge.ts` is format-agnostic
  * downstream of import: by the time `toChapter` hands it a `Chapter`, every
  * format looks the same. Structural variants (merged cells, footnotes,
  * equations, deep headings, …) exercise the IMPORTER, which
- * `corpus.browser.test.ts` already runs across the full twenty-case corpus.
- * Running all twenty here, twice each for determinism, would be forty full
- * compile+audit+zip pipelines that could only ever re-confirm what that file
- * already confirms about parsing — nothing about cartridge shape depends on
- * which structural property a given DOCX or EPUB exercises.
+ * `corpus.browser.test.ts` already runs across the full twenty-two-case
+ * corpus. Running all twenty-two here, twice each for determinism, would be
+ * forty-four full compile+audit+zip pipelines that could only ever re-confirm
+ * what that file already confirms about parsing — nothing about cartridge
+ * shape depends on which structural property a given DOCX or EPUB exercises.
  */
 const metadata = {
   title: 'Artifact release check',
@@ -49,7 +49,7 @@ const metadata = {
  * `CORPUS_CASES` (testing/corpus.ts) lists its per-format baseline case —
  * `*-semantic` for every format except PDF, whose baseline is
  * `pdf-text-multipage` — BEFORE any structural variant, and its own module
- * comment says so explicitly: "Every one of the eight released file formats
+ * comment says so explicitly: "Every one of the ten released file formats
  * … gets its own semantic case" ahead of "Beyond that baseline, six
  * structural properties … are exercised on TWO formats only". Taking the
  * FIRST case seen for each format, rather than matching on an id suffix like
@@ -71,7 +71,7 @@ test('the corpus has exactly one baseline case per released format', () => {
   // changing shape out from under it — e.g. a new format landing after a
   // structural variant of an existing one, which would make "first occurrence"
   // pick the wrong case. `releaseEnabledFormats()` (`capability.ts`) is the
-  // same independent statement of "the eight released formats" that
+  // same independent statement of "the ten released formats" that
   // `released-sources.ts` is built against, not a value derived from this
   // corpus, so this comparison can actually fail.
   const released = new Set(releaseEnabledFormats())

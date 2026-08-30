@@ -1,4 +1,4 @@
-import type { ImportMetadata, ImportResult } from './types'
+import type { ImportFinding, ImportMetadata, ImportResult } from './types'
 import type { ParserProbeProgress } from './parsers/probe'
 import { DOCUMENT_IMPORT_LIMITS } from './limits'
 import { documentIds, importProvenance, sha256Hex, validateImportMetadata } from './common'
@@ -7,6 +7,8 @@ import {
   capabilityForFilename,
   type DocumentFormatCapability,
 } from './capability'
+import { readPresentationIndex } from './presentation/index'
+import { reconcilePresentation } from './presentation/reconcile'
 
 export interface StructuredDocumentImportOptions {
   metadata: ImportMetadata
@@ -57,7 +59,49 @@ export async function importStructuredDocument(
     )
   }
   if (!parsed.normalized) throw new Error('AnyDoc returned no normalized document content.')
-  const visibleText = parsed.normalized.html.replace(/<[^>]*>/g, '').trim()
+
+  // A presentation's normalized HTML is anydoc's account only. Reconciling it
+  // against the deck's own index is what turns it into sections a reader can
+  // trust — and what refuses the file when the two accounts disagree.
+  let html = parsed.normalized.html
+  const presentationFindings: ImportFinding[] = []
+  if (capability.format === 'pptx' || capability.format === 'odp') {
+    if (!parsed.presentation) {
+      throw new Error(
+        `This ${capability.label} could not be read as a package, so its slides cannot be identified.`,
+      )
+    }
+    const index = readPresentationIndex(parsed.presentation.kind, parsed.presentation.parts)
+    const reconciled = reconcilePresentation({
+      html,
+      index,
+      sourceLabel: capability.format.toUpperCase(),
+    })
+    const blocker = reconciled.findings.find((finding) => finding.severity === 'blocker')
+    if (blocker) {
+      /*
+       * `reconcilePresentation` still returns HTML built on the disagreement it
+       * just raised a blocker over (its own comment: "nothing publishes on a
+       * blocker" — enforcing that is the caller's job). A DOCX footnote or
+       * equation blocker names ONE block anydoc could not render while every
+       * other block on the page stays correctly placed, so `document.ts`
+       * returns those results normally and lets `ImportPlanEditor`'s blocker
+       * gate stop publishing. A presentation blocker is not that: it means the
+       * page's own claim about which slide held what may be wrong from that
+       * point forward (reconcile.ts's own opening comment: "Silent
+       * misattribution... is the one outcome this module exists to prevent").
+       * There is no safe partial page to hand to a plan editor, so this
+       * importer refuses the whole file outright instead of trusting every
+       * future reader of `findings` to check severity before rendering
+       * `work.sections[0].html`.
+       */
+      throw new Error(blocker.message)
+    }
+    html = reconciled.html
+    presentationFindings.push(...reconciled.findings)
+  }
+
+  const visibleText = html.replace(/<[^>]*>/g, '').trim()
   // A figure-only document (a cover page, a plate section) now normalizes to
   // something like `<p><img ...></p>` with no visible TEXT at all, since a
   // packageable image no longer leaves an `[Embedded image: ...]` text
@@ -67,7 +111,7 @@ export async function importStructuredDocument(
   // empty — mirroring the identical check the sibling HTML/Markdown importer
   // already applies (`markup.ts`'s `!textContent?.trim() && !querySelector('img, hr')`).
   if (!visibleText) {
-    const rendered = new DOMParser().parseFromString(parsed.normalized.html, 'text/html')
+    const rendered = new DOMParser().parseFromString(html, 'text/html')
     if (!rendered.querySelector('img, hr')) {
       throw new Error(`AnyDoc found no readable structured content in this ${capability.label} file.`)
     }
@@ -75,14 +119,15 @@ export async function importStructuredDocument(
 
   const title = options.metadata.title.trim()
   const { id, sectionId } = documentIds(sourceSha256)
-  const findings = parsed.normalized.findings.map((finding) => ({ ...finding, sectionId }))
+  const findings = [...parsed.normalized.findings, ...presentationFindings]
+    .map((finding) => ({ ...finding, sectionId }))
 
   return {
     work: {
       id,
       title,
       format: capability.format,
-      sections: [{ id: sectionId, title, order: 0, html: parsed.normalized.html }],
+      sections: [{ id: sectionId, title, order: 0, html }],
       // `name` is carried through as-is from the packaged record: it is
       // assigned once at import (`prepareAssets`), deduped by content hash
       // with the first-seen origin winning the name, and the HTML already

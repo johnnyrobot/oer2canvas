@@ -12,7 +12,9 @@ import {
 } from './capability'
 
 test('one capability table distinguishes shipped formats from parser probes', () => {
-  expect(releaseEnabledFormats()).toEqual(['text', 'markdown', 'html', 'docx', 'odt', 'rtf', 'epub', 'pdf'])
+  expect(releaseEnabledFormats()).toEqual([
+    'text', 'markdown', 'html', 'docx', 'odt', 'rtf', 'epub', 'pdf', 'pptx', 'odp',
+  ])
   expect(PLAIN_TEXT_FILE_ACCEPT).toBe('.txt,text/plain')
   expect(TEXT_CONTENT_FILE_ACCEPT).toBe(
     '.txt,text/plain,.md,.markdown,text/markdown,text/x-markdown,.html,.htm,text/html,application/xhtml+xml',
@@ -21,7 +23,12 @@ test('one capability table distinguishes shipped formats from parser probes', ()
   expect(STRUCTURED_DOCUMENT_FILE_ACCEPT).toContain('.odt')
   expect(STRUCTURED_DOCUMENT_FILE_ACCEPT).toContain('.rtf')
   expect(STRUCTURED_DOCUMENT_FILE_ACCEPT).toContain('.epub')
-  expect(STRUCTURED_DOCUMENT_FORMAT_SUMMARY).toBe('DOCX, ODT, RTF, or EPUB')
+  expect(STRUCTURED_DOCUMENT_FILE_ACCEPT).toContain('.pptx')
+  expect(STRUCTURED_DOCUMENT_FILE_ACCEPT).toContain('.pptm')
+  expect(STRUCTURED_DOCUMENT_FILE_ACCEPT).toContain('.ppsx')
+  expect(STRUCTURED_DOCUMENT_FILE_ACCEPT).toContain('.ppsm')
+  expect(STRUCTURED_DOCUMENT_FILE_ACCEPT).toContain('.odp')
+  expect(STRUCTURED_DOCUMENT_FORMAT_SUMMARY).toBe('DOCX, ODT, RTF, EPUB, PPTX, PPTM, PPSX, PPSM, or ODP')
   expect(capabilityForFilename('chapter.DOCX')).toMatchObject({
     format: 'docx',
     parser: 'anydoc',

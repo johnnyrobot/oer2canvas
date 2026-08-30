@@ -6,6 +6,7 @@ import {
   semanticRtfFixture,
 } from './structured-document-fixtures'
 import { pdfFixture } from './pdf-fixture'
+import { pptxFixture, odpFixture } from './presentation-fixtures'
 
 const utf8 = (value: string) => new TextEncoder().encode(value)
 
@@ -18,7 +19,7 @@ const utf8 = (value: string) => new TextEncoder().encode(value)
  * a reader cannot see what a case is FOR — so `standsInFor` is required, and a
  * test enforces it.
  *
- * COVERAGE SHAPE. Every one of the eight released file formats
+ * COVERAGE SHAPE. Every one of the ten released file formats
  * (`RELEASED_SOURCES` in `../released-sources.ts`) gets its own semantic
  * case — an ordinary document in that format, proving the parser handles the
  * shape it will actually see most often. Beyond that baseline, six
@@ -31,7 +32,13 @@ const utf8 = (value: string) => new TextEncoder().encode(value)
  * normalization path downstream of each parser — `anydoc-html.ts`'s
  * `normalizeAnyDocDocument`, which every non-native format funnels through —
  * not the parser's own format-specific plumbing, so two structurally
- * different carriers are enough evidence without paying for all eight.
+ * different carriers are enough evidence without paying for all ten. PPTX
+ * and ODP get only the semantic baseline here, not the six structural
+ * properties: their own reconciler (`presentation/reconcile.ts`) already has
+ * dedicated browser-test coverage for the shapes that matter to a deck
+ * specifically (notes, missing titles, reading order, unrepresentable
+ * content), which a DOCX-shaped "merged cell" or "footnote" property would
+ * not exercise.
  *
  * The seventh structural property the design considered, a hostile
  * construct, is deliberately NOT reproduced here: `security.browser.test.ts`
@@ -200,6 +207,26 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     standsInFor: 'A multi-page text-based PDF chapter: the case PDF import exists for, where page markers drive the split and every page must produce text.',
     bytes: async () => pdfFixture(3, 'Corpus'),
     expectInHtml: ['Corpus page 1', 'Corpus page 3'],
+  },
+  {
+    id: 'pptx-semantic',
+    format: 'pptx',
+    standsInFor: 'An ordinary lecture deck exported from PowerPoint: a titled slide with bulleted body text, and a second slide carrying a data table — proving the reconciler turns anydoc\'s flat output into one section per slide without losing either shape.',
+    bytes: () => pptxFixture([
+      { title: 'Photosynthesis', body: ['Light reactions', 'Calvin cycle'] },
+      { title: 'Where it happens', table: true },
+    ]),
+    expectInHtml: ['<section data-slide="1"', '<section data-slide="2"', 'Photosynthesis', '<table'],
+  },
+  {
+    id: 'odp-semantic',
+    format: 'odp',
+    standsInFor: 'The same ordinary lecture deck, authored in Impress and saved as OpenDocument Presentation instead of PowerPoint\'s OOXML — a titled page with bulleted body text and a second page carrying a data table, proving the reconciler\'s ODF path reaches the same per-page sections.',
+    bytes: () => odpFixture([
+      { title: 'Photosynthesis', body: ['Light reactions', 'Calvin cycle'] },
+      { title: 'Where it happens', table: true },
+    ]),
+    expectInHtml: ['<section data-slide="1"', '<section data-slide="2"', 'Photosynthesis', '<table'],
   },
 
   // ===== Structural properties, on DOCX and EPUB only =================

@@ -116,6 +116,49 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
     ],
     probe: parserProbe('pdf-inspector', 'pdf'),
   },
+  {
+    format: 'pptx',
+    label: 'PowerPoint presentation',
+    /*
+     * ONE entry for four extensions, not four entries.
+     * `importStructuredDocument` requires `parsed.detectedFormat === capability.format`,
+     * and every PPTX-family container — presentation, slideshow, and both
+     * macro-enabled variants — reports `pptx` from its content type (design
+     * fact 1, measured 2026-08-29). Separate `pptm`/`ppsx`/`ppsm` entries would
+     * therefore fail that check on every real file.
+     */
+    extensions: ['.pptx', '.pptm', '.ppsx', '.ppsm'],
+    mediaTypes: [
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/vnd.openxmlformats-officedocument.presentationml.slideshow',
+      'application/vnd.ms-powerpoint.presentation.macroEnabled.12',
+      'application/vnd.ms-powerpoint.slideshow.macroEnabled.12',
+    ],
+    parser: 'anydoc',
+    status: 'enabled',
+    limitations: [
+      'Speaker notes are not imported; slides that had them are listed so you can add what students need.',
+      'Diagrams, charts, and embedded audio or video are not imported — add them in Canvas afterwards.',
+      'A slide with no title is titled by its number so you can rename it.',
+      'An equation blocks import; equation rendering is not supported yet.',
+      'Macros are never read or run.',
+    ],
+    probe: parserProbe('anydoc', 'pptx'),
+  },
+  {
+    format: 'odp',
+    label: 'OpenDocument presentation',
+    extensions: ['.odp'],
+    mediaTypes: ['application/vnd.oasis.opendocument.presentation'],
+    parser: 'anydoc',
+    status: 'enabled',
+    limitations: [
+      'Speaker notes are not imported; pages that had them are listed so you can add what students need.',
+      'A page with no title is titled by its number so you can rename it.',
+      'An equation blocks import; equation rendering is not supported yet.',
+    ],
+    probe: parserProbe('anydoc', 'odp'),
+  },
 ] as const
 
 const plainText = DOCUMENT_FORMAT_CAPABILITIES.find((entry) => entry.format === 'text')!
