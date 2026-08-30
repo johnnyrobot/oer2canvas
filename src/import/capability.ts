@@ -141,6 +141,8 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
       'Diagrams, charts, and embedded audio or video are not imported — add them in Canvas afterwards.',
       'A slide with no title is titled by its number so you can rename it.',
       'An equation blocks import; equation rendering is not supported yet.',
+      'An image not in a format this importer can package (PNG, JPEG, GIF, or WebP) blocks import — a pasted chart, a Visio drawing, or legacy clip art is often saved this way; replace it with one of those formats first.',
+      "A slide whose content cannot be matched to the deck's own outline blocks import outright, because publishing it could put content under the wrong slide.",
       'Macros are never read or run.',
     ],
     probe: parserProbe('anydoc', 'pptx'),
@@ -153,9 +155,12 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
     parser: 'anydoc',
     status: 'enabled',
     limitations: [
-      'Speaker notes are not imported; pages that had them are listed so you can add what students need.',
-      'A page with no title is titled by its number so you can rename it.',
+      'Speaker notes are not imported; slides that had them are listed so you can add what students need.',
+      'Embedded audio or video is not imported — add it in Canvas afterwards.',
+      'A slide with no title is titled by its number so you can rename it.',
       'An equation blocks import; equation rendering is not supported yet.',
+      'An image not in a format this importer can package (PNG, JPEG, GIF, or WebP) blocks import; replace it with one of those formats first.',
+      "A slide whose content cannot be matched to the deck's own outline blocks import outright, because publishing it could put content under the wrong slide.",
     ],
     probe: parserProbe('anydoc', 'odp'),
   },
@@ -185,7 +190,7 @@ export const STRUCTURED_DOCUMENT_FORMAT_SUMMARY = [
 ].filter(Boolean).join(', or ')
 
 /*
- * Every format the file picker offers: anydoc's four plus PDF. Separate from
+ * Every format the file picker offers: anydoc's six plus PDF. Separate from
  * `ENABLED_ANYDOC_CAPABILITIES` because that list answers a different question —
  * which formats `importStructuredDocument` itself handles — and its answer
  * appears in that function's refusal message, which must not offer PDF.

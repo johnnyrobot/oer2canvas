@@ -66,6 +66,15 @@ export async function importStructuredDocument(
   let html = parsed.normalized.html
   const presentationFindings: ImportFinding[] = []
   if (capability.format === 'pptx' || capability.format === 'odp') {
+    // DEFENSE IN DEPTH, not a live path: the format-detection guard above
+    // (`parsed.detectedFormat === capability.format`) already ensures
+    // `capability.format` here is exactly what the Worker detected, and the
+    // Worker (`workers/anydoc.worker.ts`) sets `presentation` for every
+    // format `isPresentationPackageKind` accepts — currently 'pptx' and
+    // 'odp', the same two checked above — so this cannot fire today. It stays
+    // because that Worker-side coupling lives in a different file and could
+    // silently drift; if it ever does, refusing beats reconciling against an
+    // index this branch has no way to build.
     if (!parsed.presentation) {
       throw new Error(
         `This ${capability.label} could not be read as a package, so its slides cannot be identified.`,
