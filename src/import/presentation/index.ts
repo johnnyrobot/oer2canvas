@@ -17,13 +17,22 @@ export interface PresentationSlideIndex {
   /** Notes text, when the slide has a notes part that is not whitespace. */
   notesText?: string
   /**
-   * Plain pictures on the slide — PPTX `p:pic` that is not media, ODF
-   * `draw:image`. anydoc emits each as a block carrying an `<img>` and NO text
-   * of its own, which no text comparison can attribute; the count is how the
-   * reconciler knows an image-only slide is a slide rather than a gap, and
-   * refuses to let one slide absorb the next slide's picture.
+   * WHERE THIS SLIDE'S PICTURES COME FROM: the package parts its pictures
+   * reference (`ppt/media/image1.png`, `Pictures/image1.png`), plus the URL of
+   * any picture linked from outside the package. DEDUPLICATED, in the order
+   * first seen — see `reconcile.ts` for why a set rather than a list.
+   *
+   * anydoc emits a picture as a block carrying an `<img>` and NO text of its
+   * own, so no text comparison can attribute one. This replaces the per-slide
+   * COUNT that used to do that job. A count required predicting which shapes
+   * anydoc turns into a picture block, and five review rounds each found a
+   * shape the prediction got wrong; being uncounted is precisely the defect, so
+   * no counting rule can see it. A part path is an identity both accounts
+   * already hold — `parsers/anydoc-html.ts` tags every picture it emits with
+   * its own origin (`data-origin-part`) — so the two are JOINED rather than
+   * balanced.
    */
-  images: number
+  pictureOrigins: readonly string[]
   /** The title placeholder is not first in reading order. */
   titleOutOfOrder: boolean
   /** Content anydoc drops with no block and no asset. */
@@ -61,6 +70,7 @@ const ODF_OFFICE_NS = 'urn:oasis:names:tc:opendocument:xmlns:office:1.0'
 const ODF_TEXT_NS = 'urn:oasis:names:tc:opendocument:xmlns:text:1.0'
 const ODF_DRAW_NS = 'urn:oasis:names:tc:opendocument:xmlns:drawing:1.0'
 const ODF_PRESENTATION_NS = 'urn:oasis:names:tc:opendocument:xmlns:presentation:1.0'
+const XLINK_NS = 'http://www.w3.org/1999/xlink'
 
 function parseXml(xml: string, what: string): Document {
   const parsed = new DOMParser().parseFromString(xml, 'application/xml')
@@ -287,6 +297,38 @@ function isTitleShape(shape: Element): boolean {
   return type === 'title' || type === 'ctrTitle'
 }
 
+/**
+ * `TargetMode="External"` on a relationship: the `Target` is a URL rather than
+ * a part inside the package. PowerPoint's "Link to File" insert writes one, and
+ * anydoc emits an ordinary `<img src="https://…">` for it (measured) — with no
+ * bytes and therefore no package part, so the URL itself is that picture's
+ * identity on both sides of the join.
+ */
+const EXTERNAL_TARGET_MODE = 'External'
+
+/**
+ * Every relationship this slide declares, as the string that identifies what it
+ * points at: a package part path for an internal target, the URL verbatim for
+ * an external one. Filtered by nothing — a relationship is looked up only when
+ * a blip names it, so an unused image relationship (a picture background lives
+ * in the slide's rels too) can never make the index expect a picture.
+ */
+function slideRelationshipTargets(relsXml: string | undefined): Map<string, string> {
+  const targets = new Map<string, string>()
+  if (!relsXml) return targets
+  const document = parseXml(relsXml, 'relationship part')
+  for (const relationship of document.getElementsByTagNameNS(RELS_NS, 'Relationship')) {
+    const id = relationship.getAttribute('Id')
+    const target = relationship.getAttribute('Target')
+    if (!id || !target) continue
+    targets.set(
+      id,
+      relationship.getAttribute('TargetMode') === EXTERNAL_TARGET_MODE ? target : resolveFromSlides(target),
+    )
+  }
+  return targets
+}
+
 function relationshipTargets(relsXml: string | undefined, type: string): string[] {
   if (!relsXml) return []
   const document = parseXml(relsXml, 'relationship part')
@@ -374,26 +416,45 @@ function rendersChoiceBranch(choice: Element): boolean {
 }
 
 /**
- * Whether a `p:pic` will actually become a picture in anydoc's output: its
- * `p:blipFill` names a blip, either EMBEDDED (`r:embed`, bytes in the package)
- * or LINKED (`r:link`, a URL). Both were measured emitting an `<img>` — the
- * linked one alongside an `external-image` warning — and a `p:pic` naming
- * neither has no image data at all, so counting it would leave the reconciler
- * holding a budget nothing can spend.
+ * WHERE A PICTURE SHAPE'S BYTES COME FROM: every `a:blip` under a `p:blipFill`
+ * anywhere beneath `shape`, resolved through the slide's own relationships.
+ *
+ * `p:blipFill` (presentationml) is the picture fill of a `p:pic` — the element
+ * that IS a picture. It is deliberately not `a:blipFill` (drawingml), which is
+ * how a shape, a slide background or a table cell says "fill me with this
+ * image"; anydoc emits no picture block for any of those, so collecting them
+ * would make the index expect parts that never arrive.
+ *
+ * `r:embed` wins over `r:link` when a blip carries both — REASONED, not
+ * measured: bytes present in the package are what a renderer prefers, and
+ * adding both would make the index expect two pictures where anydoc emits one.
+ * A blip naming neither, or naming a relationship the package never declared,
+ * contributes NOTHING — which is exactly what anydoc emits for it (measured:
+ * a `p:pic` whose `r:embed` names an undefined relationship produces no block
+ * and no finding). That is the whole of the old `hasRenderablePicture`
+ * prediction, now falling out of the resolution instead of being modelled.
  */
-function hasRenderablePicture(shape: Element): boolean {
-  const fill = shape.getElementsByTagNameNS(PML_NS, 'blipFill')[0]
-  const blip = fill?.getElementsByTagNameNS(DRAWING_NS, 'blip')[0]
-  return blip !== undefined &&
-    (blip.getAttributeNS(R_NS, 'embed') !== null || blip.getAttributeNS(R_NS, 'link') !== null)
+function blipOrigins(shape: Element, resolve: (relationshipId: string) => string | undefined): string[] {
+  const origins: string[] = []
+  for (const fill of shape.getElementsByTagNameNS(PML_NS, 'blipFill')) {
+    for (const blip of fill.getElementsByTagNameNS(DRAWING_NS, 'blip')) {
+      const relationshipId = blip.getAttributeNS(R_NS, 'embed') ?? blip.getAttributeNS(R_NS, 'link')
+      const origin = relationshipId ? resolve(relationshipId) : undefined
+      if (origin) origins.push(origin)
+    }
+  }
+  return origins
 }
 
 interface ShapeWalkState {
   textRuns: string[]
   title: string | undefined
   titleIndex: number
-  images: number
+  /** Deduplicated, in the order first seen — see `PresentationSlideIndex`. */
+  pictureOrigins: Set<string>
   unrepresentable: { diagrams: number; charts: number; media: number }
+  /** A relationship id from this slide's own rels, as a part path or a URL. */
+  resolveRelationship: (relationshipId: string) => string | undefined
 }
 
 /**
@@ -468,16 +529,29 @@ function walkShapes(container: Element, state: ShapeWalkState, depth = 0): void 
          * (measured: `<p><span>[Embedded image: Worksheet]</span></p>`, since a
          * preview is usually an EMF this importer cannot package).
          *
-         * It is counted HERE because the preview sits two levels below the
-         * shape tree, where the `p:pic` branch above — which only ever sees a
-         * shape-level or group-level picture — never reaches it. Counting zero
-         * for it meant a slide could not claim its own worksheet preview, and
-         * measured alongside a broken embed on an earlier slide, slide 2's
-         * content published under slide 1's heading with no blocker at all.
+         * It is read HERE because the preview sits two levels below the shape
+         * tree, where the `p:pic` branch below — which only ever sees a
+         * shape-level or group-level picture — never reaches it. Recording
+         * nothing for it meant a slide could not claim its own worksheet
+         * preview, and measured alongside a broken embed on an earlier slide,
+         * slide 2's content published under slide 1's heading with no blocker
+         * at all.
+         *
+         * THE IDENTITY IS THE OLE OBJECT'S OWN PART, NOT THE PREVIEW'S BLIP,
+         * and that is measured rather than assumed: real anydoc 0.2.4 reports
+         * this picture's `originPart` as `ppt/embeddings/worksheet1.xlsx` —
+         * the `p:oleObj/@r:id` target — even though the bytes it renders come
+         * from the preview `p:pic`'s own `r:embed` (`ppt/media/image2.emf`).
+         * Reading the blip here instead made the index expect a part that
+         * never arrives and the preview belong to no slide, which is a refusal
+         * on an ordinary pasted worksheet. The blip is deliberately NOT also
+         * recorded: it would be a second part nothing ever carries.
          */
-        state.images += [...shape.getElementsByTagNameNS(PML_NS, 'pic')]
-          .filter(hasRenderablePicture)
-          .length
+        for (const oleObject of shape.getElementsByTagNameNS(PML_NS, 'oleObj')) {
+          const relationshipId = oleObject.getAttributeNS(R_NS, 'id')
+          const origin = relationshipId ? state.resolveRelationship(relationshipId) : undefined
+          if (origin) state.pictureOrigins.add(origin)
+        }
       }
       else if (uri === TABLE_URI) {
         /*
@@ -513,14 +587,16 @@ function walkShapes(container: Element, state: ShapeWalkState, depth = 0): void 
        * POSTER FRAME — the still shown before the video plays — as an ordinary
        * embedded blip in the same shape's `p:blipFill`, and anydoc emits
        * `<p><img …></p>` for that poster (measured, real anydoc 0.2.4). So the
-       * shape is BOTH: one media loss to report, and one picture the reconciler
-       * must let its slide claim, or the poster block belongs to nobody and the
-       * whole import refuses.
+       * shape is BOTH: one media loss to report, and one picture whose origin
+       * its slide must be able to claim, or the poster block belongs to nobody
+       * and the whole import refuses.
        */
       const isMedia = shape.getElementsByTagNameNS(DRAWING_NS, 'videoFile').length > 0 ||
         shape.getElementsByTagNameNS(DRAWING_NS, 'audioFile').length > 0
       if (isMedia) state.unrepresentable.media += 1
-      if (hasRenderablePicture(shape)) state.images += 1
+      for (const origin of blipOrigins(shape, state.resolveRelationship)) {
+        state.pictureOrigins.add(origin)
+      }
       continue
     }
     if (shape.namespaceURI === PML_NS && shape.localName === 'grpSp') {
@@ -587,19 +663,20 @@ function pptxIndex(parts: Record<string, string>): PresentationIndex {
       throw new PresentationIndexError(`Slide ${position + 1} has no shape tree to read.`)
     }
 
+    const relsXml = parts[`ppt/slides/_rels/${path!.split('/').pop()}.rels`]
+    const relationshipTargetById = slideRelationshipTargets(relsXml)
+
     const state: ShapeWalkState = {
       textRuns: [],
       title: undefined,
       titleIndex: -1,
-      images: 0,
+      pictureOrigins: new Set<string>(),
       unrepresentable: { diagrams: 0, charts: 0, media: 0 },
+      resolveRelationship: (relationshipId) => relationshipTargetById.get(relationshipId),
     }
     walkShapes(tree, state)
 
-    const notesTarget = relationshipTargets(
-      parts[`ppt/slides/_rels/${path!.split('/').pop()}.rels`],
-      'notesSlide',
-    )[0]
+    const notesTarget = relationshipTargets(relsXml, 'notesSlide')[0]
     const notesXml = notesTarget ? parts[resolveFromSlides(notesTarget)] : undefined
     const notesText = notesXml ? notesBodyText(parseXml(notesXml, 'notes part')) : undefined
 
@@ -608,7 +685,7 @@ function pptxIndex(parts: Record<string, string>): PresentationIndex {
       ...(state.title ? { title: state.title } : {}),
       textRuns: state.textRuns,
       ...(notesText ? { notesText } : {}),
-      images: state.images,
+      pictureOrigins: [...state.pictureOrigins],
       titleOutOfOrder: state.titleIndex > 0,
       unrepresentable: state.unrepresentable,
     })
@@ -808,12 +885,26 @@ function odpIndex(parts: Record<string, string>): PresentationIndex {
       ...(title ? { title } : {}),
       textRuns: ordered,
       ...(notesText ? { notesText } : {}),
-      // Every `draw:image` on the page that is not inside an excluded root —
-      // the notes subtree or a comment — counted the same way, and for the same
-      // reason, as PPTX's `p:pic`.
-      images: [...page.getElementsByTagNameNS(ODF_DRAW_NS, 'image')]
+      /*
+       * Every `draw:image` on the page that is not inside an excluded root —
+       * the notes subtree or a comment — read the same way, and for the same
+       * reason, as PPTX's `p:pic`. ODF needs no relationship part to resolve
+       * them: `xlink:href` names the part directly, and MEASURED against real
+       * anydoc 0.2.4 that is byte-for-byte the `originPart` it reports
+       * (`Pictures/image1.png`). An href pointing outside the package (a
+       * linked picture) is carried verbatim for the same reason PPTX carries
+       * an external relationship target verbatim.
+       *
+       * A `draw:image` with no `xlink:href` at all — ODF also allows the bytes
+       * inline as `office:binary-data` — contributes nothing, so a block
+       * anydoc emits for one would belong to no slide and refuse. That is
+       * fail-closed and untested against a real Impress package; see the
+       * report's concerns.
+       */
+      pictureOrigins: [...new Set([...page.getElementsByTagNameNS(ODF_DRAW_NS, 'image')]
         .filter((image) => !excludedRoots.some((root) => root.contains(image)))
-        .length,
+        .map((image) => image.getAttributeNS(XLINK_NS, 'href') ?? '')
+        .filter((href) => href.length > 0))],
       titleOutOfOrder: false,
       /*
        * ODF carries a chart or a diagram as an embedded OBJECT rather than as

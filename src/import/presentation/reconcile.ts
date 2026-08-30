@@ -1,4 +1,5 @@
 import { blocksOf } from '../page-plan'
+import { PICTURE_ORIGIN_ATTRIBUTE } from '../parsers/anydoc-html'
 import type { ImportFinding } from '../types'
 import type { PresentationIndex, PresentationSlideIndex } from './index'
 
@@ -25,6 +26,23 @@ import type { PresentationIndex, PresentationSlideIndex } from './index'
  * 1's section, fabricated a replacement heading for slide 2, and raised no
  * finding at all. Silent misattribution, which is the one outcome this module
  * exists to make impossible.
+ *
+ * PICTURES ARE ATTRIBUTED BY IDENTITY, NOT BY COUNT. anydoc emits a picture as
+ * a block with no text of its own, so nothing about the block's position says
+ * which slide it came from. That used to be answered by a per-slide COUNT the
+ * index predicted from the deck's XML, and five review rounds each found a
+ * shape the prediction got wrong — a video's poster frame, a broken embed, an
+ * ink `mc:Fallback`, an OLE preview, a namespace-keyed `mc` branch rule. A
+ * count cannot close that class: a silent misattribution needs an
+ * uncounted-but-emitted picture on one slide paid for by a
+ * counted-but-unemitted picture on another, and the totals then balance. Being
+ * uncounted is precisely the defect, so no counting rule can see it.
+ *
+ * Both accounts already hold an identity instead. `parsers/anydoc-html.ts` tags
+ * every picture it emits with the package part its bytes came from (or, for a
+ * picture linked from outside the package, that URL) in
+ * `data-origin-part`; the index records, per slide, the set of those same parts
+ * the slide's own shapes reference. `claimPictures` below joins the two.
  *
  * So a slide's expected text is its runs CONCATENATED, and blocks are consumed
  * while the text accumulated so far remains a PREFIX of it. The slide is
@@ -126,6 +144,36 @@ const HEADING_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
  */
 const IMAGE_PLACEHOLDER_TEXT = /^\[Embedded image(?::.*)?\]$/
 
+/**
+ * The join key as it appears in the emitted HTML, for removal before
+ * publishing. `anydoc-html.ts` writes the value through `escapeHtml`, so the
+ * value can never contain the `"` this stops at, and the attribute is the last
+ * one on an `<img>` and the only one on a placeholder `<span>`. Matching the
+ * serialized string keeps `BlockFacts.html` byte-identical to what `blocksOf`
+ * produced apart from this one removal — re-serializing a parsed block instead
+ * would silently normalize every other attribute in it.
+ */
+const PICTURE_ORIGIN_ATTRIBUTE_PATTERN = new RegExp(` ${PICTURE_ORIGIN_ATTRIBUTE}="[^"]*"`, 'g')
+
+/**
+ * A join key is a join key, never content: it names a path inside the author's
+ * own file, and nothing downstream has any use for it. Stripped here, at the
+ * one place every published block passes through.
+ */
+const withoutJoinKeys = (html: string): string => html.replace(PICTURE_ORIGIN_ATTRIBUTE_PATTERN, '')
+
+/**
+ * How many slides have to reference a part before a SECOND block carrying it
+ * becomes ambiguous: one. When exactly one slide references a part, every block
+ * carrying it belongs to that slide however many there are — PowerPoint
+ * declares one relationship per media part and reuses it for every shape
+ * showing that picture, so the same picture twice on one slide is one part. As
+ * soon as a second slide references it (the same logo on two slides), a second
+ * block carrying it may be either slide's and identity alone cannot say which.
+ * See `claimPictures`.
+ */
+const SOLE_REFERENCING_SLIDE = 1
+
 /** The open tag of a heading block, for inserting the slide's id into it. */
 const HEADING_OPEN_TAG = /^<h[1-6](?=[\s/>])/i
 
@@ -179,12 +227,14 @@ interface BlockFacts {
   hasId: boolean
   isQuote: boolean
   /**
-   * How many pictures this block carries — an `<img>`, or a placeholder
-   * standing in for one that could not be packaged. Claimed against the
-   * slide's own image count, which is the only thing that can say which slide
-   * a picture came from.
+   * ONE ENTRY PER PICTURE this block carries — an `<img>`, or a placeholder
+   * standing in for one that could not be packaged — holding that picture's
+   * `data-origin-part`. An empty entry is a picture whose origin the parser
+   * could not determine at all; no slide can reference the empty string, so it
+   * fails closed into the refusal below rather than joining to whichever slide
+   * happens to be open.
    */
-  pictures: number
+  pictureOrigins: readonly string[]
 }
 
 function readBlock(html: string): BlockFacts {
@@ -199,6 +249,8 @@ function readBlock(html: string): BlockFacts {
   // matches on the text the deck actually has.
   const placeholders = [...parsed.body.getElementsByTagName('span')]
     .filter((span) => IMAGE_PLACEHOLDER_TEXT.test(collapse(span.textContent ?? '')))
+  const pictureOrigins = [...parsed.body.getElementsByTagName('img'), ...placeholders]
+    .map((picture) => picture.getAttribute(PICTURE_ORIGIN_ATTRIBUTE) ?? '')
   for (const placeholder of placeholders) placeholder.remove()
   const text = collapse(parsed.body.textContent ?? '')
   return {
@@ -208,7 +260,7 @@ function readBlock(html: string): BlockFacts {
     isHeading: element !== null && HEADING_TAGS.has(element.localName),
     hasId: element !== null && element.hasAttribute('id'),
     isQuote: element !== null && element.localName === 'blockquote',
-    pictures: parsed.body.getElementsByTagName('img').length + placeholders.length,
+    pictureOrigins,
   }
 }
 
@@ -279,7 +331,26 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
       severity: 'blocker',
       message: `This ${options.sourceLabel} declares no slides, so its content cannot be attributed to any slide.`,
     })
-    return { html: options.html, findings }
+    // Nothing publishes on a blocker, but the join key is stripped on every
+    // path out of this module all the same: one rule, no exceptions to audit.
+    return { html: withoutJoinKeys(options.html), findings }
+  }
+
+  /*
+   * HOW MANY SLIDES REFERENCE EACH PART, over the whole deck. It decides the
+   * one question identity cannot answer on its own: whether a slide already
+   * holding a picture from part P may take a SECOND block carrying P. If P is
+   * this slide's alone, yes — every P block in the deck is this slide's, and a
+   * slide really can carry the same picture twice (one relationship, two
+   * `p:pic` shapes; measured). If another slide also references P — the same
+   * logo on two slides — then no: the second block is as likely to be that
+   * slide's, and taking it would be a guess. See `claimPictures`.
+   */
+  const referencingSlides = new Map<string, number>()
+  for (const slide of slides) {
+    for (const part of slide.pictureOrigins) {
+      referencingSlides.set(part, (referencingSlides.get(part) ?? 0) + 1)
+    }
   }
 
   const untitled: number[] = []
@@ -294,7 +365,33 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
     const expected = squeeze(slide.textRuns.join(''))
     const taken: BlockFacts[] = []
     let accumulated = ''
-    let imagesLeft = slide.images
+    const referenced = new Set(slide.pictureOrigins)
+    const claimed = new Set<string>()
+
+    /**
+     * Whether THIS slide may take a block carrying pictures from `parts`, and
+     * if so, taking them. A picture is claimable when the slide references its
+     * part, and either the slide has not taken one from that part yet, or no
+     * other slide in the deck references it. `''` — a picture whose origin the
+     * parser could not determine at all — is never referenced by anything, so
+     * it can never be claimed by anyone.
+     *
+     * ALL OR NOTHING, and atomic. A block is one block and cannot be split
+     * between two slides, so every picture in it has to be claimable or the
+     * block belongs to the next slide — and a partial claim would then mark
+     * this slide as having received a picture it never took, hiding the very
+     * refusal the join exists to raise.
+     */
+    const claimPictures = (parts: readonly string[]): boolean => {
+      const provisional = new Set(claimed)
+      for (const part of parts) {
+        if (!referenced.has(part)) return false
+        if (provisional.has(part) && referencingSlides.get(part) !== SOLE_REFERENCING_SLIDE) return false
+        provisional.add(part)
+      }
+      for (const part of parts) claimed.add(part)
+      return true
+    }
 
     while (at < blocks.length) {
       const block = blocks[at]!
@@ -324,21 +421,19 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
       }
 
       /*
-       * A PICTURE IS CLAIMED AGAINST THE SLIDE'S IMAGE COUNT, never absorbed
-       * because it happens to be next. anydoc emits a picture as
-       * `<p><img …></p>` — measured — which carries no text for the
-       * accumulation to test, so an earlier version let ANY text-free block
-       * through unconditionally. Measured on a three-slide deck whose middle
-       * slide is image-only, in both ODP and PPTX: the image landed in slide
-       * 1's section, slide 2 shipped holding nothing but a generated heading,
-       * and no finding said so — misattribution AND content loss, silently.
+       * A PICTURE IS CLAIMED BY IDENTITY, never absorbed because it happens to
+       * be next. anydoc emits a picture as `<p><img …></p>` — measured — which
+       * carries no text for the accumulation to test, so an earlier version let
+       * ANY text-free block through unconditionally. Measured on a three-slide
+       * deck whose middle slide is image-only, in both ODP and PPTX: the image
+       * landed in slide 1's section, slide 2 shipped holding nothing but a
+       * generated heading, and no finding said so — misattribution AND content
+       * loss, silently.
        *
-       * The index's per-slide image count is what disambiguates it, and it has
-       * to be a count rather than a position: a titled slide with its own
-       * picture must still take that picture, and nothing about where the block
-       * sits distinguishes that from the next slide's.
+       * See `claimPictures` for the rule and for why a block carrying several
+       * pictures is claimed all at once or not at all.
        */
-      if (block.pictures > imagesLeft) break
+      if (block.pictureOrigins.length > 0 && !claimPictures(block.pictureOrigins)) break
 
       // A block that would take the accumulation off the slide's own text ends
       // the slide: it belongs to the next one, or to nobody, and the checks
@@ -348,9 +443,8 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
       // Nothing left to claim it by: no text this slide is still expecting, and
       // no picture either. It ends the slide and becomes the refusal below,
       // rather than being swallowed into a section it may not belong to.
-      if (!block.squeezed && block.pictures === 0) break
+      if (!block.squeezed && block.pictureOrigins.length === 0) break
 
-      imagesLeft -= block.pictures
       accumulated += block.squeezed
       taken.push(block)
       at += 1
@@ -365,15 +459,15 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
      * promise true — without it, total content loss (`html: ''` against a
      * fully populated deck) produced a page of empty sections and NO finding.
      *
-     * UNSPENT IMAGE BUDGET IS THE SAME KIND OF DISAGREEMENT AS UNMATCHED TEXT,
-     * and is counted here rather than being left to lapse. A slide holding a
-     * budget it never spent will otherwise spend it on the NEXT slide's
-     * picture: measured with a `p:pic` whose `r:embed` names an undefined
-     * relationship — anydoc emits nothing and raises no finding of its own —
-     * slide 1 took slide 2's image, slide 2 shipped holding only its generated
-     * heading, and the only finding was `presentation-untitled-slide`. Refusing
-     * on the unspent budget closes that whole class ("a counted picture anydoc
-     * did not emit") rather than the one trigger that exposed it.
+     * A REFERENCED PART THAT NEVER ARRIVED IS THE SAME KIND OF DISAGREEMENT AS
+     * UNMATCHED TEXT. The slide's own shapes point at a package part, and no
+     * block anydoc emitted carried it — so either anydoc dropped that picture
+     * for a reason of its own, or it emitted the picture without the origin
+     * this join needs. Both are disagreements between the two accounts, and
+     * neither may be published as if the slide were complete.
+     *
+     * `claimed` is a subset of `referenced` by construction (`claimPictures`
+     * refuses anything not referenced), so comparing sizes is comparing sets.
      *
      * The two are recorded SEPARATELY so the refusal can say which kind of
      * content is missing: "missing text" sends an author to look at a slide's
@@ -382,7 +476,7 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
      * slide whose text is all present.
      */
     if (accumulated !== expected) missingText.push(slide.number)
-    if (imagesLeft > 0) missingPictures.push(slide.number)
+    if (referenced.size > claimed.size) missingPictures.push(slide.number)
 
     const title = slide.title?.trim() || `Slide ${slide.number}`
     if (!slide.title?.trim()) untitled.push(slide.number)
@@ -421,7 +515,7 @@ export function reconcilePresentation(options: ReconcileOptions): ReconcileResul
       const html = block === titleBlock && !block.hasId
         ? block.html.replace(HEADING_OPEN_TAG, (open) => `${open} id="slide-${slide.number}"`)
         : block.html
-      return block === titleBlock ? html : demoteHeading(html)
+      return withoutJoinKeys(block === titleBlock ? html : demoteHeading(html))
     }).join('')
     const label = slide.title?.trim() ? `Slide ${slide.number}: ${title}` : `Slide ${slide.number}`
     sections.push(

@@ -1,4 +1,4 @@
-import { wantedPresentationPart } from './parts'
+import { isPresentationPackageKind, wantedPresentationPart } from './parts'
 
 test('a pptx index wants the presentation, its slides, their rels, and their notes', () => {
   const wanted = (path: string) => wantedPresentationPart('pptx', path)
@@ -34,4 +34,24 @@ test('an odp index wants only content.xml', () => {
   expect(wantedPresentationPart('odp', 'content.xml')).toBe(true)
   expect(wantedPresentationPart('odp', 'styles.xml')).toBe(false)
   expect(wantedPresentationPart('odp', 'Pictures/image1.png')).toBe(false)
+})
+
+test('exactly the two deck formats are presentation packages', () => {
+  /*
+   * Two modules key off this and they have to agree exactly: the anydoc Worker
+   * collects a deck's package parts for these formats, and
+   * `parsers/anydoc-html.ts` tags its pictures with the `data-origin-part`
+   * join key for these formats. A format in one set and not the other either
+   * refuses every deck carrying a picture (an index with no keys to join) or
+   * leaks a package path into an exported page (keys with no index to read
+   * them).
+   *
+   * `ppt` is the legacy BINARY format and is deliberately false: it is not a
+   * ZIP package, so there is no index to read and nothing to join against.
+   */
+  expect(isPresentationPackageKind('pptx')).toBe(true)
+  expect(isPresentationPackageKind('odp')).toBe(true)
+  for (const format of ['ppt', 'docx', 'odt', 'rtf', 'epub', 'pdf', 'xlsx', 'ods', 'csv', 'doc', 'document']) {
+    expect(isPresentationPackageKind(format)).toBe(false)
+  }
 })

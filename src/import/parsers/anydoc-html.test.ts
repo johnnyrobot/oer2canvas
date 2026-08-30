@@ -2,7 +2,7 @@ import type { Document } from '@firecrawl/anydoc-wasm'
 import { prepareAssets } from '../assets'
 import { PARSER_PROBE_LIMITS } from '../parser-limit-values'
 import { pngHeaderDeclaring, RASTER_FIXTURES } from '../testing/raster-fixtures'
-import { normalizeAnyDocDocument, UnsupportedAnyDocVersionError } from './anydoc-html'
+import { normalizeAnyDocDocument, PICTURE_ORIGIN_ATTRIBUTE, UnsupportedAnyDocVersionError } from './anydoc-html'
 
 const paragraph = (text: string) => ({
   kind: 'paragraph' as const,
@@ -182,6 +182,75 @@ test('packages a validated raster as a cartridge reference with its true size', 
   expect(result.html).not.toContain('[Embedded image')
   expect(result.findings.some((finding) => finding.code === 'embedded-content')).toBe(false)
   expect(result.packagedAssets).toHaveLength(1)
+})
+
+/**
+ * THE JOIN KEY IS FOR DECKS AND NOTHING ELSE.
+ *
+ * `data-origin-part` exists so `presentation/reconcile.ts` can say which slide
+ * a picture came from. Four other formats share this module and have no second
+ * account to join against — and `data-*` passes the Canvas allowlist untouched
+ * (`engine/allowlist.ts`), so emitting it for them would ship a path inside the
+ * author's own file into every exported DOCX, ODT, RTF and EPUB page. The
+ * assertion is byte equality against the format-less default rather than a
+ * `not.toContain`, so ANY difference this attribute introduces for those
+ * formats — not just this attribute — fails here.
+ */
+test('the picture join key is emitted for a deck and for nothing else', async () => {
+  const assets = [{ id: 0, mediaType: 'image/png', originPart: 'media/image1.png', data: RASTER_FIXTURES.png.bytes }]
+  const prepared = await prepareAssets(assets)
+  const htmlFor = (format: string) => normalizeAnyDocDocument(documentWith(assets), format, prepared).html
+
+  const untagged = htmlFor('document')
+  expect(untagged).not.toContain(PICTURE_ORIGIN_ATTRIBUTE)
+  for (const format of ['docx', 'odt', 'rtf', 'epub']) {
+    expect(htmlFor(format)).toBe(untagged)
+  }
+  for (const format of ['pptx', 'odp']) {
+    expect(htmlFor(format)).toContain(`${PICTURE_ORIGIN_ATTRIBUTE}="media/image1.png"`)
+  }
+})
+
+/**
+ * The three shapes a picture can leave this module in, each carrying the
+ * identity the reconciler joins on — including the one that has NO identity.
+ * A packaged picture is keyed by the part its bytes came from; an unpackageable
+ * one keeps that same part on its placeholder, because the part is what the
+ * DECK referenced whatever became of the bytes; an external one has no part at
+ * all, so its URL is the identity, and it is the same string the deck's own
+ * relationship names as the target. Anything else gets an EMPTY key, which no
+ * slide can reference — so it fails closed into a named refusal rather than
+ * joining to whichever slide happens to be open.
+ */
+test('every emitted picture carries an origin, and an unidentifiable one carries an empty origin', async () => {
+  const assets = [
+    { id: 0, mediaType: 'image/png', originPart: 'ppt/media/image1.png', data: RASTER_FIXTURES.png.bytes },
+    { id: 1, mediaType: 'image/x-emf', originPart: 'ppt/media/image2.emf', data: new Uint8Array([1, 2, 3, 4]) },
+  ]
+  const document = {
+    kind: 'document',
+    blocks: [{
+      kind: 'paragraph',
+      content: [
+        { kind: 'image', alt: 'Packaged', source: { kind: 'asset', assetId: 0 } },
+        { kind: 'image', alt: 'Unpackageable', source: { kind: 'asset', assetId: 1 } },
+        { kind: 'image', alt: 'External', source: { kind: 'external', url: 'https://example.edu/cell.png' } },
+        { kind: 'image', alt: 'Unavailable', source: { kind: 'unavailable' } },
+      ],
+    }],
+    assets, notes: [],
+  } as never
+  const result = normalizeAnyDocDocument(document, 'pptx', await prepareAssets(assets))
+
+  const parsed = new DOMParser().parseFromString(result.html, 'text/html')
+  const origins = [...parsed.querySelectorAll(`[${PICTURE_ORIGIN_ATTRIBUTE}]`)]
+    .map((element) => element.getAttribute(PICTURE_ORIGIN_ATTRIBUTE))
+  expect(origins).toEqual([
+    'ppt/media/image1.png',
+    'ppt/media/image2.emf',
+    'https://example.edu/cell.png',
+    '',
+  ])
 })
 
 test('two references to identical bytes package once and share one reference', async () => {

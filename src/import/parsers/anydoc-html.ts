@@ -3,6 +3,41 @@ import type { AssetRejection, PreparedAsset } from '../assets'
 import type { PackagedAssetRecord, ParserProbeFinding, ParserProbeNormalizedContent } from './probe'
 import { isPublicNetworkUrl } from '../common'
 import { escapeHtml } from '../html'
+import { isPresentationPackageKind } from '../presentation/parts'
+
+/**
+ * The JOIN KEY between a picture in this HTML and the slide it came from:
+ * the package part the picture's bytes were read out of (`ppt/media/image1.png`,
+ * `Pictures/image1.png`), or — for a picture that has no bytes in the package —
+ * the external URL it points at. Both are measured against real anydoc 0.2.4.
+ *
+ * It exists because the presentation reconciler previously had to PREDICT how
+ * many picture blocks anydoc would emit for a slide and spend that prediction
+ * as a budget, and five review rounds each found a shape the prediction got
+ * wrong (a video's poster frame, a broken embed, an ink `mc:Fallback`, an OLE
+ * preview, a namespace-keyed `mc` branch rule). A budget cannot close that
+ * class: an uncounted-but-emitted picture on one slide is paid for by a
+ * counted-but-unemitted picture on another, the totals balance, and nothing
+ * notices. The part path is an identity BOTH accounts already hold — this
+ * module knows it per picture, and the deck's own rels say which parts each
+ * slide references — so joining on it removes the prediction entirely.
+ *
+ * It is NOT content. `presentation/reconcile.ts` strips it from every block it
+ * publishes, and it is emitted only for the formats whose index is read (see
+ * `isPresentationPackageKind`), so no DOCX, ODT, RTF or EPUB import can carry
+ * a package path into an exported page.
+ */
+export const PICTURE_ORIGIN_ATTRIBUTE = 'data-origin-part'
+
+/**
+ * The key for a picture whose origin cannot be determined: anydoc reported
+ * `source.kind === 'unavailable'` (the part is missing or unreadable and there
+ * is no URL), or it named an asset id `Document.assets` does not carry. The
+ * empty string is deliberately a value NO slide can ever reference, so such a
+ * picture fails closed into a named refusal instead of joining to whichever
+ * slide happened to be open.
+ */
+const UNKNOWN_ORIGIN = ''
 
 export class UnsupportedAnyDocVersionError extends Error {
   readonly code = 'unsupported-version'
@@ -65,6 +100,21 @@ export function normalizeAnyDocDocument(
   // to fire on ANY non-empty `document.assets`) means that case now needs its
   // own, narrower signal instead of silently producing zero findings.
   const consultedAssetIds = new Set<number>()
+
+  /*
+   * The join key is written only for a deck, because only a deck has a second
+   * account to join against. `prepared` cannot answer this on its own: a
+   * REJECTED asset (an EMF, an oversized PNG) is stored as `{ rejected }` with
+   * no origin at all, and the placeholder emitted in its place still has to
+   * carry the part it failed on. `Document.assets` has the origin for every
+   * asset whatever became of it, so the lookup is built from there.
+   */
+  const tagsPictureOrigins = isPresentationPackageKind(sourceFormat)
+  const originByAssetId = new Map<number, string>(
+    document.assets.map((asset) => [asset.id, asset.originPart]),
+  )
+  const originAttribute = (origin: string): string =>
+    (tagsPictureOrigins ? ` ${PICTURE_ORIGIN_ATTRIBUTE}="${escapeHtml(origin)}"` : '')
 
   /**
    * Why an image could not be packaged, as a noun phrase that completes
@@ -183,6 +233,23 @@ export function normalizeAnyDocDocument(
       const altText = inline.alt ?? ''
       const altAttribute = inline.alt ? ` alt="${escapeHtml(inline.alt)}"` : ''
 
+      /*
+       * WHERE THIS PICTURE CAME FROM, decided once for all three of the
+       * branches below so the packaged image, the external image and the
+       * unpackageable placeholder cannot drift apart. An external picture has
+       * no package part, so its URL is the identity instead — the deck's rels
+       * record exactly that string as the relationship's `Target`, so both
+       * accounts read the same characters out of the same package. Anything
+       * else — `kind: 'unavailable'`, or an asset id no `Document.assets`
+       * entry matches — has no identity at all and gets `UNKNOWN_ORIGIN`.
+       */
+      const origin = inline.source?.kind === 'external'
+        ? inline.source.url ?? UNKNOWN_ORIGIN
+        : inline.source?.kind === 'asset' && inline.source.assetId !== undefined
+          ? originByAssetId.get(inline.source.assetId) ?? UNKNOWN_ORIGIN
+          : UNKNOWN_ORIGIN
+      const joinKey = originAttribute(origin)
+
       // External images are not embedded bytes at all — there is nothing for
       // `prepareAssets` to have seen and nothing to package into the
       // cartridge — but before this feature every image blocked, so no
@@ -208,7 +275,7 @@ export function normalizeAnyDocDocument(
             'warning',
             `This ${sourceLabel} references an external image hosted elsewhere; the exported page depends on that server remaining available.`,
           )
-          return `<img src="${escapeHtml(externalUrl.toString())}"${altAttribute}>`
+          return `<img src="${escapeHtml(externalUrl.toString())}"${altAttribute}${joinKey}>`
         }
       }
 
@@ -239,7 +306,7 @@ export function normalizeAnyDocDocument(
         }
         return (
           `<img src="${escapeHtml(entry.reference)}"${altAttribute}` +
-          ` width="${entry.width}" height="${entry.height}">`
+          ` width="${entry.width}" height="${entry.height}"${joinKey}>`
         )
       }
 
@@ -260,7 +327,7 @@ export function normalizeAnyDocDocument(
             ? 'external-unsafe'
             : 'unavailable',
       )
-      return `<span>[Embedded image${altText ? `: ${escapeHtml(altText)}` : ''}]</span>`
+      return `<span${joinKey}>[Embedded image${altText ? `: ${escapeHtml(altText)}` : ''}]</span>`
     }
     if (inline.kind === 'math') {
       equations += 1

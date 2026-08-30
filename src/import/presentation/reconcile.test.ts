@@ -4,13 +4,29 @@ import type { PresentationIndex } from './index'
 
 const index = (slides: PresentationIndex['slides']): PresentationIndex => ({ kind: 'pptx', slides })
 
+/**
+ * Two package parts, as real anydoc reports them for a PPTX
+ * (measured: `originPart` is `ppt/media/image1.png`). The join runs on these
+ * strings, so the tests below use the real shape rather than a bare token.
+ */
+const PART = 'ppt/media/image1.png'
+const OTHER_PART = 'ppt/media/image2.emf'
+
+/**
+ * A picture block as `parsers/anydoc-html.ts` emits one for a deck, carrying
+ * the join key. An EMPTY origin is what that module writes for a picture whose
+ * source it could not identify at all, and it has to fail closed here.
+ */
+const picture = (origin: string, alt = 'A cell') =>
+  `<p><img src="cell.png" alt="${alt}" data-origin-part="${origin}"></p>`
+
 const slide = (
   number: number,
   overrides: Partial<PresentationIndex['slides'][number]> = {},
 ): PresentationIndex['slides'][number] => ({
   number,
   textRuns: [],
-  images: 0,
+  pictureOrigins: [],
   titleOutOfOrder: false,
   unrepresentable: { diagrams: 0, charts: 0, media: 0 },
   ...overrides,
@@ -361,12 +377,11 @@ test('an image-only slide keeps its own picture, and the slide before it does no
   // as `<p><img …></p>`, carrying no text at all. Absorbing any text-free block
   // into whichever slide was open put the middle slide's image in slide 1 and
   // shipped slide 2 holding nothing but a generated heading, with no finding.
-  const image = '<p><img src="cell.png" alt="A cell"></p>'
   const result = reconcilePresentation({
-    html: `<h2>One</h2><p>Body one</p>${image}<h2>Three</h2><p>Body three</p>`,
+    html: `<h2>One</h2><p>Body one</p>${picture(PART)}<h2>Three</h2><p>Body three</p>`,
     index: index([
       slide(1, { title: 'One', textRuns: ['One', 'Body one'] }),
-      slide(2, { images: 1 }),
+      slide(2, { pictureOrigins: [PART] }),
       slide(3, { title: 'Three', textRuns: ['Three', 'Body three'] }),
     ]),
     sourceLabel: 'PPTX',
@@ -380,9 +395,9 @@ test('an image-only slide keeps its own picture, and the slide before it does no
 
 test('a titled slide still takes its own picture', () => {
   const result = reconcilePresentation({
-    html: '<h2>One</h2><p>Body one</p><p><img src="cell.png" alt="A cell"></p><h2>Two</h2>',
+    html: `<h2>One</h2><p>Body one</p>${picture(PART)}<h2>Two</h2>`,
     index: index([
-      slide(1, { title: 'One', textRuns: ['One', 'Body one'], images: 1 }),
+      slide(1, { title: 'One', textRuns: ['One', 'Body one'], pictureOrigins: [PART] }),
       slide(2, { title: 'Two', textRuns: ['Two'] }),
     ]),
     sourceLabel: 'PPTX',
@@ -392,20 +407,126 @@ test('a titled slide still takes its own picture', () => {
   expect(result.findings).toEqual([])
 })
 
-test('a counted picture that never arrived refuses instead of lapsing', () => {
+test('the join key never reaches the published html', () => {
+  // `data-origin-part` is how a picture says which slide it came from. It is
+  // not content, `data-*` passes the Canvas allowlist untouched
+  // (`engine/allowlist.ts`), and a package path inside the author's own file
+  // has no business in an exported page.
+  const result = reconcilePresentation({
+    html: `<h2>One</h2>${picture(PART)}`,
+    index: index([slide(1, { title: 'One', textRuns: ['One'], pictureOrigins: [PART] })]),
+    sourceLabel: 'PPTX',
+  })
+
+  expect(result.html).toContain('<img src="cell.png" alt="A cell">')
+  expect(result.html).not.toContain('data-origin-part')
+  expect(result.findings).toEqual([])
+})
+
+test('two slides sharing one media part get one picture each', () => {
   /*
-   * MEASURED with a `p:pic` whose `r:embed` names an undefined relationship:
-   * anydoc emits nothing for it and raises no finding of its own, so slide 1
-   * carried an unspent budget straight into slide 2's picture — slide 1 took
-   * the image, slide 2 shipped holding only its generated heading, and the only
-   * finding was `presentation-untitled-slide`. An unspent budget is the same
-   * kind of disagreement as unmatched text, and refuses the same way.
+   * The same logo on two slides is ONE package part, so identity alone cannot
+   * say which block is whose. The forward walk answers it: each slide takes one
+   * block for a part another slide also references, and no more.
+   *
+   * The two picture blocks are CONSECUTIVE, with no heading between them,
+   * because that is the only arrangement that pins the rule — with a heading in
+   * between, slide 1's text accumulation ends the slide before greed could
+   * matter, and a slide allowed to take every block bearing a part it
+   * references would still pass.
    */
   const result = reconcilePresentation({
-    html: '<h2>One</h2><p><img src="cell.png" alt="A cell"></p><h2>Three</h2>',
+    html: `${picture(PART, 'First')}${picture(PART, 'Second')}`,
     index: index([
-      slide(1, { title: 'One', textRuns: ['One'], images: 1 }),
-      slide(2, { images: 1 }),
+      slide(1, { pictureOrigins: [PART] }),
+      slide(2, { pictureOrigins: [PART] }),
+    ]),
+    sourceLabel: 'PPTX',
+  })
+
+  const sections = result.html.split('<section').slice(1)
+  expect(sections[0]).toContain('alt="First"')
+  expect(sections[0]).not.toContain('alt="Second"')
+  expect(sections[1]).toContain('alt="Second"')
+  expect(codes(result)).toEqual(['presentation-untitled-slide'])
+})
+
+test('one slide may hold the same part twice when no other slide references it', () => {
+  // PowerPoint declares ONE relationship per media part and reuses it for every
+  // shape showing that picture, so "the same picture twice on one slide" and
+  // "once" are the same set. When the part is this slide's alone, every block
+  // carrying it is this slide's however many there are.
+  const result = reconcilePresentation({
+    html: `<h2>One</h2>${picture(PART, 'First')}${picture(PART, 'Second')}<h2>Two</h2>`,
+    index: index([
+      slide(1, { title: 'One', textRuns: ['One'], pictureOrigins: [PART] }),
+      slide(2, { title: 'Two', textRuns: ['Two'] }),
+    ]),
+    sourceLabel: 'PPTX',
+  })
+
+  const sections = result.html.split('<section').slice(1)
+  expect(sections[0]).toContain('alt="First"')
+  expect(sections[0]).toContain('alt="Second"')
+  expect(result.findings).toEqual([])
+})
+
+test('a part on one slide twice AND on another slide refuses rather than guessing', () => {
+  /*
+   * The one shape identity cannot resolve: slide 1 shows the logo twice and
+   * slide 2 shows it once, so the three blocks carry the same part and nothing
+   * on either side says which pair belongs to slide 1. Slide 1 takes one and
+   * stops (slide 2 references the part too), slide 2 takes the second, and the
+   * third belongs to nobody. A refusal, which is the whole promise: the walk
+   * confirms or fails, and never guesses.
+   */
+  const result = reconcilePresentation({
+    html: `<h2>One</h2>${picture(PART, 'First')}${picture(PART, 'Second')}<h2>Two</h2>${picture(PART, 'Third')}`,
+    index: index([
+      slide(1, { title: 'One', textRuns: ['One'], pictureOrigins: [PART] }),
+      slide(2, { title: 'Two', textRuns: ['Two'], pictureOrigins: [PART] }),
+    ]),
+    sourceLabel: 'PPTX',
+  })
+
+  const finding = only(result, 'presentation-unattributed-content')
+  expect(finding.severity).toBe('blocker')
+  expect(finding.message).toContain('1 block of content belongs to no slide')
+})
+
+test('a picture whose origin the parser could not determine refuses', () => {
+  /*
+   * anydoc reports `source.kind === 'unavailable'` when a picture's part is
+   * missing or unreadable and it has no URL, so `anydoc-html.ts` writes an
+   * EMPTY join key. No slide can reference the empty string, so this fails
+   * closed instead of joining to whichever slide happens to be open — which is
+   * exactly the misattribution the whole join exists to prevent.
+   */
+  const result = reconcilePresentation({
+    html: `<h2>One</h2><p><span data-origin-part="">[Embedded image: A pasted chart]</span></p>`,
+    index: index([slide(1, { title: 'One', textRuns: ['One'], pictureOrigins: [PART] })]),
+    sourceLabel: 'PPTX',
+  })
+
+  const finding = only(result, 'presentation-unattributed-content')
+  expect(finding.severity).toBe('blocker')
+  expect(finding.message).toContain('1 block of content belongs to no slide')
+  expect(finding.message).toContain('slide 1 is missing a picture the deck says it carries')
+})
+
+test('a referenced part that never arrived refuses instead of lapsing', () => {
+  /*
+   * Slide 2's own shapes point at a package part, and no block anydoc emitted
+   * carried it: either anydoc dropped that picture for a reason of its own, or
+   * it emitted one without the origin this join needs. Slide 1's picture is
+   * still attributed correctly — identity, not position, decided that — but
+   * slide 2 may not ship as though it were complete.
+   */
+  const result = reconcilePresentation({
+    html: `<h2>One</h2>${picture(PART)}<h2>Three</h2>`,
+    index: index([
+      slide(1, { title: 'One', textRuns: ['One'], pictureOrigins: [PART] }),
+      slide(2, { pictureOrigins: [OTHER_PART] }),
       slide(3, { title: 'Three', textRuns: ['Three'] }),
     ]),
     sourceLabel: 'PPTX',
@@ -416,6 +537,7 @@ test('a counted picture that never arrived refuses instead of lapsing', () => {
   // The message names the KIND of content that is missing, so an author is not
   // sent hunting for absent text on a slide whose text is all present.
   expect(finding.message).toContain('slide 2 is missing a picture the deck says it carries')
+  expect(result.html.split('<section')[1]).toContain('<img')
 })
 
 test('a placeholder whose alt text contains brackets is still a picture', () => {
@@ -424,8 +546,8 @@ test('a placeholder whose alt text contains brackets is still a picture', () => 
   // ordinary. MEASURED with `descr="Figure [3] pasted"`: a pattern that stopped
   // at the first `]` read the placeholder as text, and the deck refused.
   const result = reconcilePresentation({
-    html: '<h2>One</h2><p><span>[Embedded image: Figure [3] pasted]</span></p>',
-    index: index([slide(1, { title: 'One', textRuns: ['One'], images: 1 })]),
+    html: `<h2>One</h2><p><span data-origin-part="${OTHER_PART}">[Embedded image: Figure [3] pasted]</span></p>`,
+    index: index([slide(1, { title: 'One', textRuns: ['One'], pictureOrigins: [OTHER_PART] })]),
     sourceLabel: 'PPTX',
   })
 
@@ -434,11 +556,11 @@ test('a placeholder whose alt text contains brackets is still a picture', () => 
 })
 
 test('a picture no slide claims refuses instead of being absorbed', () => {
-  // The index says neither slide has a picture, so the block belongs to
+  // No slide's shapes reference this picture's part, so the block belongs to
   // nobody — and swallowing it would attribute a figure to a slide it was
   // never on.
   const result = reconcilePresentation({
-    html: '<h2>One</h2><p><img src="cell.png" alt="A cell"></p><h2>Two</h2>',
+    html: `<h2>One</h2>${picture(PART)}<h2>Two</h2>`,
     index: index([
       slide(1, { title: 'One', textRuns: ['One'] }),
       slide(2, { title: 'Two', textRuns: ['Two'] }),

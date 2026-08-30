@@ -157,7 +157,7 @@ test.each([
   expect(index.slides[0]!.textRuns).toEqual(['One', expected])
 })
 
-test("an OLE object's preview picture is counted, though it sits below the shape tree", async () => {
+test("an OLE object's preview picture is recorded, though it sits below the shape tree", async () => {
   /*
    * A pasted Excel worksheet is `p:graphicFrame` → `p:oleObj` → a preview
    * `p:pic`, two levels below where the shape walk looks for a picture.
@@ -165,20 +165,25 @@ test("an OLE object's preview picture is counted, though it sits below the shape
    * for that preview, so a slide that cannot claim it has a block belonging to
    * nobody — and combined with a broken embed on an earlier slide, that turned
    * into content published under the wrong slide's heading with no blocker.
+   *
+   * ALSO MEASURED, and not what I expected: the origin anydoc reports for that
+   * picture is the OLE OBJECT's part, not the preview blip's `ppt/media/
+   * image2.emf`. Reading the blip made the deck refuse on an ordinary pasted
+   * worksheet.
    */
   const index = await indexOf(await pptxFixture([
     { title: 'One', body: ['Body one'], oleObject: true },
   ]))
 
-  expect(index.slides[0]!.images).toBe(1)
+  expect(index.slides[0]!.pictureOrigins).toEqual(['ppt/embeddings/worksheet1.xlsx'])
 })
 
-test("an ink annotation's fallback picture is counted, so the page's own image is not orphaned", async () => {
+test("an ink annotation's fallback picture is recorded, so the page's own image is not orphaned", async () => {
   const index = await indexOf(await pptxFixture([
     { title: 'One', inkInAlternateContent: true },
   ]))
 
-  expect(index.slides[0]!.images).toBe(1)
+  expect(index.slides[0]!.pictureOrigins).toEqual(['ppt/media/image1.png'])
 })
 
 test('an odp draw:plugin carrying media is reported lost, with or without a poster frame', async () => {
@@ -193,13 +198,13 @@ test('an odp draw:plugin carrying media is reported lost, with or without a post
     { title: 'One', body: ['Body one'], video: { poster: true } },
   ]))
   expect(withPoster.slides[0]!.unrepresentable.media).toBe(1)
-  expect(withPoster.slides[0]!.images).toBe(1)
+  expect(withPoster.slides[0]!.pictureOrigins).toEqual(['Pictures/image1.png'])
 
   const withoutPoster = await odpIndexOf(await odpFixture([
     { title: 'One', body: ['Body one'], video: {} },
   ]))
   expect(withoutPoster.slides[0]!.unrepresentable.media).toBe(1)
-  expect(withoutPoster.slides[0]!.images).toBe(0)
+  expect(withoutPoster.slides[0]!.pictureOrigins).toEqual([])
 })
 
 test('a run split mid-word AND a soft line break in the same paragraph are both handled correctly (fix-review round-2 Important A)', async () => {
@@ -583,15 +588,25 @@ test("an odp table's cells reach textRuns through the flat paragraph query", asy
   expect(index.slides[0]!.textRuns).toEqual(['Data', 'Body text', 'Stage', 'Location', 'Calvin cycle', 'Stroma'])
 })
 
-test('a pptx picture is counted as an image, because anydoc emits a block for it', async () => {
-  // The reconciler cannot attribute a picture by its text, because anydoc emits
-  // it as a block with none. The count is what tells an image-only slide apart
-  // from a gap.
+test('a pptx picture records the package part its bytes come from', async () => {
+  /*
+   * The reconciler cannot attribute a picture by its text, because anydoc emits
+   * it as a block with none; the part path is the identity it joins on, and
+   * MEASURED against real anydoc 0.2.4 it reports exactly this string as the
+   * picture's `originPart`.
+   *
+   * TWO pictures, ONE entry. PowerPoint declares one relationship per media
+   * part and reuses it for every shape that shows that picture, so a list built
+   * from the rels could not tell "twice on this slide" from "once" however it
+   * was written — which is why this is a set and why the reconciler resolves
+   * multiplicity from the whole deck rather than from one slide (see
+   * `claimPictures`).
+   */
   const index = await indexOf(await pptxFixture([
     { title: 'Pictures', image: { alt: 'A cell' }, secondImage: { alt: 'Another cell' } },
   ]))
 
-  expect(index.slides[0]!.images).toBe(2)
+  expect(index.slides[0]!.pictureOrigins).toEqual(['ppt/media/image1.png'])
   expect(index.slides[0]!.unrepresentable.media).toBe(0)
 })
 
@@ -608,22 +623,30 @@ test("a video's poster frame is BOTH a lost medium and a picture anydoc emits", 
   ]))
 
   expect(index.slides[0]!.unrepresentable.media).toBe(1)
-  expect(index.slides[0]!.images).toBe(1)
+  expect(index.slides[0]!.pictureOrigins).toEqual(['ppt/media/image1.png'])
 })
 
-test('a linked picture is counted, and a picture with no blip reference is not', async () => {
-  // MEASURED: a linked blip (`r:link`, no bytes in the package) still emits an
-  // `<img src="https://…">` alongside an `external-image` warning, so its slide
-  // must be able to claim it. A `p:pic` naming no blip at all has no image data
-  // for anydoc to emit, and counting it would leave a budget nothing can spend.
+test('a linked picture is identified by its URL, and a picture with no blip reference by nothing', async () => {
+  /*
+   * MEASURED: a linked blip (`r:link`, no bytes in the package) still emits an
+   * `<img src="https://…">` alongside an `external-image` warning, so its slide
+   * must be able to claim it — and there is no package part to claim it BY, so
+   * the relationship's external target is the identity instead. It is the same
+   * string anydoc reports as the picture's source, which is what makes the join
+   * work for a picture the package holds no bytes for.
+   *
+   * A `p:pic` naming no blip at all resolves to nothing, exactly as anydoc
+   * emits nothing for it — the old `hasRenderablePicture` prediction, now a
+   * consequence of resolution rather than a rule of its own.
+   */
   const linked = await indexOf(await pptxFixture([{ title: 'One', linkedImage: true }]))
-  expect(linked.slides[0]!.images).toBe(1)
+  expect(linked.slides[0]!.pictureOrigins).toEqual(['https://example.edu/cell.png'])
 
-  const withoutBlip = await indexOf(await pptxFixture([{ title: 'One' }]))
-  expect(withoutBlip.slides[0]!.images).toBe(0)
+  const withoutBlip = await indexOf(await pptxFixture([{ title: 'One', blipWithoutReference: true }]))
+  expect(withoutBlip.slides[0]!.pictureOrigins).toEqual([])
 })
 
-test('an odp picture inside speaker notes is not counted as a picture on the slide', async () => {
+test('an odp picture inside speaker notes is not recorded as a picture on the slide', async () => {
   /*
    * anydoc publishes nothing from the notes — MEASURED: the notes picture
    * produces no block at all — so counting it would leave the reconciler
@@ -636,6 +659,6 @@ test('an odp picture inside speaker notes is not counted as a picture on the sli
     { title: 'Notes only', notes: 'A note.', notesImage: true },
   ]))
 
-  expect(index.slides[0]!.images).toBe(1)
-  expect(index.slides[1]!.images).toBe(0)
+  expect(index.slides[0]!.pictureOrigins).toEqual(['Pictures/image1.png'])
+  expect(index.slides[1]!.pictureOrigins).toEqual([])
 })

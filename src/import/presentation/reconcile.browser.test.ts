@@ -157,15 +157,21 @@ test("one slide's text:h does not demote every slide title on the page", async (
   expect(result.findings).toEqual([])
 })
 
-test('a deck with a video imports it, poster frame and all', async () => {
+test.each([
+  ['video', { video: true }],
+  ['audio', { audio: true }],
+] as const)('a deck with %s imports it, poster frame and all', async (_kind, media) => {
   /*
-   * PowerPoint writes a media `p:pic` with a poster frame, and anydoc emits
-   * that poster as an ordinary picture block. Counting the shape as media alone
-   * left the poster belonging to nobody, and one video anywhere in a lecture
-   * deck refused the whole import.
+   * PowerPoint writes a media `p:pic` with a poster frame — an inserted sound
+   * clip shows a speaker icon exactly as a video shows a still — and anydoc
+   * emits that poster as an ordinary picture block. Treating the shape as
+   * media ALONE left the poster belonging to nobody, and one clip anywhere in
+   * a lecture deck refused the whole import. The audio row is measured here
+   * rather than reasoned from the video row: the index treats `a:audioFile`
+   * and `a:videoFile` alike, and that claim was never checked against anydoc.
    */
   const { anydocHtml, result } = await reconcileBytes('pptx', await pptxFixture([
-    { title: 'One', body: ['Body one'], video: true },
+    { title: 'One', body: ['Body one'], ...media },
     { title: 'Two', body: ['Body two'] },
   ]))
 
@@ -178,10 +184,17 @@ test('a deck with a video imports it, poster frame and all', async () => {
   expect(result.findings[0]!.message).toContain('1 media')
 })
 
-test('a counted picture anydoc never emitted refuses rather than taking the next slide\'s', async () => {
-  // A `p:pic` whose `r:embed` names an undefined relationship: anydoc emits
-  // nothing for it and raises no finding, so nothing but the index's own count
-  // knows the picture is missing.
+test("a broken embed no longer costs the next slide its picture", async () => {
+  /*
+   * A `p:pic` whose `r:embed` names an undefined relationship. Under the count
+   * budget this deck REFUSED: slide 1 counted a picture, spent that count on
+   * the one picture anydoc did emit — slide 2's — and the refusal then named
+   * slide 2 as the slide missing a picture, which was as much as a budget could
+   * say. Under the join there is nothing to say: an undefined relationship
+   * resolves to no part, so slide 1 references nothing, expects nothing, and
+   * cannot take the block that carries slide 2's part. The picture lands on
+   * slide 2, where it came from, and the deck imports.
+   */
   const { anydocHtml, result } = await reconcileBytes('pptx', await pptxFixture([
     { title: 'One', brokenImage: true },
     { image: { alt: 'A cell' } },
@@ -189,14 +202,11 @@ test('a counted picture anydoc never emitted refuses rather than taking the next
   ]))
 
   expect(anydocHtml.match(/<img/g)).toHaveLength(1)
-  const finding = result.findings.find((entry) => entry.code === 'presentation-unattributed-content')
-  expect(finding?.severity).toBe('blocker')
-  // Named by KIND: every slide's text is present and only a picture is missing,
-  // so "missing content" would send the author looking in the wrong place. The
-  // slide it names is the one left SHORT — slide 1 spent its budget on the
-  // picture anydoc did emit — which is as much as a forward-only walk can say
-  // without guessing which picture was meant for which slide.
-  expect(finding?.message).toContain('slide 2 is missing a picture the deck says it carries')
+  const sections = sectionsOf(result.html)
+  expect(sections[0]!.querySelector('img')).toBeNull()
+  expect(sections[1]!.querySelector('img')).not.toBeNull()
+  expect(sections[2]!.querySelector('img')).toBeNull()
+  expect(result.findings.map((finding) => finding.code)).toEqual(['presentation-untitled-slide'])
 })
 
 test.each([
@@ -214,14 +224,31 @@ test.each([
   ])],
   ['a grouped picture', async () => pptxFixture([{ title: 'One', group: { image: true } }])],
   ['a linked picture', async () => pptxFixture([{ title: 'One', linkedImage: true }])],
-] as const)('%s spends its budget and does not refuse', async (_name, fixture) => {
-  // Refusing on an unspent budget is only safe if every ordinary picture shape
-  // actually spends one.
+] as const)('%s is attributed to its own slide and does not refuse', async (_name, fixture) => {
+  // Refusing when a referenced part never arrives is only safe if every
+  // ordinary picture shape really does arrive carrying that part.
   const { result } = await reconcileBytes('pptx', await fixture())
 
   expect(result.findings.map((finding) => finding.code))
     .not.toContain('presentation-unattributed-content')
   expect(result.html).toContain('<img')
+})
+
+test('a p:pic naming no image data at all is a picture in neither account', async () => {
+  // A bare `<a:blip/>`: no `r:embed`, no `r:link`. MEASURED — anydoc emits no
+  // block for it, and it resolves through the rels to no part, so the two
+  // accounts agree that nothing is there. Under the count budget this was a
+  // rule the index had to KNOW ("do not count a p:pic naming no blip"); now it
+  // is a consequence of there being nothing to resolve.
+  const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', body: ['Body one'], blipWithoutReference: true },
+    { title: 'Two', body: ['Body two'] },
+  ]))
+
+  expect(anydocHtml).not.toContain('<img')
+  expect(anydocHtml).not.toContain('[Embedded image')
+  expect(index.slides[0]!.pictureOrigins).toEqual([])
+  expect(result.findings).toEqual([])
 })
 
 test("an ink annotation's picture stays on the slide that carries it", async () => {
@@ -261,7 +288,7 @@ test('a picture that could not be packaged is attributed, not refused', async ()
   const index = readPresentationIndex('pptx', parsed.presentation!.parts)
   const result = reconcilePresentation({ html: parsed.normalized!.html, index, sourceLabel: 'PPTX' })
 
-  expect(parsed.normalized!.html).toContain('<span>[Embedded image: A pasted chart]</span>')
+  expect(parsed.normalized!.html).toContain('<span data-origin-part="ppt/media/image2.emf">[Embedded image: A pasted chart]</span>')
   // The loss is already reported, by the parser, with the actionable message.
   expect(parsed.normalized!.findings.map((finding) => finding.code)).toContain('embedded-content')
   // So the reconciler adds no second refusal, and the placeholder sits in the
@@ -337,32 +364,33 @@ test("a pasted worksheet's preview stays on the slide that carries it", async ()
     { title: 'Two', body: ['Body two'] },
   ]))
 
-  expect(anydocHtml).toContain('<span>[Embedded image: Worksheet]</span>')
+  expect(anydocHtml).toContain('<span data-origin-part="ppt/embeddings/worksheet1.xlsx">[Embedded image: Worksheet]</span>')
   const sections = sectionsOf(result.html)
   expect(sections[0]!.textContent).toContain('[Embedded image: Worksheet]')
   expect(sections[1]!.textContent).not.toContain('[Embedded image')
   expect(result.findings).toEqual([])
 })
 
-test('a deck whose pictures anydoc did not all emit fails closed', async () => {
+test('the deck that used to refuse for a broken embed now attributes every picture', async () => {
   /*
-   * Slide 1 holds a picture anydoc emits nothing for; slide 2 holds a worksheet
-   * whose preview it does emit. The counts no longer line up on either slide,
-   * and the point of this test is the DIRECTION of the failure: a blocker, and
-   * no block of slide 2's published under slide 1's heading. It fails closed
-   * here for slide 1's unspent budget rather than for the preview — this is a
-   * regression guard on that direction, not the pin for the OLE count, which is
-   * the test above.
+   * The adversarial deck from fix round 5: slide 1 holds a picture anydoc emits
+   * nothing for, slide 2 holds a worksheet whose preview it does emit. Under
+   * the count budget slide 1's unspent count refused the whole import; the
+   * report recorded that it "fails closed here for slide 1's unspent budget
+   * rather than for the preview". Neither slide's account is ambiguous under
+   * the join — slide 1 references no resolvable part, slide 2 references the
+   * worksheet — so the preview stays where it belongs and nothing refuses.
    */
   const { result } = await reconcileBytes('pptx', await pptxFixture([
     { title: 'One', brokenImage: true },
     { title: 'Two', body: ['Body two'], oleObject: true },
   ]))
 
-  const finding = result.findings.find((entry) => entry.code === 'presentation-unattributed-content')
-  expect(finding?.severity).toBe('blocker')
-  expect(finding?.message).toContain('missing a picture the deck says')
-  expect(sectionsOf(result.html)[0]!.textContent).not.toContain('Body two')
+  expect(result.findings).toEqual([])
+  const sections = sectionsOf(result.html)
+  expect(sections[0]!.textContent).not.toContain('Body two')
+  expect(sections[0]!.textContent).not.toContain('[Embedded image')
+  expect(sections[1]!.textContent).toContain('[Embedded image: Worksheet]')
 })
 
 test('a placeholder whose alt text contains brackets does not refuse the deck', async () => {
@@ -372,7 +400,100 @@ test('a placeholder whose alt text contains brackets does not refuse the deck', 
     { title: 'One', body: ['Body one'], unpackageableImage: { alt: 'Figure [3] pasted' } },
   ]))
 
-  expect(anydocHtml).toContain('<span>[Embedded image: Figure [3] pasted]</span>')
+  expect(anydocHtml).toContain('<span data-origin-part="ppt/media/image2.emf">[Embedded image: Figure [3] pasted]</span>')
   expect(result.findings).toEqual([])
   expect(sectionsOf(result.html)[0]!.textContent).toContain('[Embedded image: Figure [3] pasted]')
+})
+
+
+test.each([
+  ['odp', async () => odpFixture([
+    { title: 'One', image: { alt: 'First' } },
+    { title: 'Two', image: { alt: 'Second' } },
+  ])],
+  ['pptx', async () => pptxFixture([
+    { title: 'One', image: { alt: 'First' } },
+    { title: 'Two', image: { alt: 'Second' } },
+  ])],
+] as const)('two %s slides showing the SAME media part keep one picture each', async (kind, fixture) => {
+  /*
+   * The shape the join has to answer for and a plain set-membership rule gets
+   * wrong: one media part, referenced by two slides — a logo, a course banner,
+   * the same diagram reused. Both blocks carry the identical
+   * `data-origin-part`, so identity alone cannot say which is whose, and a
+   * slide allowed to take every block bearing a part it references would eat
+   * both and leave slide 2 empty. Each slide takes ONE block for a part another
+   * slide also references, which is what the deck's own order says.
+   */
+  const { anydocHtml, result } = await reconcileBytes(kind, await fixture())
+
+  const origins = [...anydocHtml.matchAll(/data-origin-part="([^"]*)"/g)].map((match) => match[1])
+  expect(origins).toHaveLength(2)
+  expect(origins[0]).toBe(origins[1])
+
+  const sections = sectionsOf(result.html)
+  expect(sections[0]!.querySelector('img')!.alt).toBe('First')
+  expect(sections[1]!.querySelector('img')!.alt).toBe('Second')
+  expect(result.findings).toEqual([])
+})
+
+test('the same part twice on one slide and once on another refuses rather than guessing', async () => {
+  /*
+   * The residual ambiguity, pinned as a REFUSAL rather than left to a guess.
+   * PowerPoint declares one relationship per media part however many shapes
+   * show it, so "twice on slide 1" and "once on slide 1" are the same set —
+   * and since slide 2 references the same part, nothing in either account says
+   * whether the second block is slide 1's or slide 2's. Slide 1 takes one,
+   * slide 2 takes the next, and the third belongs to nobody.
+   */
+  const { anydocHtml, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', image: { alt: 'First' }, secondImage: { alt: 'Second' } },
+    { title: 'Two', image: { alt: 'Third' } },
+  ]))
+
+  expect(anydocHtml.match(/<img/g)).toHaveLength(3)
+  const finding = result.findings.find((entry) => entry.code === 'presentation-unattributed-content')
+  expect(finding?.severity).toBe('blocker')
+  expect(finding?.message).toContain('1 block of content belongs to no slide')
+})
+
+test('a picture anydoc cannot identify refuses rather than joining the open slide', async () => {
+  /*
+   * A `p:pic` whose `r:embed` names a relationship the package DOES declare,
+   * pointing at a media part the package does not contain. MEASURED with real
+   * anydoc 0.2.4: it emits `<span data-origin-part="">[Embedded image: A
+   * missing picture]</span>` — a picture with no identity at all, because
+   * anydoc has no bytes and therefore no origin to report. No slide can
+   * reference the empty string, so it joins to nothing and both halves of the
+   * refusal fire: the block belongs to no slide, and slide 1 never received the
+   * part its own shapes point at.
+   */
+  const { anydocHtml, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', body: ['Body one'], missingMediaImage: true },
+    { title: 'Two', body: ['Body two'] },
+  ]))
+
+  expect(anydocHtml).toContain('<span data-origin-part="">[Embedded image: A missing picture]</span>')
+  const finding = result.findings.find((entry) => entry.code === 'presentation-unattributed-content')
+  expect(finding?.severity).toBe('blocker')
+  expect(finding?.message).toContain('slide 1 is missing a picture the deck says it carries')
+  expect(finding?.message).toContain('blocks of content belong to no slide')
+})
+
+test('no join key survives into the html this module publishes', async () => {
+  // `data-origin-part` is how a picture says where it came from; it is not
+  // content, and `data-*` passes the Canvas allowlist untouched, so a package
+  // path would otherwise ride into the exported page. Every picture shape at
+  // once: a packaged picture, a linked one, and an unpackageable placeholder.
+  const { anydocHtml, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', body: ['Body one'], image: { alt: 'A cell' } },
+    { title: 'Two', linkedImage: true },
+    { title: 'Three', unpackageableImage: {} },
+  ]))
+
+  expect(anydocHtml).toContain('data-origin-part')
+  expect(result.html).not.toContain('data-origin-part')
+  expect(result.html).toContain('<img')
+  expect(result.html).toContain('[Embedded image')
+  expect(result.findings.map((finding) => finding.code)).toEqual([])
 })

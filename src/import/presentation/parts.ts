@@ -9,6 +9,23 @@
  */
 export type PresentationPackageKind = 'pptx' | 'odp'
 
+const PRESENTATION_PACKAGE_KINDS: readonly PresentationPackageKind[] = ['pptx', 'odp']
+
+/**
+ * Whether a detected format is a deck whose own package index will be read.
+ *
+ * ONE predicate, deliberately, because two decisions have to agree exactly:
+ * the Worker only collects the package parts above for these formats, and
+ * `parsers/anydoc-html.ts` only tags its pictures with the join key
+ * (`data-origin-part`) for these formats. If those two ever disagreed, either
+ * a deck would arrive with an index and no join keys — refusing every deck
+ * with a picture — or a DOCX would carry a join key nothing reads into the
+ * exported page. Neither is visible from inside either module alone.
+ */
+export function isPresentationPackageKind(format: string): format is PresentationPackageKind {
+  return PRESENTATION_PACKAGE_KINDS.some((kind) => kind === format)
+}
+
 const PPTX_PATTERNS: readonly RegExp[] = [
   /^ppt\/presentation\.xml$/,
   /^ppt\/_rels\/presentation\.xml\.rels$/,

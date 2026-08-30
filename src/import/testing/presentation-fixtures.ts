@@ -111,6 +111,21 @@ export interface PptxSlideSpec {
    */
   brokenImage?: boolean
   /**
+   * A `p:pic` whose `p:blipFill` holds a BARE `<a:blip/>` — no `r:embed` and no
+   * `r:link`, so it names no image data at all. anydoc emits nothing for it,
+   * and it resolves to no part, so neither account records a picture.
+   */
+  blipWithoutReference?: boolean
+  /**
+   * A picture whose `r:embed` names a relationship the package DOES declare,
+   * pointing at a media part the package does not contain. Unlike
+   * `brokenImage` the reference resolves, so the index expects a picture from
+   * that part — and anydoc, having no bytes, cannot report an origin for
+   * whatever it emits. It is the shape that exercises the join's fail-closed
+   * path: a picture that can be identified by neither account.
+   */
+  missingMediaImage?: boolean
+  /**
    * A picture whose bytes are an EMF — what PowerPoint writes for a pasted
    * chart, a Visio drawing, or legacy clip art. `prepareAssets` sniffs magic
    * bytes and packages only PNG/JPEG/GIF/WebP, so this one cannot be packaged,
@@ -152,6 +167,14 @@ export interface PptxSlideSpec {
   diagram?: boolean
   chart?: boolean
   video?: boolean
+  /**
+   * A media `p:pic` carrying `a:audioFile` rather than `a:videoFile` — an
+   * inserted sound clip — with the same embedded poster blip PowerPoint gives a
+   * video (an audio clip shows a speaker icon). The index treats the two media
+   * kinds identically; this exists so that claim is measured against real
+   * anydoc rather than reasoned from the video case.
+   */
+  audio?: boolean
   table?: boolean
   /**
    * Content authored inside a `p:grpSp` — PowerPoint's own "Group" command.
@@ -416,6 +439,12 @@ function slideXml(spec: PptxSlideSpec): string {
       `<p:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
       `<p:spPr/></p:pic>`
     : ''
+  const audio = spec.audio
+    ? `<p:pic><p:nvPicPr><p:cNvPr id="25" name="Lecture audio"/><p:cNvPicPr/>` +
+      `<p:nvPr><a:audioFile r:link="rIdAudio"/></p:nvPr></p:nvPicPr>` +
+      `<p:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+      `<p:spPr/></p:pic>`
+    : ''
   const secondImage = spec.secondImage
     ? `<p:pic><p:nvPicPr><p:cNvPr id="9" name="Picture 9"` +
       `${spec.secondImage.alt === undefined ? '' : ` descr="${xmlEscape(spec.secondImage.alt)}"`}/>` +
@@ -438,6 +467,17 @@ function slideXml(spec: PptxSlideSpec): string {
   const brokenImage = spec.brokenImage
     ? `<p:pic><p:nvPicPr><p:cNvPr id="11" name="Broken Picture 11"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
       `<p:blipFill><a:blip r:embed="rIdMissingImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+      `<p:spPr/></p:pic>`
+    : ''
+  const blipWithoutReference = spec.blipWithoutReference
+    ? `<p:pic><p:nvPicPr><p:cNvPr id="26" name="Unreferenced Blip 26"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+      `<p:blipFill><a:blip/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+      `<p:spPr/></p:pic>`
+    : ''
+  const missingMediaImage = spec.missingMediaImage
+    ? `<p:pic><p:nvPicPr><p:cNvPr id="19" name="Missing Media 19" descr="A missing picture"/>` +
+      `<p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+      `<p:blipFill><a:blip r:embed="rIdMissingMedia"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
       `<p:spPr/></p:pic>`
     : ''
   const oleObject = spec.oleObject
@@ -463,10 +503,11 @@ function slideXml(spec: PptxSlideSpec): string {
     (spec.inkInAlternateContent ? alternateContentInk() : '')
   const nested = spec.nestedGroupDepth ? nestedGroups(spec.nestedGroupDepth) : ''
 
-  const pictures = `${image}${secondImage}${linkedImage}${brokenImage}${unpackageableImage}`
+  const pictures = `${image}${secondImage}${linkedImage}${brokenImage}${blipWithoutReference}` +
+    `${missingMediaImage}${unpackageableImage}`
   const shapes = spec.titleLast
-    ? `${body}${pictures}${diagram}${chart}${video}${table}${oleObject}${group}${alternateContent}${nested}${title}`
-    : `${title}${body}${pictures}${diagram}${chart}${video}${table}${oleObject}${group}${alternateContent}${nested}`
+    ? `${body}${pictures}${diagram}${chart}${video}${audio}${table}${oleObject}${group}${alternateContent}${nested}${title}`
+    : `${title}${body}${pictures}${diagram}${chart}${video}${audio}${table}${oleObject}${group}${alternateContent}${nested}`
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -602,8 +643,16 @@ export async function pptxFixture(
     if (slide.unpackageableImage || slide.oleObject) {
       rels.push('<Relationship Id="rIdEmf" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image2.emf"/>')
     }
-    if (slide.image || slide.secondImage || slide.video || slide.group?.image || slide.inkInAlternateContent) {
+    if (slide.audio) {
+      rels.push('<Relationship Id="rIdAudio" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio" Target="../media/audio1.m4a" TargetMode="External"/>')
+    }
+    if (slide.image || slide.secondImage || slide.video || slide.audio || slide.group?.image ||
+      slide.inkInAlternateContent) {
       rels.push('<Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>')
+    }
+    if (slide.missingMediaImage) {
+      // Declared, and pointing at a part deliberately never written below.
+      rels.push('<Relationship Id="rIdMissingMedia" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image3.png"/>')
     }
     if (slide.linkedImage) {
       rels.push('<Relationship Id="rIdLinkedImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="https://example.edu/cell.png" TargetMode="External"/>')
@@ -615,8 +664,8 @@ export async function pptxFixture(
     }
   })
 
-  if (slides.some((slide) => slide.image || slide.secondImage || slide.video || slide.group?.image ||
-    slide.inkInAlternateContent)) {
+  if (slides.some((slide) => slide.image || slide.secondImage || slide.video || slide.audio ||
+    slide.group?.image || slide.inkInAlternateContent)) {
     entries.push({ name: 'ppt/media/image1.png', data: EMBEDDED_IMAGE_PNG })
   }
   if (slides.some((slide) => slide.unpackageableImage || slide.oleObject)) {

@@ -16,7 +16,7 @@ import type {
 import { normalizeAnyDocDocument } from '../parsers/anydoc-html'
 import { prepareAssets } from '../assets'
 import { readZipParts } from '../zip-read'
-import { wantedPresentationPart } from '../presentation/parts'
+import { isPresentationPackageKind, wantedPresentationPart } from '../presentation/parts'
 
 const ANYDOC_VERSION = '0.2.4'
 const workerScope = self as DedicatedWorkerGlobalScope
@@ -123,8 +123,8 @@ workerScope.addEventListener('message', (event: MessageEvent<ParserProbeRequest>
       // and `document.ts` refuses a presentation with no index rather than the
       // Worker deciding for every format at once.
       let presentation: { kind: 'pptx' | 'odp'; parts: Record<string, string> } | undefined
-      if (detectedFormat === 'pptx' || detectedFormat === 'odp') {
-        const kind = detectedFormat
+      const kind = detectedFormat
+      if (kind !== undefined && isPresentationPackageKind(kind)) {
         const parts = await readZipParts(bytes, (path) => wantedPresentationPart(kind, path))
         presentation = { kind, parts: Object.fromEntries(parts) }
       }
