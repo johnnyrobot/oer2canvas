@@ -11,8 +11,8 @@ infrastructure.
 
 The public web app supports OpenStax, LibreTexts, Pressbooks, pasted text/Markdown/HTML, local
 UTF-8 `.txt`, `.md`, `.markdown`, `.html`, and `.htm` files, text-oriented `.docx`, `.epub`,
-`.odt`, and `.rtf` files, text-based `.pdf` files, and one web page at a time, through one output
-path:
+`.odt`, and `.rtf` files, text-based `.pdf` files, PowerPoint decks (`.pptx`, `.pptm`, `.ppsx`,
+`.ppsm`), and one web page at a time, through one output path:
 
 - a Common Cartridge 1.1 download, with no Canvas address, account, or token access.
 
@@ -71,6 +71,38 @@ browser; and a figure is marked in place rather than imported. The document-impo
 matrix is desktop Chrome and Firefox.
 Playwright WebKit remains diagnostic cross-engine evidence; Safari and mobile browsers are not
 supported for document import.
+
+A PowerPoint deck becomes **one proposed page**, with each slide a titled section — a deck is
+one lesson, and an instructor who wants it split can do that in the page plan editor, which
+already splits at any block boundary. Because a deck is not a document, its slides are read
+twice: once by the parser, and once from the file's own package, so the two accounts can be
+compared. What that comparison buys, and what it costs:
+
+- **Speaker notes are never imported.** The parser emits a presenter's private note as an
+  ordinary quotation, indistinguishable from a pull quote; matching it against the deck's own
+  notes part is what tells them apart. Notes are dropped and the slides that had them are
+  named, so you can add whatever students actually need.
+- **Diagrams, charts, and embedded audio or video are not imported.** They leave no content
+  behind at all, so a finding names the slide, the kind, and the count; add them in Canvas
+  afterwards.
+- **A slide with no title is titled by its number** (`Slide 7`) and listed, so it can be found
+  and renamed. Roughly two in five slides in real decks carry no title placeholder, so this is
+  ordinary rather than exceptional.
+- **An equation blocks import**, the same as in a Word document or an EPUB.
+- **An image the importer cannot package** — a pasted chart, a Visio drawing, or legacy clip
+  art, usually saved as EMF or WMF — blocks import; replace it with PNG, JPEG, GIF, or WebP.
+- **A slide whose content cannot be matched to the deck's own outline blocks import outright.**
+  Publishing a guess would put a paragraph under the wrong slide's heading, where nothing looks
+  wrong and no reader could discover it.
+- **Macros are never read or run.** A `.pptm` or `.ppsm` imports its slides and nothing of its
+  macro.
+
+OpenDocument Presentation (`.odp`) is **not** offered. Its support was evaluated against the
+same bar and did not meet it: an Impress chart or diagram is an embedded object neither account
+can identify, so it is dropped — or published as a still picture of itself — with nothing saying
+so. Everything else on that path works, but a silent loss is the one thing this workflow refuses
+to publish, so the format stays unreleased rather than shipping with a limitation nobody could
+act on.
 
 A failed or cancelled import says what went wrong, the form stays usable, and nothing from
 the interrupted attempt is kept, so you can correct the input and try again.

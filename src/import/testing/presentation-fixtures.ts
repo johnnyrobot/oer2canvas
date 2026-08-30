@@ -1064,6 +1064,23 @@ export interface OdpPageSpec {
    */
   video?: { poster?: boolean }
   /**
+   * A `draw:frame > draw:object` referencing an embedded sub-document — the
+   * shape Impress writes for an INSERTED CHART, and the same shape it writes
+   * for any other embedded object (a Draw diagram, a Math formula, a Calc
+   * range). `replacementImage` adds the `ObjectReplacements/` picture Impress
+   * normally writes beside it, which is the shape a real `.odp` almost always
+   * has.
+   *
+   * The sub-document itself is deliberately NOT written into the package: no
+   * account reads it. anydoc emits nothing for the `draw:object`, and
+   * `odpIndex` reports `unrepresentable.charts` as a hardcoded zero because
+   * ODF gives the frame no `draw:mime-type` to classify it by — the mime type
+   * lives in the manifest entry for the sub-document's own directory. This
+   * option exists to PIN that gap, which is why ODP is `status: 'probe-only'`
+   * in `../capability.ts`; see `reconcile.browser.test.ts`'s ODP chart test.
+   */
+  chartObject?: { replacementImage?: boolean }
+  /**
    * The `text:outline-level` of `headingText`. Level 2 makes anydoc emit an
    * `<h2>`, which would otherwise ship as a SIBLING of the slide title.
    */
@@ -1254,6 +1271,22 @@ function odpNotesContentXml(page: OdpPageSpec, imageHref: string): string {
   return `${heading}${nested}`
 }
 
+/**
+ * Whether any page references the shared `Pictures/` part, so the ZIP entry and
+ * its manifest row are written. ONE predicate, used by both, because two copies
+ * that must agree is how a fixture ends up declaring a picture it never wrote —
+ * and every ODP option below that renders a `draw:image` from `imageHref` has
+ * to be listed here or the package is inconsistent with its own content.
+ */
+function needsPicturePart(page: OdpPageSpec): boolean {
+  return Boolean(page.image || page.secondImage || page.alternateImages || page.notesImage ||
+    page.video?.poster || page.chartObject?.replacementImage ||
+    page.hyperlinkedImage || page.imageInTableCell || page.imageInNestedFrame ||
+    page.imageInCustomShape || page.unframedImage || page.groupedImage || page.deeplyGroupedImage ||
+    page.imageInFrameInFrame || page.imageInFrameInGroupInFrame ||
+    page.imageInFrameInFrameInGroup || page.groupDepth)
+}
+
 export async function odpFixture(
   pages: readonly OdpPageSpec[],
   { imagePartName = 'image1.png' }: {
@@ -1364,6 +1397,15 @@ export async function odpFixture(
       : ''
     const table = page.table ? odpTable(`Table ${index + 1}`) : ''
     const media = page.video ? odpMedia(`Video ${index + 1}`, page.video.poster, imageHref) : ''
+    const chartObject = page.chartObject
+      ? `<draw:frame draw:name="Object ${index + 1}" svg:width="10cm" svg:height="8cm">` +
+        `<draw:object xlink:href="./Object ${index + 1}" xlink:type="simple" xlink:show="embed" ` +
+        `xlink:actuate="onLoad"/>` +
+        (page.chartObject.replacementImage
+          ? `<draw:image xlink:href="${imageHref}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>`
+          : '') +
+        `</draw:frame>`
+      : ''
     const nestedFrame = page.nestedFrameText
       ? odpNestedFrame(`Outer Frame ${index + 1}`, `Inner Frame ${index + 1}`, page.nestedFrameText)
       : ''
@@ -1373,7 +1415,7 @@ export async function odpFixture(
       : ''
     // A direct child of draw:page, the same level presentation:notes sits at.
     const comment = page.commentText ? odpAnnotation(`Comment ${index + 1}`, page.commentText) : ''
-    const extras = `${customShape}${groupedCustomShape}${nestedFrame}${table}${media}`
+    const extras = `${customShape}${groupedCustomShape}${nestedFrame}${table}${media}${chartObject}`
     const pictures = `${image}${secondImage}${alternateImages}${hyperlinkedImage}${imageInTableCell}` +
       `${imageInNestedFrame}${imageInCustomShape}${unframedImage}${groupedImage}${deeplyGroupedImage}` +
       `${imageInFrameInFrame}${imageInFrameInGroupInFrame}${imageInFrameInFrameInGroup}${groupDepthImage}` +
@@ -1396,12 +1438,7 @@ export async function odpFixture(
       `<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">` +
       `<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.presentation"/>` +
       `<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>` +
-      (pages.some((page) => page.image || page.secondImage || page.alternateImages || page.notesImage ||
-        page.video?.poster || page.hyperlinkedImage || page.imageInTableCell ||
-        page.imageInNestedFrame || page.imageInCustomShape || page.unframedImage ||
-        page.groupedImage || page.deeplyGroupedImage ||
-        page.imageInFrameInFrame || page.imageInFrameInGroupInFrame ||
-        page.imageInFrameInFrameInGroup || page.groupDepth)
+      (pages.some(needsPicturePart)
         ? `<manifest:file-entry manifest:full-path="${imagePart}" manifest:media-type="image/png"/>`
         : '') +
       (pages.some((page) => page.alternateImages)
@@ -1410,11 +1447,7 @@ export async function odpFixture(
       `</manifest:manifest>`) },
     { name: 'content.xml', data: utf8(content) },
   ]
-  if (pages.some((page) => page.image || page.secondImage || page.alternateImages || page.notesImage ||
-    page.video?.poster || page.hyperlinkedImage || page.imageInTableCell || page.imageInNestedFrame ||
-    page.imageInCustomShape || page.unframedImage || page.groupedImage || page.deeplyGroupedImage ||
-    page.imageInFrameInFrame || page.imageInFrameInGroupInFrame ||
-    page.imageInFrameInFrameInGroup || page.groupDepth)) {
+  if (pages.some(needsPicturePart)) {
     entries.push({ name: imagePart, data: EMBEDDED_IMAGE_PNG })
   }
   if (pages.some((page) => page.alternateImages)) {

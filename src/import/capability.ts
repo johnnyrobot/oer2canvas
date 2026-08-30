@@ -135,6 +135,25 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
       'application/vnd.ms-powerpoint.slideshow.macroEnabled.12',
     ],
     parser: 'anydoc',
+    /*
+     * ENABLED under issue 14's bar, on this evidence (measured 2026-08-30
+     * against real anydoc 0.2.4, over the seven `format: 'pptx'` corpus cases):
+     * every top-level block attributed with no blocker of any code; all three
+     * of design fact 6's constructs named together on the slide that carried
+     * them ("Slide 1 contains 1 diagram, 1 chart, 1 media"); the speaker-notes
+     * case's note absent from the imported HTML, proven load-bearing by
+     * mutation; and the shared accessibility and cartridge suites passing with
+     * a real packaged picture inside `web_resources/`.
+     *
+     * Two residuals are stated rather than closed, and the issue's `## Answer`
+     * carries the reasoning. `walkShapes` enumerates shape kinds instead of
+     * following one stated rule the way the ODP walk now does, so criterion 1
+     * is met by measurement over this corpus and not proven for every deck;
+     * and WHICH INSTANCE of a shared media part lands under which slide still
+     * rests on the index and anydoc agreeing about which shapes produce
+     * blocks, though a picture can never be published under a slide that does
+     * not reference its origin part at all.
+     */
     status: 'enabled',
     limitations: [
       'Speaker notes are not imported; slides that had them are listed so you can add what students need.',
@@ -153,14 +172,48 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
     extensions: ['.odp'],
     mediaTypes: ['application/vnd.oasis.opendocument.presentation'],
     parser: 'anydoc',
-    status: 'enabled',
+    /*
+     * PROBE-ONLY, and this is a verdict rather than an unfinished state.
+     *
+     * Issue 14's bar (see `.scratch/document-import/14-graduate-presentations-design.md`,
+     * "The bar, committed before the corpus is built") requires that every
+     * construct in design fact 6 — a diagram, a chart, and embedded media — be
+     * NAMED BY A FINDING on the slide that carried it. PPTX names all three,
+     * measured. ODP names ONE.
+     *
+     * Measured 2026-08-30 against real anydoc 0.2.4, both of the shapes
+     * LibreOffice Impress actually writes for an inserted chart
+     * (`draw:frame > draw:object`):
+     *
+     * - with no replacement image, the page imports as its heading and nothing
+     *   else, with ZERO findings;
+     * - with the `ObjectReplacements/` picture Impress normally writes beside
+     *   it, the page imports that still picture as though it were an ordinary
+     *   slide image, again with ZERO findings — so a reader is shown a snapshot
+     *   of a chart with nothing saying a chart was ever there.
+     *
+     * That is design fact 6's silent loss, unclosed, on ordinary Impress
+     * content. `odpIndex` reports `unrepresentable.diagrams` and `charts` as a
+     * hardcoded zero because ODF carries both as embedded OBJECTS rather than
+     * as the distinct frame kinds PPTX uses, and no mime type for either was
+     * ever measured — so the second reader this issue exists to build cannot
+     * notice what the parser lost for either one.
+     *
+     * Everything else about the ODP path is measured and works: sections per
+     * page, generated titles for untitled pages, speaker notes excluded and
+     * named, media counted, packaged pictures through the cartridge. None of
+     * that is enough on its own, because the failure above is silent, and a
+     * silent loss is the one outcome this workflow refuses to publish.
+     *
+     * Re-enabling it needs one thing: a measurement of what Impress writes for
+     * a chart and a diagram — the manifest media type of the embedded
+     * sub-document — so `odpIndex` can count them the way `pptxIndex` counts a
+     * `graphicData` uri. That is a task, not a flag flip.
+     */
+    status: 'probe-only',
     limitations: [
-      'Speaker notes are not imported; slides that had them are listed so you can add what students need.',
-      'Embedded audio or video is not imported — add it in Canvas afterwards.',
-      'A slide with no title is titled by its number so you can rename it.',
-      'An equation blocks import; equation rendering is not supported yet.',
-      'An image not in a format this importer can package (PNG, JPEG, GIF, or WebP) blocks import; replace it with one of those formats first.',
-      "A slide whose content cannot be matched to the deck's own outline blocks import outright, because publishing it could put content under the wrong slide.",
+      'Not released: an Impress chart or diagram is an embedded object this importer cannot notice, so it is dropped — or published as a still picture of itself — with no finding saying so.',
+      'Everything else measured on this path works: one section per page, generated titles for untitled pages, speaker notes excluded and named, embedded media named, packaged pictures through the cartridge.',
     ],
     probe: parserProbe('anydoc', 'odp'),
   },

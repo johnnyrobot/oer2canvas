@@ -6,7 +6,7 @@ import {
   semanticRtfFixture,
 } from './structured-document-fixtures'
 import { pdfFixture } from './pdf-fixture'
-import { pptxFixture, odpFixture } from './presentation-fixtures'
+import { pptxFixture } from './presentation-fixtures'
 
 const utf8 = (value: string) => new TextEncoder().encode(value)
 
@@ -19,7 +19,7 @@ const utf8 = (value: string) => new TextEncoder().encode(value)
  * a reader cannot see what a case is FOR — so `standsInFor` is required, and a
  * test enforces it.
  *
- * COVERAGE SHAPE. Every one of the ten released file formats
+ * COVERAGE SHAPE. Every one of the nine released file formats
  * (`RELEASED_SOURCES` in `../released-sources.ts`) gets its own semantic
  * case — an ordinary document in that format, proving the parser handles the
  * shape it will actually see most often. Beyond that baseline, six
@@ -32,16 +32,16 @@ const utf8 = (value: string) => new TextEncoder().encode(value)
  * normalization path downstream of each parser — `anydoc-html.ts`'s
  * `normalizeAnyDocDocument`, which every non-native format funnels through —
  * not the parser's own format-specific plumbing, so two structurally
- * different carriers are enough evidence without paying for all ten.
+ * different carriers are enough evidence without paying for all nine.
  *
- * PPTX and ODP do not repeat that DOCX/EPUB structural set — a
+ * PPTX does not repeat that DOCX/EPUB structural set — a
  * DOCX-shaped "merged cell" or "footnote" property would not exercise
  * anything a deck actually does — but they are not left at the semantic
  * baseline either. `presentation/reconcile.ts` is a second reconciliation
- * pass downstream of anydoc, unique to these two formats, and it has its own
+ * pass downstream of anydoc, unique to the presentation formats, and it has its own
  * failure modes worth a case each: a slide with no title
  * (`pptx-untitled-slide`), speaker notes that must not publish
- * (`pptx-speaker-notes`, `odp-speaker-notes`), and content anydoc drops with
+ * (`pptx-speaker-notes`), and content anydoc drops with
  * no block at all (`pptx-unrepresentable`). `pptx-slideshow-container` and
  * `pptx-macro-container` cover the PPTX-family container variants
  * (`presentation.browser.test.ts` covers the remaining `.ppsm` extension
@@ -50,10 +50,8 @@ const utf8 = (value: string) => new TextEncoder().encode(value)
  * is supposed to raise would still pass a check that only looked at the html.
  *
  * `pptx-packaged-image` is the SEVENTH pptx case (there are seven
- * `format: 'pptx'` cases in this file; `odp-speaker-notes` below is ODP, not
- * PPTX), and `odp-packaged-image` is one of THREE `format: 'odp'` cases. Both
- * are placed FIRST among their format's cases rather than after
- * `pptx-semantic`/`odp-semantic`, for a reason specific to
+ * `format: 'pptx'` cases in this file). It is placed FIRST among them rather
+ * than after `pptx-semantic`, for a reason specific to
  * `cartridge-artifact.browser.test.ts`: that suite runs the real export
  * pipeline and a real `unzip` against only the FIRST case per format, so a
  * described image has to lead each format's cases for the real
@@ -375,54 +373,23 @@ export const CORPUS_CASES: readonly CorpusCase[] = [
     // page rather than merely being carried, unread, inside the zip.
     expectNotInHtml: ['macro payload placeholder'],
   },
-  {
-    /*
-     * Placed BEFORE `odp-semantic` deliberately, mirroring
-     * `pptx-packaged-image`'s placement ahead of `pptx-semantic` above and for
-     * the identical reason: `cartridge-artifact.browser.test.ts` takes only
-     * the FIRST case per format, and ODP needs its own described-image case
-     * leading its cases for that suite's real export-and-`unzip` path to ever
-     * package an ODP slide's own picture.
-     */
-    id: 'odp-packaged-image',
-    format: 'odp',
-    standsInFor: 'The same described-image property as pptx-packaged-image, carried through ODF\'s own `draw:frame`/`draw:image` picture shape instead of a PPTX `p:pic` — proving the SAME shared reconciler and asset-packaging path that pptx-packaged-image exercises also holds for the ODP import path, independently rather than assumed from the PPTX case.',
-    bytes: () => odpFixture([{ title: 'Diagram slide', image: { alt: 'A labelled chloroplast' } }]),
-    // Same three-part proof as `pptx-packaged-image`: the image survived
-    // (`<img`), it is a PACKAGED reference rather than an unpackaged one
-    // (`$IMS-CC-FILEBASE$/oer2canvas/`, `FILEBASE` in `import/assets.ts`), and
-    // its alt text survived (the text that carries it past the accessibility
-    // audit's decorative/alt gate into the cartridge at all).
-    expectInHtml: ['Diagram slide', '<img', '$IMS-CC-FILEBASE$/oer2canvas/', 'A labelled chloroplast'],
-  },
-  {
-    id: 'odp-semantic',
-    format: 'odp',
-    standsInFor: 'The same ordinary lecture deck, authored in Impress and saved as OpenDocument Presentation instead of PowerPoint\'s OOXML — a titled page with bulleted body text and a second page carrying a data table, proving the reconciler\'s ODF path reaches the same per-page sections.',
-    bytes: () => odpFixture([
-      { title: 'Photosynthesis', body: ['Light reactions', 'Calvin cycle'] },
-      { title: 'Where it happens', table: true },
-    ]),
-    expectInHtml: ['<section data-slide="1"', '<section data-slide="2"', 'Photosynthesis', '<table'],
-  },
-  {
-    id: 'odp-speaker-notes',
-    format: 'odp',
-    standsInFor: "The same private-notes property as pptx-speaker-notes, but carried in ODF's own `presentation:notes` element instead of a PPTX notes slide — the ODP path through the SAME shared reconciler, exercised independently rather than assumed from the PPTX case.",
-    bytes: () => odpFixture([
-      { title: 'Photosynthesis', body: ['Light reactions'], notes: 'Do not read this to the class.' },
-    ]),
-    expectInHtml: ['<section data-slide="1"', 'Photosynthesis'],
-    expectNotInHtml: ['Do not read this to the class.'],
-    // Same `presentation-speaker-notes` warning as `pptx-speaker-notes`,
-    // verified empirically for the ODP path independently.
-    expectFindings: ['presentation-speaker-notes'],
-  },
+  /*
+   * NO `odp-*` CASES, and their absence is issue 14's verdict rather than an
+   * omission. This corpus is evidence for what `RELEASED_SOURCES` claims, and
+   * ODP is `status: 'probe-only'` in `../capability.ts` — measured 2026-08-30
+   * to publish an Impress chart as a still picture of itself, or to drop it
+   * entirely, with no finding either way. Three `odp-*` cases lived here until
+   * that measurement (`odp-packaged-image`, `odp-semantic`,
+   * `odp-speaker-notes`, at commit 0d1f4e1); the ODP path they exercised is
+   * still covered against real anydoc by `presentation/reconcile.browser.test.ts`
+   * and `presentation/index.test.ts`, which do not route through
+   * `importStructuredDocument` and so do not assert a release claim.
+   */
 
   // ===== Structural properties, on DOCX and EPUB only =================
   //
   // See the module comment above for why these two formats and not all
-  // eight: they exercise the shared `anydoc-html.ts` normalization path
+  // nine: they exercise the shared `anydoc-html.ts` normalization path
   // that every non-native parser funnels through, from two structurally
   // different package shapes.
 

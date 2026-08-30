@@ -11,12 +11,17 @@ are in `package-lock.json`; this summary identifies the direct runtime and build
 | Temml | MIT | Converts publisher-carried TeX equations to MathML |
 | Marked 18.0.11 | MIT | Parses local Markdown with a controlled GFM configuration before sanitization |
 | @huggingface/transformers | Apache-2.0 | Browser/WebGPU runtime for the optional local VLM draft |
-| @firecrawl/anydoc-wasm 0.2.4 | MIT | Browser Worker parsing for released DOCX, ODT, RTF, and EPUB import |
+| @firecrawl/anydoc-wasm 0.2.4 | MIT | Browser Worker parsing for released DOCX, ODT, RTF, EPUB, and PowerPoint (`.pptx`, `.pptm`, `.ppsx`, `.ppsm`) import |
 | @firecrawl/pdf-inspector-wasm 1.17.0 | MIT | Browser Worker classification and text extraction for released PDF import |
 | Vite / Vitest / Playwright | MIT | Build and test tooling |
 | vite-plugin-pwa / Workbox | MIT | Service worker and PWA assets |
 | Tailwind CSS | MIT | Styles |
 | Wrangler | MIT | Cloudflare Worker development/deployment |
+
+AnyDoc also accepts OpenDocument Presentation (`.odp`). This release does not offer that
+format in the file picker — its support status is evaluated but not shipped, so the parser
+sees an `.odp` only in this repository's own tests. The licensing position is unchanged
+either way: the same package, under the same MIT license, is bundled regardless.
 
 The dependency packages ship their full license text in `node_modules` during development
 and in their published distributions. Publisher content and images remain subject to the

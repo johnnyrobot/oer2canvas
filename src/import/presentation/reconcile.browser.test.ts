@@ -1031,3 +1031,49 @@ test.each([
     expect(result.findings.map((finding) => finding.code)).toEqual(['presentation-speaker-notes'])
   },
 )
+
+test.each([
+  ['dropped entirely', { replacementImage: false }, 0],
+  ['published as a still picture of itself', { replacementImage: true }, 1],
+] as const)(
+  'ISSUE 14 VERDICT: an ODP chart is %s, with no finding saying so',
+  async (_name, chartObject, expectedImages) => {
+    /*
+     * THE MEASUREMENT THAT KEPT ODP OUT OF THIS RELEASE, pinned so it cannot
+     * quietly stop being true — in either direction.
+     *
+     * Issue 14's bar (see the design's "The bar, committed before the corpus is
+     * built") requires that every construct in design fact 6 — a diagram, a
+     * chart, and embedded media — be NAMED BY A FINDING on the slide that
+     * carried it. PPTX names all three together ("Slide 1 contains 1 diagram,
+     * 1 chart, 1 media"). ODP names only media: `odpIndex` reports
+     * `unrepresentable.diagrams` and `charts` as a hardcoded zero, because ODF
+     * carries both as an embedded OBJECT with no `draw:mime-type` on the frame
+     * to classify it by — the mime type lives in the manifest entry for the
+     * sub-document's own directory, which nothing here reads.
+     *
+     * Both rows below are shapes LibreOffice Impress actually writes for an
+     * inserted chart, and the SECOND is the worse one: the reader is shown a
+     * snapshot of a chart, with the same markup an ordinary slide picture
+     * produces and nothing at all saying a chart was ever there. That is design
+     * fact 6's silent loss, unclosed, which is why `capability.ts` has
+     * `status: 'probe-only'` on the `odp` entry.
+     *
+     * WHEN THIS TEST FAILS, DO NOT LOOSEN IT. A failure means the index learned
+     * to notice an embedded object, which is the one thing ODP needs to
+     * graduate — update this test to assert the finding, then flip the status
+     * and add the released-source entry back.
+     */
+    const { result } = await reconcileFixture([
+      { title: 'Process overview', chartObject },
+    ])
+
+    const sections = sectionsOf(result.html)
+    expect(sections).toHaveLength(1)
+    expect(sections[0]!.querySelectorAll('img')).toHaveLength(expectedImages)
+    // The whole verdict in one assertion: no `presentation-unrepresentable`,
+    // and no blocker either — the chart is lost SILENTLY, which is the outcome
+    // the second reader exists to prevent and does not, here.
+    expect(result.findings).toEqual([])
+  },
+)

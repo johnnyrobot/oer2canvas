@@ -36,6 +36,39 @@ the lines of "two pages created, second import updated both in place."
 Add new rows to the bottom of the relevant table after a real run. Do not edit or remove a past
 row; if a later run finds the same thing, that repetition is itself useful evidence.
 
+## 0. What a deck import does and does not do
+
+Recorded here, not only in the capability table, because these are the behaviours a human
+running the checks below will actually see on screen and could otherwise mistake for defects.
+
+`.pptx`, `.pptm`, `.ppsx`, and `.ppsm` are one format to this importer — all four containers
+report `pptx` from their own main-part content type — and a deck of any of them imports as
+**one proposed page whose slides are `<section data-slide="N">` sections**, each led by an
+`<h2>`. It is not one page per slide; the page plan editor splits at any block boundary if an
+instructor wants that.
+
+- **Speaker notes are excluded, and the slides that had them are named.** If a note reaches an
+  imported page, that is a defect, not a limitation — `src/import/corpus.browser.test.ts`
+  asserts its absence directly.
+- **Diagrams, charts, and embedded audio or video are not imported**, and each is named by a
+  warning that gives the slide, the kind, and the count. A video's still poster frame does
+  import as a picture; the warning is what records that a video, not a still, was there.
+- **A slide with no title is titled `Slide N`** and named by a warning, so it can be renamed
+  in the plan editor. This is common, not exceptional.
+- **Two different refusals, with two different screens.** A deck whose slides cannot be matched
+  to the deck's own outline is refused at the file picker with a message and never reaches the
+  plan editor, because there is no partial page it would be safe to show. A deck carrying an
+  image the importer cannot package instead reaches the plan editor with a blocking finding and
+  a disabled Prepare button, because that page's slide attribution is still trustworthy. Both
+  are correct; the difference is not currently explained to the user, and is worth watching for
+  in the screen-reader run below.
+
+**`.odp` is not offered.** Issue 14 evaluated it against the same bar and it did not pass: an
+Impress chart or diagram is an embedded object neither the parser nor the package index can
+identify, so it is dropped, or published as a still picture of itself, with no finding either
+way. Choosing an `.odp` in the file picker produces the ordinary unsupported-file refusal. That
+is expected behaviour, not a bug to report.
+
 ## 1. Live Canvas push
 
 Verifies that a real import creates pages in a real Canvas course, and — the property page

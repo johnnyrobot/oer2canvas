@@ -111,19 +111,18 @@ export const RELEASED_SOURCES: readonly ReleasedSource[] = [
     maximumBytes: DOCUMENT_IMPORT_LIMITS.maximumInputBytes,
     limitations: capabilityFor('pdf').limitations,
   },
+  // PPTX (and the .pptm/.ppsx/.ppsm containers its one capability entry
+  // carries) graduated under issue 14's bar. ODP did NOT, and has no entry
+  // here on purpose: it is `status: 'probe-only'` in the capability table, and
+  // the reason is written out at length on that entry. Adding a row for it
+  // would make `released-sources.test.ts`'s reconciliation fail, which is
+  // exactly the guard working.
   {
     format: 'pptx',
     kind: 'file',
     label: capabilityFor('pptx').label,
     maximumBytes: DOCUMENT_IMPORT_LIMITS.maximumInputBytes,
     limitations: capabilityFor('pptx').limitations,
-  },
-  {
-    format: 'odp',
-    kind: 'file',
-    label: capabilityFor('odp').label,
-    maximumBytes: DOCUMENT_IMPORT_LIMITS.maximumInputBytes,
-    limitations: capabilityFor('odp').limitations,
   },
   {
     format: 'web',
