@@ -111,6 +111,16 @@ export interface PptxSlideSpec {
    */
   brokenImage?: boolean
   /**
+   * The RAW `Target` written for this slide's `rIdImage` relationship, replacing
+   * the properly percent-encoded one the fixture writes by default. A
+   * relationship `Target` is a URI reference, so a conforming writer encodes a
+   * `%` as `%25` and a `#` as `%23`; this option exists to author the
+   * NON-conforming forms a converter or a hand-edited package produces, and the
+   * shapes that showed an unresolvable target vanishing silently instead of
+   * being recorded as a reference to something unknown.
+   */
+  imageTargetOverride?: string
+  /**
    * A `p:pic` whose `p:blipFill` holds a BARE `<a:blip/>` — no `r:embed` and no
    * `r:link`, so it names no image data at all. anydoc emits nothing for it,
    * and it resolves to no part, so neither account records a picture.
@@ -142,20 +152,47 @@ export interface PptxSlideSpec {
    */
   oleObject?: boolean
   /**
-   * An `mc:AlternateContent` whose two branches carry DIFFERENT TEXT, so a
-   * test can say which branch was read. Measured: anydoc renders the
-   * `mc:Fallback`.
+   * An `mc:AlternateContent` whose branches carry DIFFERENT TEXT, so a test can
+   * say which branch was read. Measured: anydoc renders the `mc:Fallback`
+   * unless the Choice requires only namespaces it supports.
    */
   alternateContentText?: {
     choice: string
-    fallback: string
     /**
-     * The prefix `mc:Choice` REQUIRES, keyed into `MC_REQUIRES_NAMESPACES`.
-     * `false` omits the attribute entirely, which is legal and which anydoc
-     * treats differently. Defaults to `p14`.
+     * OMITTED emits no `mc:Fallback` element at all — legal, and the shape
+     * that exposed the seventh counterexample: with no renderable Choice and
+     * no Fallback, anydoc renders NOTHING, so an index that fell back to
+     * reading the first Choice collected content no block ever carries.
      */
-    requires?: keyof typeof MC_REQUIRES_NAMESPACES | false
+    fallback?: string
+    /**
+     * The prefix (or prefixes) `mc:Choice` REQUIRES, keyed into
+     * `MC_REQUIRES_NAMESPACES`. An ARRAY declares several and requires all of
+     * them, which is the conservative reading `rendersChoiceBranch` takes.
+     * `''` emits `Requires=""` — present but empty, which is not the same
+     * shape as `false`, which omits the attribute entirely. Defaults to `p14`.
+     */
+    requires?: keyof typeof MC_REQUIRES_NAMESPACES | readonly (keyof typeof MC_REQUIRES_NAMESPACES)[] | '' | false
+    /**
+     * A SECOND `mc:Choice`, after the first. An `mc:AlternateContent` may
+     * carry several, and the renderable one wins wherever it sits — not the
+     * first one written.
+     */
+    secondChoice?: {
+      text: string
+      requires?: keyof typeof MC_REQUIRES_NAMESPACES | readonly (keyof typeof MC_REQUIRES_NAMESPACES)[] | '' | false
+    }
   }
+  /**
+   * An `mc:AlternateContent` carrying ONE `mc:Choice` with an unsupported
+   * `Requires` and NO `mc:Fallback`, whose Choice holds an ordinary embedded
+   * `p:pic` on the slide's own `rIdImage`. MEASURED: anydoc emits no block for
+   * it at all. The index used to fall back to reading the first Choice, which
+   * made it collect a picture part anydoc never emits — and because that part
+   * is the one an EARLIER slide really owns, the earlier slide lost a picture
+   * to this one with no finding at all (the seventh counterexample).
+   */
+  pictureInChoiceOnlyAlternateContent?: boolean
   /**
    * `mc:AlternateContent` as PowerPoint writes an INK ANNOTATION: the
    * `mc:Choice` is a `p14:contentPart` anydoc cannot render, and the
@@ -346,19 +383,53 @@ function alternateContentDiagram(): string {
  * simplest possible probe for which branch a reader takes, and the one that
  * measured anydoc rendering the `mc:Fallback`.
  */
-function alternateContentTextShapes(
-  { choice, fallback, requires = 'p14' }: NonNullable<PptxSlideSpec['alternateContentText']>,
+/**
+ * One `mc:Choice`'s namespace declarations and `Requires` attribute.
+ * `false` omits the attribute; `''` writes it empty; an array declares every
+ * prefix it names and requires all of them at once.
+ */
+function choiceRequiresXml(
+  requires: NonNullable<PptxSlideSpec['alternateContentText']>['requires'],
 ): string {
-  const prefix = requires === false ? '' : requires
-  const declaration = prefix
-    ? ` xmlns:${prefix}="${MC_REQUIRES_NAMESPACES[prefix]}" Requires="${prefix}"`
+  if (requires === false) return ''
+  const prefixes = requires === undefined ? ['p14'] : typeof requires === 'string'
+    ? (requires === '' ? [] : [requires])
+    : [...requires]
+  const declarations = prefixes
+    .map((prefix) => ` xmlns:${prefix}="${MC_REQUIRES_NAMESPACES[prefix]}"`)
+    .join('')
+  return `${declarations} Requires="${prefixes.join(' ')}"`
+}
+
+function alternateContentTextShapes(
+  { choice, fallback, requires, secondChoice }: NonNullable<PptxSlideSpec['alternateContentText']>,
+): string {
+  const second = secondChoice
+    ? `<mc:Choice${choiceRequiresXml(secondChoice.requires)}>` +
+      textShape(27, 'AC Second Choice Text 27', [secondChoice.text], '') +
+      `</mc:Choice>`
     : ''
+  const fallbackBranch = fallback === undefined
+    ? ''
+    : `<mc:Fallback>${textShape(14, 'AC Fallback Text 14', [fallback], '')}</mc:Fallback>`
   return `<mc:AlternateContent xmlns:mc="${MC_NS}">` +
-    `<mc:Choice${declaration}>` +
+    `<mc:Choice${choiceRequiresXml(requires)}>` +
     textShape(13, 'AC Choice Text 13', [choice], '') +
-    `</mc:Choice><mc:Fallback>` +
-    textShape(14, 'AC Fallback Text 14', [fallback], '') +
-    `</mc:Fallback></mc:AlternateContent>`
+    `</mc:Choice>${second}${fallbackBranch}</mc:AlternateContent>`
+}
+
+/**
+ * `mc:AlternateContent` with ONE unsupported `mc:Choice` holding a picture and
+ * NO `mc:Fallback` — see `pictureInChoiceOnlyAlternateContent`.
+ */
+function choiceOnlyAlternateContentPicture(): string {
+  return `<mc:AlternateContent xmlns:mc="${MC_NS}">` +
+    `<mc:Choice xmlns:p14="${MC_REQUIRES_NAMESPACES.p14}" Requires="p14">` +
+    `<p:pic><p:nvPicPr><p:cNvPr id="28" name="Choice Only Picture 28" descr="Choice only"/>` +
+    `<p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+    `<p:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+    `<p:spPr/></p:pic>` +
+    `</mc:Choice></mc:AlternateContent>`
 }
 
 /**
@@ -500,7 +571,8 @@ function slideXml(spec: PptxSlideSpec): string {
   const group = spec.group ? groupShape(spec.group) : ''
   const alternateContent = (spec.diagramInAlternateContent ? alternateContentDiagram() : '') +
     (spec.alternateContentText ? alternateContentTextShapes(spec.alternateContentText) : '') +
-    (spec.inkInAlternateContent ? alternateContentInk() : '')
+    (spec.inkInAlternateContent ? alternateContentInk() : '') +
+    (spec.pictureInChoiceOnlyAlternateContent ? choiceOnlyAlternateContentPicture() : '')
   const nested = spec.nestedGroupDepth ? nestedGroups(spec.nestedGroupDepth) : ''
 
   const pictures = `${image}${secondImage}${linkedImage}${brokenImage}${blipWithoutReference}` +
@@ -657,8 +729,9 @@ export async function pptxFixture(
       rels.push('<Relationship Id="rIdAudio" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio" Target="../media/audio1.m4a" TargetMode="External"/>')
     }
     if (slide.image || slide.secondImage || slide.video || slide.audio || slide.group?.image ||
-      slide.inkInAlternateContent) {
-      rels.push(`<Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${encodeURIComponent(imagePartName)}"/>`)
+      slide.inkInAlternateContent || slide.pictureInChoiceOnlyAlternateContent) {
+      const target = slide.imageTargetOverride ?? `../media/${encodeURIComponent(imagePartName)}`
+      rels.push(`<Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="${target}"/>`)
     }
     if (slide.missingMediaImage) {
       // Declared, and pointing at a part deliberately never written below.
@@ -675,7 +748,7 @@ export async function pptxFixture(
   })
 
   if (slides.some((slide) => slide.image || slide.secondImage || slide.video || slide.audio ||
-    slide.group?.image || slide.inkInAlternateContent)) {
+    slide.group?.image || slide.inkInAlternateContent || slide.pictureInChoiceOnlyAlternateContent)) {
     entries.push({ name: `ppt/media/${imagePartName}`, data: EMBEDDED_IMAGE_PNG })
   }
   if (slides.some((slide) => slide.unpackageableImage || slide.oleObject)) {
@@ -951,12 +1024,12 @@ function odpHeading(text: string, level = 1): string {
  * A `draw:frame` holding a `draw:plugin` with a media mime type — Impress's
  * inserted video — and optionally a `draw:image` poster in the same frame.
  */
-function odpMedia(name: string, poster: boolean | undefined): string {
+function odpMedia(name: string, poster: boolean | undefined, imageHref: string): string {
   return `<draw:frame draw:name="${name}" svg:width="8cm" svg:height="5cm" svg:x="2cm" svg:y="6cm">` +
     `<draw:plugin xlink:href="Media/media1.mp4" xlink:type="simple" xlink:show="embed" ` +
     `xlink:actuate="onLoad" draw:mime-type="application/vnd.sun.star.media"/>` +
     (poster
-      ? `<draw:image xlink:href="Pictures/image1.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>`
+      ? `<draw:image xlink:href="${imageHref}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>`
       : '') +
     `</draw:frame>`
 }
@@ -966,11 +1039,11 @@ function odpMedia(name: string, poster: boolean | undefined): string {
  * (a single run) or `page.notesRuns` (multiple segments in one paragraph) as
  * one `text:p`.
  */
-function odpNotesContentXml(page: OdpPageSpec): string {
+function odpNotesContentXml(page: OdpPageSpec, imageHref: string): string {
   const heading = page.notesHeadingText ? odpHeading(page.notesHeadingText) : ''
   if (page.notesImage) {
     const picture = `<draw:frame draw:name="Notes picture" svg:width="1cm" svg:height="1cm">` +
-      `<draw:image xlink:href="Pictures/image1.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
+      `<draw:image xlink:href="${imageHref}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
       `</draw:frame>`
     if (page.notes !== undefined) return `${heading}<text:p>${xmlEscape(page.notes)}</text:p>${picture}`
     return `${heading}${picture}`
@@ -980,7 +1053,21 @@ function odpNotesContentXml(page: OdpPageSpec): string {
   return heading
 }
 
-export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Array<ArrayBuffer>> {
+export async function odpFixture(
+  pages: readonly OdpPageSpec[],
+  { imagePartName = 'image1.png' }: {
+    /**
+     * The BASENAME of the embedded picture part inside `Pictures/`. ODF's
+     * `xlink:href` is an IRI, so the name is percent-encoded into the href
+     * while the ZIP entry and the manifest keep it literally — the ODF twin of
+     * PPTX's `imagePartName`, and the only way a picture named `image 1.png`
+     * reaches the index's href resolver at all.
+     */
+    imagePartName?: string
+  } = {},
+): Promise<Uint8Array<ArrayBuffer>> {
+  const imagePart = `Pictures/${imagePartName}`
+  const imageHref = `Pictures/${encodeURIComponent(imagePartName)}`
   const body = pages.map((page, index) => {
     const title = page.title === undefined
       ? ''
@@ -991,13 +1078,13 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
     const outline = outlineContent ? odpFrame(`Body ${index + 1}`, 'outline', outlineContent) : ''
     const image = page.image
       ? `<draw:frame draw:name="Diagram ${index + 1}" svg:width="1cm" svg:height="1cm">` +
-        `<draw:image xlink:href="Pictures/image1.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
+        `<draw:image xlink:href="${imageHref}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
         (page.image.alt === undefined ? '' : `<svg:desc>${xmlEscape(page.image.alt)}</svg:desc>`) +
         `</draw:frame>`
       : ''
     const secondImage = page.secondImage
       ? `<draw:frame draw:name="Second diagram ${index + 1}" svg:width="1cm" svg:height="1cm">` +
-        `<draw:image xlink:href="Pictures/image1.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
+        `<draw:image xlink:href="${imageHref}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
         (page.secondImage.alt === undefined ? '' : `<svg:desc>${xmlEscape(page.secondImage.alt)}</svg:desc>`) +
         `</draw:frame>`
       : ''
@@ -1005,7 +1092,7 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
     const alternateImages = page.alternateImages
       ? `<draw:frame draw:name="Alternatives ${index + 1}" svg:width="1cm" svg:height="1cm">` +
         `<draw:image xlink:href="Pictures/image2.gif" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
-        `<draw:image xlink:href="Pictures/image1.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
+        `<draw:image xlink:href="${imageHref}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>` +
         `</draw:frame>`
       : ''
     const customShape = page.customShapeText ? odpCustomShape(`Custom Shape ${index + 1}`, page.customShapeText) : ''
@@ -1013,11 +1100,11 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
       ? odpGroup(`Group ${index + 1}`, odpCustomShape(`Grouped Custom Shape ${index + 1}`, page.groupedCustomShapeText))
       : ''
     const table = page.table ? odpTable(`Table ${index + 1}`) : ''
-    const media = page.video ? odpMedia(`Video ${index + 1}`, page.video.poster) : ''
+    const media = page.video ? odpMedia(`Video ${index + 1}`, page.video.poster, imageHref) : ''
     const nestedFrame = page.nestedFrameText
       ? odpNestedFrame(`Outer Frame ${index + 1}`, `Inner Frame ${index + 1}`, page.nestedFrameText)
       : ''
-    const notesContent = odpNotesContentXml(page)
+    const notesContent = odpNotesContentXml(page, imageHref)
     const notes = notesContent
       ? `<presentation:notes>${odpFrame(`Notes ${index + 1}`, 'notes', notesContent)}</presentation:notes>`
       : ''
@@ -1045,7 +1132,7 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
       `<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>` +
       (pages.some((page) => page.image || page.secondImage || page.alternateImages || page.notesImage ||
         page.video?.poster)
-        ? `<manifest:file-entry manifest:full-path="Pictures/image1.png" manifest:media-type="image/png"/>`
+        ? `<manifest:file-entry manifest:full-path="${imagePart}" manifest:media-type="image/png"/>`
         : '') +
       (pages.some((page) => page.alternateImages)
         ? `<manifest:file-entry manifest:full-path="Pictures/image2.gif" manifest:media-type="image/gif"/>`
@@ -1055,7 +1142,7 @@ export async function odpFixture(pages: readonly OdpPageSpec[]): Promise<Uint8Ar
   ]
   if (pages.some((page) => page.image || page.secondImage || page.alternateImages || page.notesImage ||
     page.video?.poster)) {
-    entries.push({ name: 'Pictures/image1.png', data: EMBEDDED_IMAGE_PNG })
+    entries.push({ name: imagePart, data: EMBEDDED_IMAGE_PNG })
   }
   if (pages.some((page) => page.alternateImages)) {
     // Deliberately different bytes AND a different part, so a test can tell the

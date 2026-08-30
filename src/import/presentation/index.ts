@@ -335,8 +335,12 @@ function slideRelationshipTargets(relsXml: string | undefined): Map<string, stri
       targets.set(id, target)
       continue
     }
-    const path = resolveFromSlides(target)
-    if (path) targets.set(id, path)
+    // A DECLARED relationship always produces an entry, even when its target
+    // cannot be named: the difference between "this slide references something
+    // I cannot identify" and "this slide references nothing" is the difference
+    // between a refusal and a neighbouring slide quietly claiming exclusivity
+    // it does not have. See `UNRESOLVABLE_REFERENCE`.
+    targets.set(id, resolvePackagePath(target, SLIDE_PART_DIRECTORY) ?? UNRESOLVABLE_REFERENCE)
   }
   return targets
 }
@@ -364,39 +368,80 @@ const SLIDE_PART_DIRECTORY = 'ppt/slides/'
  */
 const PACKAGE_ORIGIN = 'https://package.invalid/'
 
+const PACKAGE_ROOT = ''
+
 /**
- * A relationship target as the ZIP entry name it denotes, resolved against the
- * slide part's own directory.
+ * A reference the index can see but cannot NAME: a relationship target or an
+ * `xlink:href` that will not resolve to a package part (a malformed percent
+ * sequence, an absolute URL where a part was expected, a raw `#` or `?`).
  *
- * This used to be `ppt/${target.replace(/^\.\.\//, '')}` — a string hack that
- * was harmless while it only located a notes part, and is not harmless now that
- * the same string is a picture's IDENTITY. Two things it got wrong:
+ * It is recorded as an origin — a reference to something unknown — rather than
+ * dropped, and that distinction is the whole point. MEASURED: with slide 1
+ * naming `../media/100%.png` (a literal, unencoded `%`) and slide 2 naming the
+ * same ZIP entry through a properly encoded `../media/100%25.png`, dropping
+ * slide 1's reference made slide 2 the SOLE referencer of that part — so it
+ * claimed BOTH blocks, sections came out `[[], ["ONE PIC", "TWO PIC"]]`, and
+ * the only finding was a warning saying slide 1's picture "could not be
+ * imported", which was false: it was imported, under slide 2's heading.
  *
- * - NO PERCENT-DECODING. An OPC relationship `Target` is a URI reference, so a
- *   media part named `image 1.png` is written `../media/image%201.png`.
- *   MEASURED: the index produced `ppt/media/image%201.png` while anydoc
- *   reported `ppt/media/image 1.png`, so a file with a space in its name — an
- *   entirely ordinary file — refused the whole deck.
- * - NO REAL RESOLUTION. `media/x.png` (a sibling reference, legal) resolved as
+ * Nothing can ever satisfy this origin — no `data-origin-part` can equal a
+ * string containing a NUL, which is not a legal character in a ZIP entry name
+ * or a URL — so a slide holding one ALWAYS reaches the refusal rather than
+ * silently losing its pictures to a neighbour.
+ */
+const UNRESOLVABLE_REFERENCE = '\u0000unresolvable-reference'
+
+const PACKAGE_ORIGIN_ORIGIN = new URL(PACKAGE_ORIGIN).origin
+
+/**
+ * A relative reference as the ZIP entry name it denotes, resolved against
+ * `baseDirectory` (a package-root-relative directory, `''` for the root
+ * itself), or `undefined` when it names no part inside this package.
+ *
+ * The PPTX side used to be `ppt/${target.replace(/^\.\.\//, '')}` — a string
+ * hack that was harmless while it only located a notes part, and is not
+ * harmless now the same string is a picture's IDENTITY — and the ODP side took
+ * `xlink:href` verbatim, which is the same defect on the other format. Both are
+ * URI references, and three things went wrong without real resolution:
+ *
+ * - NO PERCENT-DECODING. A media part named `image 1.png` is written
+ *   `../media/image%201.png` (PPTX) or `Pictures/image%201.png` (ODP).
+ *   MEASURED on both formats: the index kept the encoded form while anydoc
+ *   reported the decoded one, so an entirely ordinary filename refused the
+ *   whole deck.
+ * - NO REAL RESOLUTION. `media/x.png` (a legal sibling reference) resolved as
  *   though it had been written `../media/x.png`, and `.` / `..` segments
  *   anywhere but the very front were left in place.
- *
- * A target that resolves off this origin is an absolute URL, not a part: it
- * returns `undefined` rather than a nonsense path, which fails closed. So does
- * a malformed percent sequence, which `decodeURIComponent` throws on.
+ * - A RAW `#` OR `?` TRUNCATED THE NAME. `../media/im#age.png` resolved to
+ *   `ppt/media/im` — a silently WRONG value, which is worse than an absent one
+ *   because it still feeds the sole-referencer test. A part name is a path, not
+ *   a URL with a fragment or a query, so a reference carrying either is refused
+ *   rather than trimmed. MEASURED: anydoc cannot resolve it either and reports
+ *   an empty origin, so "neither account can name it" is the honest agreement.
  */
-function resolveFromSlides(target: string): string | undefined {
+function resolvePackagePath(reference: string, baseDirectory: string): string | undefined {
   let resolved: URL
   try {
-    resolved = new URL(target, `${PACKAGE_ORIGIN}${SLIDE_PART_DIRECTORY}`)
+    resolved = new URL(reference, `${PACKAGE_ORIGIN}${baseDirectory}`)
   } catch {
     return undefined
   }
-  if (resolved.origin !== new URL(PACKAGE_ORIGIN).origin) return undefined
+  if (resolved.origin !== PACKAGE_ORIGIN_ORIGIN) return undefined
+  if (resolved.hash !== '' || resolved.search !== '') return undefined
   try {
     return decodeURIComponent(resolved.pathname.replace(/^\//, ''))
   } catch {
     return undefined
+  }
+}
+
+/** Whether a reference names its own scheme, and so points outside the package. */
+function isAbsoluteReference(reference: string): boolean {
+  try {
+    new URL(reference)
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -499,13 +544,19 @@ function readBlipOrigins(shape: Element, state: ShapeWalkState): void {
       const relationshipId = blip.getAttributeNS(R_NS, 'embed') ?? blip.getAttributeNS(R_NS, 'link')
       // A blip naming NO relationship references no image data at all, so
       // nothing was ever there to lose — measured: anydoc emits nothing, and
-      // the two accounts agree on nothing. A blip naming an UNDEFINED
-      // relationship is the opposite: the deck says a picture is there and the
-      // package does not contain it. Only the second is a loss.
+      // the two accounts agree on nothing.
       if (!relationshipId) continue
       const origin = state.resolveRelationship(relationshipId)
-      if (origin) state.pictureOrigins.add(origin)
-      else state.unrepresentable.pictures += 1
+      // A blip naming an UNDECLARED relationship is the opposite: the deck says
+      // a picture is there and the package does not contain it. Both accounts
+      // still agree — anydoc emits no block for it either — so it is a LOSS to
+      // report, not a disagreement to refuse on. A relationship that IS
+      // declared but whose target cannot be named is a third thing again, and
+      // `slideRelationshipTargets` has already turned it into
+      // `UNRESOLVABLE_REFERENCE`, which lands in `pictureOrigins` below and
+      // refuses.
+      if (origin === undefined) state.unrepresentable.pictures += 1
+      else state.pictureOrigins.add(origin)
     }
   }
 }
@@ -617,8 +668,8 @@ function walkShapes(container: Element, state: ShapeWalkState, depth = 0): void 
           const origin = state.resolveRelationship(relationshipId)
           // Same rule as a blip's: a named relationship the package does not
           // declare is an embedded object the deck says is there and is not.
-          if (origin) state.pictureOrigins.add(origin)
-          else state.unrepresentable.pictures += 1
+          if (origin === undefined) state.unrepresentable.pictures += 1
+          else state.pictureOrigins.add(origin)
         }
       }
       else if (uri === TABLE_URI) {
@@ -678,14 +729,26 @@ function walkShapes(container: Element, state: ShapeWalkState, depth = 0): void 
        * of them and the Choice for the other two.
        *
        * The first `mc:Choice` anydoc would render wins; otherwise the
-       * `mc:Fallback`; otherwise the first Choice, because an
+       * `mc:Fallback`; otherwise NOTHING.
+       *
+       * That last clause used to read "otherwise the first Choice, because an
        * `mc:AlternateContent` with no Fallback is legal and reading its Choice
-       * beats reading nothing.
+       * beats reading nothing". It is legal, and reading it does NOT beat
+       * reading nothing: MEASURED, an `mc:AlternateContent` carrying one
+       * `mc:Choice` with an unsupported `Requires` and no `mc:Fallback` makes
+       * anydoc emit no block at all — not for text (`<h2>One</h2>` alone, with
+       * the Choice's paragraph nowhere) and not for a picture. Walking that
+       * branch therefore collected content nothing carries, and for a picture
+       * that is not merely a spurious refusal: the part it over-collected was
+       * the part an EARLIER slide really owns, so the sole-referencer rule
+       * capped that slide at one block and handed this one the surplus, and
+       * slide 1's second picture published under slide 2's heading with no
+       * findings at all. Collecting nothing is what anydoc does.
        */
       const children = [...shape.children]
       const choices = children.filter((child) => child.namespaceURI === MC_NS && child.localName === 'Choice')
       const fallback = children.find((child) => child.namespaceURI === MC_NS && child.localName === 'Fallback')
-      const chosen = choices.find(rendersChoiceBranch) ?? fallback ?? choices[0]
+      const chosen = choices.find(rendersChoiceBranch) ?? fallback
       if (chosen) walkShapes(chosen, state, depth + 1)
       continue
     }
@@ -743,7 +806,7 @@ function pptxIndex(parts: Record<string, string>): PresentationIndex {
     walkShapes(tree, state)
 
     const notesTarget = relationshipTargets(relsXml, 'notesSlide')[0]
-    const notesPath = notesTarget ? resolveFromSlides(notesTarget) : undefined
+    const notesPath = notesTarget ? resolvePackagePath(notesTarget, SLIDE_PART_DIRECTORY) : undefined
     const notesXml = notesPath ? parts[notesPath] : undefined
     const notesText = notesXml ? notesBodyText(parseXml(notesXml, 'notes part')) : undefined
 
@@ -816,6 +879,24 @@ function odfParagraphs(container: Element): string[] {
 function odfNotesText(notesElement: Element): string | undefined {
   const paragraphs = odfParagraphs(notesElement)
   return collapse(paragraphs.join(' ')) || undefined
+}
+
+/**
+ * What a `draw:image`'s `xlink:href` identifies: the package part it names, the
+ * URL itself when it points outside the package, or `UNRESOLVABLE_REFERENCE`
+ * when the href is there but cannot be named. `undefined` means the element
+ * references nothing at all — ODF also allows the bytes inline as
+ * `office:binary-data`, and anydoc emits a block with an empty origin for that,
+ * which no slide can claim and which therefore already refuses.
+ *
+ * An href is an IRI, so it needs exactly the same percent-decoding and
+ * resolution as a PPTX relationship target — see `resolvePackagePath` for the
+ * measurement on both formats.
+ */
+function odfPictureOrigin(href: string | null): string | undefined {
+  if (!href) return undefined
+  if (isAbsoluteReference(href)) return href
+  return resolvePackagePath(href, PACKAGE_ROOT) ?? UNRESOLVABLE_REFERENCE
 }
 
 /**
@@ -998,8 +1079,8 @@ function odpIndex(parts: Record<string, string>): PresentationIndex {
       pictureOrigins: [...new Set([...page.getElementsByTagNameNS(ODF_DRAW_NS, 'image')]
         .filter((image) => !excludedRoots.some((root) => root.contains(image)))
         .filter((image) => image === firstImageChild(image.parentElement))
-        .map((image) => image.getAttributeNS(XLINK_NS, 'href') ?? '')
-        .filter((href) => href.length > 0))],
+        .map((image) => odfPictureOrigin(image.getAttributeNS(XLINK_NS, 'href')))
+        .filter((origin) => origin !== undefined))],
       titleOutOfOrder: false,
       /*
        * ODF carries a chart or a diagram as an embedded OBJECT rather than as

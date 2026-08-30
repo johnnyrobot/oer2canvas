@@ -646,6 +646,50 @@ test('a linked picture is identified by its URL, and a picture with no blip refe
   expect(withoutBlip.slides[0]!.pictureOrigins).toEqual([])
 })
 
+test('an mc:AlternateContent with no renderable branch contributes nothing', async () => {
+  /*
+   * One `mc:Choice` with an unsupported `Requires` and NO `mc:Fallback`.
+   * MEASURED: anydoc emits no block for it at all, so the index's old last
+   * resort — read the first Choice when nothing else is renderable — collected
+   * content nothing carries. For a picture that was not merely a spurious
+   * refusal: the over-collected part belonged to an earlier slide, which then
+   * lost a picture to this one with no finding at all.
+   */
+  const text = await indexOf(await pptxFixture([
+    { title: 'One', alternateContentText: { choice: 'CHOICE TEXT', requires: 'p14' } },
+  ]))
+  expect(text.slides[0]!.textRuns).toEqual(['One'])
+
+  const picture = await indexOf(await pptxFixture([
+    { title: 'One', pictureInChoiceOnlyAlternateContent: true },
+  ]))
+  expect(picture.slides[0]!.pictureOrigins).toEqual([])
+  expect(picture.slides[0]!.unrepresentable.pictures).toBe(0)
+})
+
+test('a declared relationship whose target cannot be named is still a reference', async () => {
+  /*
+   * The difference between "this slide references something I cannot identify"
+   * and "this slide references nothing" is the difference between a refusal and
+   * a neighbouring slide quietly claiming exclusivity it does not have. A
+   * literal unencoded `%` makes the target unresolvable; the slide records a
+   * reference no block can ever satisfy, so it always reaches the refusal.
+   *
+   * It is NOT counted as an unrepresentable loss: a warning saying the picture
+   * "could not be imported" would contradict a deck that was refused outright,
+   * and the measured defect was exactly such a warning standing beside a
+   * picture that HAD been imported, under the wrong heading.
+   */
+  const index = await indexOf(await pptxFixture(
+    [{ title: 'One', image: { alt: 'A cell' }, imageTargetOverride: '../media/100%.png' }],
+    { imagePartName: '100%.png' },
+  ))
+
+  expect(index.slides[0]!.pictureOrigins).toHaveLength(1)
+  expect(index.slides[0]!.pictureOrigins[0]).not.toBe('ppt/media/100%.png')
+  expect(index.slides[0]!.unrepresentable.pictures).toBe(0)
+})
+
 test('a blip naming an undefined relationship is reported as a lost picture', async () => {
   /*
    * The one loss nothing else records. MEASURED: anydoc emits no block for such

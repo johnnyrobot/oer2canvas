@@ -57,9 +57,18 @@ import type { PresentationIndex, PresentationSlideIndex } from './index'
  *   about how many blocks each slide produces for that part, which is a
  *   prediction about anydoc's shape selection of exactly the kind the join was
  *   meant to retire. An over-collected reference on one slide paid for by an
- *   over-emitted block on another still balances and still misattributes — one
- *   such shape (ODF `draw:frame` alternatives) was measured doing it after this
- *   join landed, and the fix was in the index's collection rule, not here.
+ *   over-emitted block on another still balances and still misattributes.
+ *
+ * Every instance of that found so far has ONE shape: THE INDEX WALKS A BRANCH
+ * OR CHILD THAT ANYDOC DOES NOT RENDER, and so records a part for a picture no
+ * block carries. Both were measured after this join landed, and both were fixed
+ * in the index's collection rule rather than here — ODF `draw:frame` children
+ * are alternatives, of which anydoc renders the first, and an
+ * `mc:AlternateContent` with no renderable `mc:Choice` and no `mc:Fallback` is
+ * rendered as nothing at all. That names the residual, and narrows it from "any
+ * disagreement about counts" to "any place the index's walk is wider than
+ * anydoc's rendering" — but it does not close it, because only measuring a
+ * shape can tell you which of the two the index is doing.
  *
  * The honest summary: the bytes under a heading are guaranteed to be that
  * slide's, the instance is not.

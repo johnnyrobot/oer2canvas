@@ -583,3 +583,150 @@ test.each([
   expect(result.findings).toEqual([])
   expect(sectionsOf(result.html)[0]!.querySelector('img')).not.toBeNull()
 })
+
+
+test("a choice-only mc:AlternateContent does not steal an earlier slide's picture", async () => {
+  /*
+   * THE SEVENTH COUNTEREXAMPLE, and the same SHAPE as the sixth: the index
+   * walked a branch anydoc renders nothing for.
+   *
+   * `mc:AlternateContent` carrying ONE `mc:Choice` with an unsupported
+   * `Requires` and NO `mc:Fallback`. MEASURED: anydoc emits no block for it at
+   * all. The index's last resort — "otherwise the first Choice, because an
+   * AlternateContent with no Fallback is legal" — collected that Choice's
+   * picture part, and because the part is the one slide 1 really owns, the
+   * sole-referencer rule capped slide 1 at one block and handed slide 2 the
+   * surplus: `[["ONE PIC"], ["TWO PIC"]]` with NO findings, when slide 1 owns
+   * both. Collecting nothing is what anydoc does.
+   */
+  const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', image: { alt: 'ONE PIC' }, secondImage: { alt: 'TWO PIC' } },
+    { title: 'Two', pictureInChoiceOnlyAlternateContent: true },
+  ]))
+
+  expect(anydocHtml.match(/<img/g)).toHaveLength(2)
+  const sections = sectionsOf(result.html)
+  expect([...sections[0]!.querySelectorAll('img')].map((image) => image.alt)).toEqual(['ONE PIC', 'TWO PIC'])
+  expect(sections[1]!.querySelectorAll('img')).toHaveLength(0)
+  expect(result.findings).toEqual([])
+  expect(index.slides[1]!.pictureOrigins).toEqual([])
+})
+
+test('a choice-only mc:AlternateContent contributes no TEXT either', async () => {
+  // The same branch, carrying a paragraph instead of a picture: anydoc emits
+  // the heading and nothing else, so an index that read the Choice would hold a
+  // run no block carries and the deck would refuse.
+  const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', alternateContentText: { choice: 'CHOICE TEXT', requires: 'p14' } },
+  ]))
+
+  expect(anydocHtml).toBe('<h2 id="One">One</h2>')
+  expect(index.slides[0]!.textRuns).toEqual(['One'])
+  expect(result.findings).toEqual([])
+})
+
+test.each([
+  [
+    'Requires names several namespaces, not all supported',
+    { choice: 'CHOICE TEXT', fallback: 'FALLBACK TEXT', requires: ['a14', 'p14'] },
+    'FALLBACK TEXT',
+  ],
+  [
+    'Requires is present but empty',
+    { choice: 'CHOICE TEXT', fallback: 'FALLBACK TEXT', requires: '' },
+    'CHOICE TEXT',
+  ],
+  [
+    'the renderable Choice is not the first one written',
+    {
+      choice: 'CHOICE TEXT',
+      requires: 'p14',
+      secondChoice: { text: 'SECOND CHOICE TEXT', requires: 'a14' },
+      fallback: 'FALLBACK TEXT',
+    },
+    'SECOND CHOICE TEXT',
+  ],
+] as const)('the index reads the branch anydoc renders when %s', async (_name, alternateContentText, expected) => {
+  // The controls on the branch rule, stated against anydoc itself rather than
+  // against remembered values — the `Requires` rule is namespace-keyed and
+  // conservative (every prefix must be supported), and the renderable Choice
+  // wins wherever it sits among several.
+  const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', alternateContentText },
+  ]))
+
+  expect(anydocHtml).toContain(expected)
+  expect(index.slides[0]!.textRuns).toEqual(['One', expected])
+  expect(result.findings).toEqual([])
+})
+
+test('an odp picture part whose name contains a space still joins', async () => {
+  /*
+   * The PPTX defect on the other format. An `xlink:href` is an IRI, so a part
+   * named `image 1.png` is referenced as `Pictures/image%201.png`; taking the
+   * href verbatim kept the encoded form while anydoc reported the decoded one,
+   * and the deck refused with "slide 1 is missing a picture the deck says it
+   * carries".
+   */
+  const { anydocHtml, index, result } = await reconcileBytes('odp', await odpFixture(
+    [{ title: 'One', body: ['Body one'], image: { alt: 'A cell' } }],
+    { imagePartName: 'image 1.png' },
+  ))
+
+  expect(anydocHtml).toContain('data-origin-part="Pictures/image 1.png"')
+  expect(index.slides[0]!.pictureOrigins).toEqual(['Pictures/image 1.png'])
+  expect(result.findings).toEqual([])
+  expect(sectionsOf(result.html)[0]!.querySelector('img')).not.toBeNull()
+})
+
+test('a target the index cannot name refuses instead of vanishing', async () => {
+  /*
+   * THE REVIEWER'S DECK. A relationship the deck DECLARES whose target will not
+   * resolve to a part — slide 1 names `../media/100%.png`, a literal unencoded
+   * `%`, while slide 2 names the SAME ZIP entry through a properly encoded
+   * `../media/100%25.png`.
+   *
+   * Dropping the unresolvable reference was the defect: slide 1 recorded no
+   * reference at all, so slide 2 became the SOLE referencer of that part and
+   * claimed BOTH blocks — sections `[[], ["ONE PIC", "TWO PIC"]]` — and the
+   * only finding was a warning saying slide 1's picture "could not be
+   * imported", which was false: it was imported, under slide 2's heading.
+   *
+   * Recording it as a reference to something UNKNOWN closes it. Nothing can
+   * ever satisfy that origin, so the slide holding one ALWAYS reaches the
+   * refusal rather than silently losing its pictures to a neighbour — and on a
+   * blocker nothing is published at all.
+   */
+  const { result } = await reconcileBytes('pptx', await pptxFixture([
+    { title: 'One', image: { alt: 'ONE PIC' }, imageTargetOverride: '../media/100%.png' },
+    { title: 'Two', image: { alt: 'TWO PIC' } },
+  ], { imagePartName: '100%.png' }))
+
+  const finding = result.findings.find((entry) => entry.code === 'presentation-unattributed-content')
+  expect(finding?.severity).toBe('blocker')
+  expect(finding?.message).toContain('slide 1 is missing a picture the deck says it carries')
+  // And NOT the warning that used to stand in its place and contradict it.
+  expect(result.findings.map((entry) => entry.code)).not.toContain('presentation-unrepresentable')
+})
+
+test('a raw fragment separator in a target is refused, not silently truncated', async () => {
+  /*
+   * `../media/im#age.png` used to resolve to `ppt/media/im` — a silently WRONG
+   * value, which is worse than an absent one because it still feeds the
+   * sole-referencer test. An OPC part name is a path, not a URL with a
+   * fragment. MEASURED: anydoc cannot name it either and reports an empty
+   * origin, so "neither account can name it" is the honest agreement, and both
+   * halves of the refusal fire.
+   */
+  const { anydocHtml, index, result } = await reconcileBytes('pptx', await pptxFixture(
+    [{ title: 'One', body: ['Body one'], image: { alt: 'A cell' }, imageTargetOverride: '../media/im#age.png' }],
+    { imagePartName: 'im#age.png' },
+  ))
+
+  expect(anydocHtml).toContain('data-origin-part=""')
+  expect(index.slides[0]!.pictureOrigins).not.toContain('ppt/media/im')
+  const finding = result.findings.find((entry) => entry.code === 'presentation-unattributed-content')
+  expect(finding?.severity).toBe('blocker')
+  expect(finding?.message).toContain('slide 1 is missing a picture the deck says it carries')
+  expect(finding?.message).toContain('1 block of content belongs to no slide')
+})
