@@ -48,6 +48,11 @@
     "count": 3
   },
   {
+    "step": "alt",
+    "message": "3 image(s) already had alt text that passed every check and were not queued",
+    "count": 3
+  },
+  {
     "step": "attribution",
     "message": "Added the source and license block required by D9"
   },

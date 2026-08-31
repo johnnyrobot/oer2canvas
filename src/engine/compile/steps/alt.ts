@@ -66,6 +66,7 @@ export const resolveAlt: Step = (doc, ctx, sink) => {
   let confirmedDecorative = 0
   let described = 0
   let shortened = 0
+  let trusted = 0
 
   images.forEach((image, index) => {
     // First, unconditionally: this both reads and clears, and every image must
@@ -94,17 +95,24 @@ export const resolveAlt: Step = (doc, ctx, sink) => {
       return
     }
 
-    // A non-empty publisher alt is normally trusted. Definite junk is the
-    // exception: it must become an alt-description question so an existing
-    // filename/URL/placeholder cannot reach the gate with no way to repair it.
-    // Long descriptions are fitted before this check, so they are accepted once
-    // they satisfy Canvas's 120-character limit.
+    // A non-empty publisher alt is trusted only when the auditor has NOTHING to
+    // say about it. Anything it flags — at any severity — becomes a question.
+    //
+    // This used to trust everything short of `error`, which meant the two
+    // softer severities described their own findings and then went nowhere: an
+    // `alert` is documented in `audit/alt-text.ts` as the severity that ROUTES
+    // TO HUMAN REVIEW, and the queue is the only human review this app has. So
+    // "too short", "redundant lead-in" and Word's machine-written alt were all
+    // diagnosed and silently accepted. Long descriptions are still fitted first,
+    // so a merely over-long publisher description is accepted once it satisfies
+    // Canvas's 120-character limit rather than being queued for its length.
     const src = image.getAttribute('src') ?? ''
     const fittedIssue = alt && alt.trim() !== ''
       ? altTextIssue({ alt, src, presentation: false })
       : null
     const definiteIssue = sourceIssue?.id === 'alt-text-too-long' ? fittedIssue : sourceIssue ?? fittedIssue
-    if (alt !== null && alt.trim() !== '' && (!definiteIssue || definiteIssue.severity !== 'error')) {
+    if (alt !== null && alt.trim() !== '' && !definiteIssue) {
+      trusted += 1
       return
     }
 
@@ -144,12 +152,26 @@ export const resolveAlt: Step = (doc, ctx, sink) => {
         ? fitCanvasAltText(description)
         : undefined
 
+    /*
+     * The flagged alt travels as the CURRENT value, not as a suggestion, and
+     * only when it is worth starting from. `error` means the auditor is certain
+     * the text conveys nothing — a filename, a URL, a bare "Image 2" — and
+     * seeding the field with it would put junk one keystroke from being saved.
+     * Everything softer is plausible prose that a person can edit faster than
+     * they can retype.
+     */
+    const current =
+      alt !== null && alt.trim() !== '' && definiteIssue && definiteIssue.severity !== 'error'
+        ? fitCanvasAltText(alt)
+        : undefined
+
     sink.queue({
       kind: alt !== null && alt.trim() !== '' ? 'alt' : alt !== null ? 'confirm-decorative' : 'alt',
       elementId,
       hash,
       context: { src, caption, reference: referenceFor(image) },
       proposed,
+      ...(current === undefined ? {} : { current }),
     })
   })
 
@@ -176,6 +198,24 @@ export const resolveAlt: Step = (doc, ctx, sink) => {
       'alt',
       `${presentational} image(s) are explicitly marked decorative by the publisher and were not queued`,
       presentational,
+    )
+  }
+
+  /*
+   * Say so when the queue is short BECAUSE somebody else already answered.
+   *
+   * Every other outcome in this step is counted and reported; being accepted on
+   * the publisher's word was the one that happened silently. An instructor
+   * looking at "Item 1 of 1" for a four-image document has no way to tell
+   * whether the other three were described well, described by Word, or never
+   * looked at — and the honest answer is that this app took their existing alt
+   * at face value, which is a thing they are entitled to know before publishing.
+   */
+  if (trusted > 0) {
+    sink.note(
+      'alt',
+      `${trusted} image(s) already had alt text that passed every check and were not queued`,
+      trusted,
     )
   }
 }

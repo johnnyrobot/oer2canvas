@@ -267,3 +267,59 @@ describe('resolveAlt with answers', () => {
     expect(out.queue).toHaveLength(2)
   })
 })
+
+describe('resolveAlt and alt the auditor flagged', () => {
+  it("queues Word's automatic alt and hands it back as the current value", () => {
+    const out = compileSection(
+      section('<img src="https://x/a.png" alt="A screenshot of a computer">'),
+      ctx,
+      [resolveAlt],
+    )
+    expect(out.queue).toHaveLength(1)
+    expect(out.queue[0]!.kind).toBe('alt')
+    // Carried as `current`, never as `proposed`: the card labels the two
+    // differently and only `proposed` suppresses the local model.
+    expect(out.queue[0]!.current).toBe('A screenshot of a computer')
+    expect(out.queue[0]!.proposed).toBeUndefined()
+  })
+
+  it('queues a redundant lead-in and a too-short alt, which used to be diagnosed and dropped', () => {
+    const redundant = compileSection(
+      section('<img src="https://x/a.png" alt="Image of a bar chart of enrollment">'),
+      ctx,
+      [resolveAlt],
+    )
+    expect(redundant.queue).toHaveLength(1)
+    expect(redundant.queue[0]!.current).toBe('Image of a bar chart of enrollment')
+
+    const short = compileSection(section('<img src="https://x/a.png" alt="Map">'), ctx, [resolveAlt])
+    expect(short.queue).toHaveLength(1)
+    expect(short.queue[0]!.current).toBe('Map')
+  })
+
+  it('never seeds the field with alt the auditor is certain conveys nothing', () => {
+    // A filename is queued, but prefilling it would put junk one keystroke from
+    // being saved — which is the defect this app exists to catch.
+    const out = compileSection(
+      section('<img src="https://x/mixtures.png" alt="mixtures.png">'),
+      ctx,
+      [resolveAlt],
+    )
+    expect(out.queue).toHaveLength(1)
+    expect(out.queue[0]!.current).toBeUndefined()
+  })
+
+  it('says out loud when images were accepted on the publisher word', () => {
+    const out = compileSection(
+      section(
+        '<img src="https://x/a.png" alt="A house with a triangular roof">' +
+          '<img src="https://x/b.png" alt="A bar chart of enrollment by quarter">',
+      ),
+      ctx,
+      [resolveAlt],
+    )
+    expect(out.queue).toEqual([])
+    const note = out.notes.find((entry) => /already had alt text/.test(entry.message))
+    expect(note?.count).toBe(2)
+  })
+})
