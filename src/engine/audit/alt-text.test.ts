@@ -188,3 +188,42 @@ test('a filename alt withholds the passed-checks badge (the hole this closes)', 
   expect(result.badgeWithheld).toBe(true);
   expect(result.conformance.blockers[0]?.id).toBe('alt-text-filename');
 });
+
+// ── machine-written alt: described-looking, nobody chose it ───────────────────
+
+test("Word's automatic alt text is routed to human review, not trusted", () => {
+  // Every one of these passes the filename, URL, placeholder, redundant and
+  // length rules, which is exactly why they used to be accepted in silence.
+  for (const alt of [
+    'A screenshot of a computer',
+    'A screenshot of a computer screen',
+    'A close up of a logo',
+    'A picture containing text, screenshot, font',
+    'Graphical user interface, text, application',
+    'Graphical user interface, application',
+    'Chart, bar chart',
+    'Text, letter',
+    'A screenshot of a computer, Description automatically generated',
+    'Diagram, Description automatically generated with medium confidence',
+  ]) {
+    const issue = altTextIssue(img(alt))
+    expect(issue?.id, alt).toBe('alt-text-machine-generated')
+    // `alert`, never `error`: the text might be adequate. What is knowable is
+    // that no person picked it for this image.
+    expect(issue?.severity, alt).toBe('alert')
+  }
+})
+
+test('a real description is not mistaken for a generated one', () => {
+  // The length cap earns its keep here. Each of these opens with a stem Office
+  // also uses, and each is somebody doing the job properly.
+  for (const alt of [
+    'A screenshot of the Canvas gradebook showing three unsubmitted assignments',
+    'A close up of the mitochondrion’s inner membrane, with cristae labelled',
+    'Bar chart of enrollment rising each quarter from 2019 to 2023',
+    'Map of the Silk Road trade routes between Xi’an and Constantinople',
+    'Text of the First Amendment as ratified in 1791',
+  ]) {
+    expect(altTextIssue(img(alt))?.id, alt).not.toBe('alt-text-machine-generated')
+  }
+})

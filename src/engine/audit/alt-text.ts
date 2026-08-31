@@ -52,6 +52,45 @@ const REDUNDANT =
 /** An alt that is a bare URL. */
 const URLISH = /^(https?:\/\/|www\.|\/\/)\S+$/i;
 
+/**
+ * Alt text a program wrote about the image, not a person.
+ *
+ * Word and PowerPoint fill `alt` in automatically when a picture is inserted,
+ * and the result passes every other rule in this file: it is not a filename,
+ * not a URL, not a bare placeholder noun, and comfortably over MIN_MEANINGFUL.
+ * So "A screenshot of a computer" was trusted exactly as a written description
+ * was, and an instructor was never told the difference. That is the single most
+ * common way a document arrives here looking described and is not.
+ *
+ * `alert`, never `error`. The text might happen to be adequate, and this rule
+ * cannot know — what it knows is that no person chose it for this image, which
+ * is precisely the "route to human review" case the severity exists for.
+ */
+
+/** Office appends this verbatim. Nothing else does; no length test needed. */
+const OFFICE_MARKER = /\bdescriptions?\s+automatically\s+generated\b/i;
+
+/**
+ * Office's stock openers, LENGTH-CAPPED so they only fire on the terse
+ * generated form. "A screenshot of a computer" is machine output; "A screenshot
+ * of the Canvas gradebook showing three unsubmitted assignments" is somebody
+ * doing the job properly, and must not be dragged into the queue for starting
+ * with the same four words.
+ */
+const OFFICE_STEM =
+  /^\s*(?:graphical user interface|a picture containing|an?\s+(?:screenshot|close[-\s]?up)\s+of)\b/i;
+const OFFICE_STEM_MAX_LENGTH = 45;
+
+/** The comma-separated noun list Office emits: "Chart, bar chart". No verb, no sentence. */
+const GENERIC_NOUN_LIST =
+  /^(?:text|chart|diagram|table|icon|logo|shape|map|application|website|qr code|graphical user interface)(?:,\s*[a-z][a-z ]{1,20})+$/i;
+
+function isMachineGenerated(text: string): boolean {
+  if (OFFICE_MARKER.test(text)) return true;
+  if (GENERIC_NOUN_LIST.test(text)) return true;
+  return OFFICE_STEM.test(text) && text.length <= OFFICE_STEM_MAX_LENGTH;
+}
+
 /** Below this, a description cannot be doing real work — but short-yet-valid alt
  *  exists ("CEO", "Map"), so this is human-review, never a block. */
 const MIN_MEANINGFUL = 6;
@@ -121,6 +160,14 @@ export function altTextIssue(image: ImageAlt): AuditIssue | null {
       'alt-text-redundant',
       'warning',
       `Alt text begins with redundant boilerplate ("${text}"). Screen readers already announce that this is an image — describe the content instead.`,
+    );
+  }
+  if (isMachineGenerated(text)) {
+    return issue(
+      'alt-text-machine-generated',
+      'alert',
+      `Alt text ("${text}") looks automatically generated rather than written for this image. ` +
+        'Confirm it says what the image actually shows.',
     );
   }
   if (text.length < MIN_MEANINGFUL) {
