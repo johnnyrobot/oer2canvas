@@ -24,6 +24,16 @@ jobs:
 
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+
+      # Same reason as `ci.yml`, and it belongs in BOTH: this job runs the same
+      # `npm test`, and `scripts/canvas-image-probes.mjs` validates the generated
+      # cartridge XML with a real parser. The runner image does not ship
+      # `xmllint`, so without this the deploy fails on a missing tool rather than
+      # on anything about the release — which is exactly how it failed, silently
+      # and from the first dispatch after the probe test landed.
+      - name: Install xmllint
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
