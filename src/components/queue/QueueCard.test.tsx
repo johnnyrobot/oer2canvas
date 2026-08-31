@@ -153,6 +153,60 @@ describe('the alt card', () => {
     expect(screen.queryByRole('button', { name: 'Draft locally' })).toBeNull()
   })
 
+  it('prefills flagged publisher alt as the CURRENT value, not as a suggestion', () => {
+    const onAnswer = vi.fn()
+    render(
+      <QueueCard
+        item={{ ...alt, current: 'A screenshot of a computer' }}
+        position={13}
+        total={25}
+        onAnswer={onAnswer}
+      />,
+    )
+    const input = screen.getByDisplayValue('A screenshot of a computer')
+    expect(
+      screen.getByLabelText(
+        'Current description — a check flagged it. Edit it, replace it, or draft a new one:',
+      ),
+    ).toBe(input)
+    // Not "Suggested description": the text is already on the image, and saying
+    // otherwise would misstate where it came from.
+    expect(screen.queryByLabelText(/Suggested description/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Use this description' }))
+    expect(onAnswer).toHaveBeenCalledWith({ type: 'alt', text: 'A screenshot of a computer' })
+  })
+
+  it('still offers a VLM on flagged alt — that is the case it exists for', () => {
+    // `proposed` suppresses the model because a caption is evidence it should
+    // not overwrite. `current` must NOT, or the model is withheld from exactly
+    // the images an instructor opened the queue to improve.
+    render(
+      <QueueCard
+        item={{ ...alt, current: 'A screenshot of a computer' }}
+        position={13}
+        total={25}
+        drafting={{ models: VLM_MODELS, draft: vi.fn() }}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Draft locally' })).toBeTruthy()
+  })
+
+  it('a local draft relabels the field, so an accepted draft is never read as the publisher value', async () => {
+    const draft = vi.fn(async () => 'A profile picker with two accounts listed.')
+    render(
+      <QueueCard
+        item={{ ...alt, current: 'A screenshot of a computer' }}
+        position={13}
+        total={25}
+        drafting={{ models: VLM_MODELS, draft }}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Draft locally' }))
+    await screen.findByDisplayValue('A profile picker with two accounts listed.')
+    expect(screen.getByText('Draft — not accepted')).toBeTruthy()
+    expect(screen.getByLabelText('Suggested description — use it, edit it, or replace it:')).toBeTruthy()
+  })
+
   it('still offers a VLM when all the compiler found was a nearby sentence', () => {
     // The regression this pins: `alt` carries a `reference` and no caption,
     // which is EVERY image in a step-by-step document import. Suppressing on

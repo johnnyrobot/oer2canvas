@@ -55,6 +55,12 @@ const ALT = {
     'One or two sentences: what it shows and what matters about it. ' +
     "Don't start with 'Image of' or 'Figure' — the screen reader already says that.",
   draftLabel: 'Suggested description — use it, edit it, or replace it:',
+  /*
+   * NOT "suggested". This text is already on the image, and the queue is asking
+   * about it because a check flagged it — calling somebody else's existing alt a
+   * suggestion would misstate both where it came from and why the card appeared.
+   */
+  currentLabel: 'Current description — a check flagged it. Edit it, replace it, or draft a new one:',
 }
 
 const TABLE = {
@@ -140,7 +146,10 @@ export function QueueCard({
   // unchanged — what changes is which answer the instructor is composing, and
   // that distinction is why this is local state and not an event (§3.2).
   const [describing, setDescribing] = useState(false)
-  const [text, setText] = useState(item.proposed ?? '')
+  // `current` first: when both exist it is the value actually on the image, and
+  // a caption-derived suggestion must not silently displace what is published.
+  const prefilled = item.current ?? item.proposed
+  const [text, setText] = useState(prefilled ?? '')
   const availableModels = drafting?.models.filter((model) => model.status !== 'incompatible') ?? []
   const [modelId, setModelId] = useState(availableModels[0]?.id ?? '')
   const [draftState, setDraftState] = useState<'idle' | VlmProgress['phase']>('idle')
@@ -167,6 +176,10 @@ export function QueueCard({
   // drafting seam was wired, shipped, and unreachable in the one import shape
   // that needs it most. The card prints the reference two lines above the
   // control either way, so the instructor is comparing them, not choosing blind.
+  //
+  // `item.current` is deliberately absent from this list. Alt the auditor
+  // flagged is the exact thing an instructor opened the queue to improve on, so
+  // suppressing the model there would withhold it from its best case.
   const canDraftLocally =
     item.kind === 'alt' &&
     item.context.src &&
@@ -326,10 +339,12 @@ export function QueueCard({
               {draftError && <p role="alert">Could not create a local draft. {draftError} Write a description instead.</p>}
             </fieldset>
           )}
-          {(item.proposed !== undefined || generatedDraft) && (
+          {(prefilled !== undefined || generatedDraft) && (
             <>
               {generatedDraft && <p><strong>Draft — not accepted</strong></p>}
-              <label htmlFor={inputId}>{ALT.draftLabel}</label>
+              <label htmlFor={inputId}>
+                {item.current !== undefined && !generatedDraft ? ALT.currentLabel : ALT.draftLabel}
+              </label>
             </>
           )}
           <input
@@ -339,12 +354,12 @@ export function QueueCard({
             maxLength={CANVAS_ALT_TEXT_MAX_LENGTH}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            aria-labelledby={item.proposed === undefined && !generatedDraft ? questionId : undefined}
+            aria-labelledby={prefilled === undefined && !generatedDraft ? questionId : undefined}
             aria-describedby={bodyId}
           />
           <p className="b2c-queue-controls">
             <button type="submit">
-              {item.proposed === undefined && !generatedDraft ? 'Save description' : 'Use this description'}
+              {prefilled === undefined && !generatedDraft ? 'Save description' : 'Use this description'}
             </button>
             {/* type="button" throughout: a bare button inside a form submits it,
                 and "Skip (S)" would then save the description it was pressed

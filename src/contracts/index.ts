@@ -72,6 +72,24 @@ export interface QueueItem {
   context: { caption?: string; reference?: string; src?: string }
   /** A draft the human confirms or replaces. Slice 9's VLM fills this in. */
   proposed?: string
+  /**
+   * Alt text ALREADY on the image, surfaced because the auditor had something to
+   * say about it — too short, a redundant lead-in, or written by Word rather
+   * than by a person.
+   *
+   * Deliberately not `proposed`, and the difference is load-bearing in two
+   * places. The card labels it as the current value rather than as a
+   * suggestion, because calling somebody else's existing text a "suggested
+   * description" is a lie about where it came from. And `proposed` suppresses
+   * the local-draft offer while this does not: a caption is evidence a model
+   * should not overwrite, whereas flagged alt is the exact case the instructor
+   * opened the queue to improve on.
+   *
+   * Set only for alt the auditor did NOT rate `error`. A filename or a URL is
+   * worthless as a starting point, and prefilling the field with it would
+   * invite a rubber-stamp of the junk this app exists to catch.
+   */
+  current?: string
 }
 
 export interface CompiledSection {
