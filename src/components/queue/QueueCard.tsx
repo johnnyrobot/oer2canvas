@@ -152,16 +152,26 @@ export function QueueCard({
   const bodyId = `${ids}-body`
   const inputId = `${ids}-input`
 
-  // Caption/reference text is the higher-confidence path. The local model is
-  // offered only when the compiler found no usable text alternative at all;
-  // that keeps an instructor from replacing grounded publisher context with a
-  // speculative caption.
+  // A real text alternative is the higher-confidence path and the local model
+  // must not displace it: an already-proposed alt, or a genuine caption, means
+  // the compiler found something written ABOUT the image, and offering a
+  // speculative draft next to it invites swapping the grounded answer for the
+  // guess.
+  //
+  // `context.reference` is NOT that, and treating it as that was a mistake worth
+  // naming. It is the nearest sentence in the surrounding prose — "3) Choose
+  // “FCCC — Foundation for California Community Colleges” as seen below" — which
+  // describes what the reader should DO, not what the image shows. On a
+  // step-by-step document (the DOCX import case, where every screenshot has a
+  // numbered sentence under it) that condition held on every single item, so the
+  // drafting seam was wired, shipped, and unreachable in the one import shape
+  // that needs it most. The card prints the reference two lines above the
+  // control either way, so the instructor is comparing them, not choosing blind.
   const canDraftLocally =
     item.kind === 'alt' &&
     item.context.src &&
     item.proposed === undefined &&
     !item.context.caption &&
-    !item.context.reference &&
     drafting &&
     availableModels.length > 0
 

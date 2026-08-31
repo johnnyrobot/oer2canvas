@@ -138,7 +138,27 @@ describe('the alt card', () => {
     expect(screen.getByRole('button', { name: 'Save description' })).toBeTruthy()
   })
 
-  it('does not offer a VLM when nearby source text already grounds the answer', () => {
+  it('does not offer a VLM when a real caption already describes the image', () => {
+    // A caption is something written ABOUT the image. Offering a speculative
+    // draft beside it invites swapping the grounded answer for the guess.
+    const captioned = { ...alt, context: { ...alt.context, caption: 'Figure 3. A four-term polynomial.' } }
+    render(
+      <QueueCard
+        item={captioned}
+        position={13}
+        total={25}
+        drafting={{ models: VLM_MODELS, draft: vi.fn() }}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'Draft locally' })).toBeNull()
+  })
+
+  it('still offers a VLM when all the compiler found was a nearby sentence', () => {
+    // The regression this pins: `alt` carries a `reference` and no caption,
+    // which is EVERY image in a step-by-step document import. Suppressing on
+    // reference made the drafting seam unreachable in exactly that shape — a
+    // sentence saying what the reader should do is not a description of what
+    // the image shows.
     render(
       <QueueCard
         item={alt}
@@ -147,7 +167,7 @@ describe('the alt card', () => {
         drafting={{ models: VLM_MODELS, draft: vi.fn() }}
       />,
     )
-    expect(screen.queryByRole('button', { name: 'Draft locally' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Draft locally' })).toBeTruthy()
   })
 
   it('is a single-line input, because Enter must natively accept', () => {
