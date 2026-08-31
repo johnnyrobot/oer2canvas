@@ -5,7 +5,7 @@ import { DOCUMENT_IMPORT_LIMITS } from './limits'
 import { documentIds, importProvenance, sha256Hex, validateImportMetadata } from './common'
 import { sanitizeImportedMarkdown } from './markup'
 import { splitPdfMarkdown, withPageCaptions } from './pdf-pages'
-import { pdfFindings, type PdfPageSummary } from './pdf-findings'
+import { glyphCorruptionSamples, pdfFindings, type PdfPageSummary } from './pdf-findings'
 import { MAX_TEXT_IMPORT_BYTES } from './text'
 
 export interface PdfImportOptions extends StructuredDocumentImportOptions {
@@ -157,8 +157,14 @@ export async function importPdfDocument(
 
   const html = sanitized.map((entry) => entry.html).join('')
   const detection = parsed.detection
+  /*
+   * Measured on the module's own extracted Markdown rather than on the
+   * sanitized html, so a tag name can never be mistaken for a corrupted word,
+   * and so the check sees exactly the text the module produced.
+   */
+  const corrupted = glyphCorruptionSamples(parsed.markdown ?? '')
   const findings = detection
-    ? pdfFindings(detection, summaries, parsed.hasEncodingIssues === true)
+    ? pdfFindings(detection, summaries, parsed.hasEncodingIssues === true, corrupted)
     : []
 
   if (!html) {

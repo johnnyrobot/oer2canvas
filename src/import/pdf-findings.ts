@@ -32,6 +32,71 @@ export interface PdfPageSummary {
  */
 const TEXT_BEARING_TYPES = new Set(['TextBased', 'Mixed'])
 
+/**
+ * Non-whitespace characters a page must have produced before its own text is
+ * treated as evidence AGAINST the module's OCR call.
+ *
+ * Not `> 0`, and the reason is the failure mode this guard must not open. A
+ * genuinely scanned page very often carries a real text layer holding nothing
+ * but a running header or a page number — "17", "Chapter 4" — so any-text-at-all
+ * would unblock an unreadable page on two characters. This sits above that noise
+ * and below a sentence; anything under it keeps the safe answer, which is to
+ * block.
+ */
+const MIN_TEXT_CONTRADICTING_OCR = 40
+
+/**
+ * Words with a character inside them that cannot occur inside a word.
+ *
+ * The fault this finds is a PDF font subset whose `ToUnicode` map has no entry
+ * for a ligature glyph, so the extractor emits the raw GLYPH INDEX instead of
+ * the characters. A Word-exported PDF turns every "ti" into whatever index the
+ * subset used: "Creative" arrives as "Crea5ve", "Instructions" as "Instruc(ons",
+ * and the text reads as prose right up until somebody tries to read it.
+ *
+ * Two letters are required on BOTH sides, which is what keeps `b2b`, `mp3s` and
+ * `H2O` out. It also costs the short cases — "still" corrupted to "s5ll" is not
+ * matched — and that trade is deliberate: this rule counts occurrences rather
+ * than trying to find every one, so missing the short forms costs nothing as
+ * long as the long forms are there, and a false positive costs a warning on a
+ * clean document.
+ */
+const IN_WORD_INTRUDER = /[a-z]{2,}([0-9(){}[\]<>|\\@#$%^&*+=~])[a-z]{2,}/gi
+
+/**
+ * How many times ONE substituted character must appear inside words.
+ *
+ * Grouping by the character is what makes this precise rather than merely
+ * suspicious. Real technical prose does contain `sha1sum` and `md5sum`, but they
+ * use DIFFERENT digits; a broken font subset maps one ligature to one glyph
+ * index, so the same intruder recurs on every instance of the same letter pair.
+ * Three of a kind is a font, not a vocabulary.
+ */
+const MIN_SAME_INTRUDER = 3
+
+/**
+ * Words that show the corruption, for the message to quote. Empty when the text
+ * is clean.
+ *
+ * Exported and pure so the rule can be measured against real extracted text
+ * without a PDF, a Worker or a browser.
+ */
+export function glyphCorruptionSamples(text: string): string[] {
+  const byIntruder = new Map<string, string[]>()
+  for (const match of text.matchAll(IN_WORD_INTRUDER)) {
+    const intruder = match[1]!
+    const samples = byIntruder.get(intruder) ?? []
+    // One sample per distinct word: a term repeated forty times is one piece of
+    // evidence, not forty, and quoting it forty times would say nothing extra.
+    if (!samples.includes(match[0])) samples.push(match[0])
+    byIntruder.set(intruder, samples)
+  }
+  const worst = [...byIntruder.values()]
+    .filter((samples) => samples.length >= MIN_SAME_INTRUDER)
+    .sort((first, second) => second.length - first.length)[0]
+  return worst ?? []
+}
+
 /** `page 3` / `pages 1–3`, so a message never says "pages 3". */
 function namePages(pages: readonly number[]): string {
   return `${pages.length === 1 ? 'page' : 'pages'} ${formatPageRanges(pages)}`
@@ -62,6 +127,7 @@ export function pdfFindings(
   detection: ParserDetection,
   pages: readonly PdfPageSummary[],
   hasEncodingIssues = false,
+  corrupted: readonly string[] = [],
 ): ImportFinding[] {
   const findings: ImportFinding[] = []
   const everyPage = Array.from({ length: detection.pageCount }, (_, index) => index + 1)
@@ -75,6 +141,30 @@ export function pdfFindings(
    * page, not just the ones it happened to list: an unrecognised `pdfType` is
    * not evidence that the rest of the text came out.
    */
+  /*
+   * A page whose text WE extracted is not a page with no text layer, whatever
+   * the module called it.
+   *
+   * This is the route out, and until now there was none — two independent routes
+   * in and no way to contradict either. `pagesNeedingOcr` means the module wants
+   * OCR run on a page, and `ocrReasonsByPage` gives `scanned` for a page that
+   * merely CONTAINS an image of text. A step-by-step document whose last page is
+   * one screenshot plus two sentences satisfies that, so the module named it,
+   * this file translated the name into "is an image of text with no text layer",
+   * and a blocker withheld a page whose text was sitting in the extraction the
+   * whole time. Measured against the module's own classification, our per-page
+   * character count is the better evidence: it is what actually came out.
+   *
+   * Only on the text-bearing branch. A document the module did not classify as
+   * text-bearing still implicates every page — an unrecognised `pdfType` is not
+   * evidence that anything came out, and this file fails closed on that
+   * deliberately.
+   */
+  const contradicted = new Set(
+    pages
+      .filter((page) => page.textLength >= MIN_TEXT_CONTRADICTING_OCR)
+      .map((page) => page.page),
+  )
   const ocrPages = TEXT_BEARING_TYPES.has(detection.pdfType)
     // Two independent routes in, because one of them is not reliable: the module
     // omits a scanned page from `pagesNeedingOcr` whenever the document still
@@ -83,7 +173,7 @@ export function pdfFindings(
     ? [...new Set([
         ...detection.pagesNeedingOcr,
         ...pages.filter((page) => page.needsOcr).map((page) => page.page),
-      ])].sort((first, second) => first - second)
+      ])].filter((page) => !contradicted.has(page)).sort((first, second) => first - second)
     : everyPage
   if (ocrPages.length > 0) {
     const count = ocrPages.length
@@ -193,15 +283,32 @@ export function pdfFindings(
     })
   }
 
-  if (hasEncodingIssues) {
-    // Document-wide: the module reports no page numbers for this, so the message
-    // must not pretend to have any.
+  /*
+   * ONE finding, from two independent detectors, because they are the same
+   * defect and reporting it twice would just be louder.
+   *
+   * The module's own flag is not sufficient: measured on a Word-exported PDF
+   * whose every "ti" came out as "5" or "(", `hasEncodingIssues` was FALSE while
+   * the text was plainly mangled — so this warning, the one thing standing
+   * between corrupted prose and a published Canvas page, never fired. When we
+   * have samples we quote them, because "some characters may have been extracted
+   * incorrectly" sends a reader looking at a page that reads fine at a glance,
+   * and "Crea5ve, Founda5on, direc5ons" ends the search immediately.
+   */
+  if (corrupted.length > 0 || hasEncodingIssues) {
+    // Document-wide: neither detector reports page numbers, so the message must
+    // not pretend to have any.
     findings.push({
       code: 'pdf-encoding',
       severity: 'warning',
       message:
-        'This PDF reported character-encoding problems, so some characters may have been ' +
-        'extracted incorrectly. Read the preview before preparing these pages.',
+        corrupted.length > 0
+          ? 'Characters inside words were extracted incorrectly, which usually means this PDF\'s ' +
+            'fonts are missing the map from glyphs to text. ' +
+            `Affected words include ${corrupted.slice(0, 4).map((word) => `"${word}"`).join(', ')}. ` +
+            'Read the preview closely — the text looks like prose but does not say what it appears to.'
+          : 'This PDF reported character-encoding problems, so some characters may have been ' +
+            'extracted incorrectly. Read the preview before preparing these pages.',
     })
   }
 

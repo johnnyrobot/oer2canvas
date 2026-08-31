@@ -1,4 +1,5 @@
-import { pdfFindings } from './pdf-findings'
+import { describe, expect, it, test } from 'vitest'
+import { glyphCorruptionSamples, pdfFindings } from './pdf-findings'
 import type { ParserDetection } from './parsers/probe'
 
 const detection = (over: Partial<ParserDetection> = {}): ParserDetection => ({
@@ -133,4 +134,95 @@ test('the ocr message agrees with both its numbers', () => {
   const many = pdfFindings(detection({ pdfType: 'Mixed', pageCount: 4, pagesNeedingOcr: [2, 3] }), [read(1), read(4)])
   expect(many.find((finding) => finding.code === 'pdf-ocr-required')!.message)
     .toContain('2 of 4 pages in this PDF are images of text')
+})
+
+describe('glyph corruption', () => {
+  // The text from a real Word-exported PDF, verbatim. Every "ti" became a glyph
+  // index: "5" in the body font, "(" in the bold heading font.
+  const CORRUPTED =
+    'Instruc(ons for pre-exis(ng Adobe Student licensing users February 2023\n' +
+    'You may have recently lost access to Adobe Crea5ve Cloud licensing even though you s5ll have a ' +
+    'license assigned. Adobe recently released an update that changes how account profiles work. ' +
+    'Please sign out and sign back in following the direc5ons below.\n' +
+    'Choose "Con5nue" on the prompt below.\n' +
+    'Choose "FCCC — Founda5on for California Community Colleges" as seen below.'
+
+  it('finds the fault the module missed, and names words to look at', () => {
+    const samples = glyphCorruptionSamples(CORRUPTED)
+    expect(samples).toContain('Crea5ve')
+    expect(samples).toContain('Founda5on')
+    expect(samples).toContain('direc5ons')
+    expect(samples).toContain('Con5nue')
+  })
+
+  it('is quiet on prose that legitimately mixes digits into words', () => {
+    // Different intruders, so no single character reaches three: this is the
+    // discriminator that separates a broken font from a technical vocabulary.
+    expect(
+      glyphCorruptionSamples(
+        'Compare sha1sum and md5sum output, then check the utf8mb4 column and the b2b p2p mp3s cases.',
+      ),
+    ).toEqual([])
+    expect(glyphCorruptionSamples('The H2O molecule and the b2b market and 3D printing.')).toEqual([])
+    expect(glyphCorruptionSamples('Ordinary prose with no corruption at all.')).toEqual([])
+  })
+
+  it('warns even when the module reports no encoding problems', () => {
+    // The regression: `hasEncodingIssues` was FALSE on the document above, so
+    // the one warning between mangled prose and a published page never fired.
+    const findings = pdfFindings(
+      detection({ pageCount: 1 }),
+      [{ page: 1, textLength: 400, images: 0 }],
+      false,
+      glyphCorruptionSamples(CORRUPTED),
+    )
+    const encoding = findings.find((finding) => finding.code === 'pdf-encoding')
+    expect(encoding?.severity).toBe('warning')
+    expect(encoding?.message).toContain('Crea5ve')
+  })
+
+  it('reports one finding, not two, when both detectors fire', () => {
+    const findings = pdfFindings(
+      detection({ pageCount: 1 }),
+      [{ page: 1, textLength: 400, images: 0 }],
+      true,
+      glyphCorruptionSamples(CORRUPTED),
+    )
+    expect(findings.filter((finding) => finding.code === 'pdf-encoding')).toHaveLength(1)
+  })
+})
+
+describe('a page the module wants OCR on, that produced text anyway', () => {
+  it('does not block a page whose text we actually extracted', () => {
+    // The Adobe case: page 3 is one screenshot plus two sentences. The module
+    // names it because it CONTAINS an image of text; the page is not blank, and
+    // blocking it withheld a whole document whose text was already in hand.
+    const findings = pdfFindings(detection({ pageCount: 3, pagesNeedingOcr: [3] }), [
+      { page: 1, textLength: 300, images: 1 },
+      { page: 2, textLength: 200, images: 2 },
+      { page: 3, textLength: 127, images: 1 },
+    ])
+    expect(findings.find((finding) => finding.code === 'pdf-ocr-required')).toBeUndefined()
+    // And its figure now joins the warning instead of being dropped with it.
+    const figures = findings.find((finding) => finding.code === 'pdf-figure-not-imported')
+    expect(figures?.message).toContain('4 figures')
+  })
+
+  it('still blocks a scanned page carrying only a running header', () => {
+    // The failure mode the threshold exists for: a real text layer holding a
+    // page number is not a page that came out.
+    const findings = pdfFindings(detection({ pageCount: 2, pagesNeedingOcr: [2] }), [
+      { page: 1, textLength: 300, images: 0 },
+      { page: 2, textLength: 9, images: 1 },
+    ])
+    expect(findings.find((finding) => finding.code === 'pdf-ocr-required')?.message).toContain('page 2')
+  })
+
+  it('still blocks a page that produced nothing at all', () => {
+    const findings = pdfFindings(detection({ pageCount: 2, pagesNeedingOcr: [] }), [
+      { page: 1, textLength: 300, images: 0 },
+      { page: 2, textLength: 0, images: 1, needsOcr: true },
+    ])
+    expect(findings.find((finding) => finding.code === 'pdf-ocr-required')?.message).toContain('page 2')
+  })
 })
