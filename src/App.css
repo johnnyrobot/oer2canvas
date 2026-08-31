@@ -77,3 +77,56 @@ input {
 article {
   margin-block-start: 1.5rem;
 }
+
+/*
+ * Give the unclassed controls their chrome back.
+ *
+ * Tailwind's preflight strips a button's border and background and an input's
+ * border down to nothing. Every control that carries utility classes replaces
+ * that chrome itself; the queue screen's controls carry no classes at all, so
+ * they rendered as bare text with padding — "Save description", "Decorative (D)"
+ * and "Skip (S)" read as a sentence, and the description field was invisible
+ * until the focus ring appeared around it. A control the eye cannot find is an
+ * affordance failure whatever the accessibility tree says.
+ *
+ * STILL NOT A PALETTE. `ButtonFace`, `ButtonText`, `ButtonBorder`, `Field` and
+ * `FieldText` are CSS system colours — whatever the user agent, the user's theme
+ * or a forced-colors mode says a button and a field are. That is the same move
+ * `queue.css` makes with `Canvas`/`CanvasText`, and it keeps the 1.4.3
+ * obligation with the user agent where the top of this file put it.
+ *
+ * `:where(… :not([class]))` twice over, so these rules have ZERO specificity AND
+ * only ever match a control that styles itself no other way. Nothing here can
+ * win against a utility class — the cascade hazard named above this block is
+ * real, this file is imported after the theme, and a bare `button {}` rule here
+ * would quietly repaint every styled button in the app.
+ */
+:where(button:not([class])) {
+  background: ButtonFace;
+  color: ButtonText;
+  border: 1px solid ButtonBorder;
+  border-radius: 0.375rem;
+}
+
+:where(button:not([class]):disabled) {
+  opacity: 0.6;
+}
+
+:where(input:not([class]), select:not([class]), textarea:not([class])) {
+  background: Field;
+  color: FieldText;
+  border: 1px solid ButtonBorder;
+  border-radius: 0.375rem;
+}
+
+/*
+ * The queue's description field is the one input an instructor types a sentence
+ * into, and a browser default text input is about 20 characters wide. Sized in
+ * `ch` against its own content, and capped by the column, so the visible box
+ * matches the answer it is asking for.
+ */
+.b2c-queue-card input[type='text'] {
+  width: 100%;
+  max-width: 48rem;
+  min-height: 2.75rem;
+}
