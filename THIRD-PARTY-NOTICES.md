@@ -13,6 +13,7 @@ are in `package-lock.json`; this summary identifies the direct runtime and build
 | @huggingface/transformers | Apache-2.0 | Browser/WebGPU runtime for the optional local VLM draft |
 | @firecrawl/anydoc-wasm 0.2.4 | MIT | Browser Worker parsing for released DOCX, ODT, RTF, EPUB, PowerPoint (`.pptx`, `.pptm`, `.ppsx`, `.ppsm`), and OpenDocument Presentation (`.odp`) import |
 | @firecrawl/pdf-inspector-wasm 1.17.0 | MIT | Browser Worker classification and text extraction for released PDF import |
+| pdfjs-dist 6.3.289 | Apache-2.0 | Browser-side recovery of image XObjects from a PDF, which the extraction module does not expose |
 | Vite / Vitest / Playwright | MIT | Build and test tooling |
 | vite-plugin-pwa / Workbox | MIT | Service worker and PWA assets |
 | Tailwind CSS | MIT | Styles |

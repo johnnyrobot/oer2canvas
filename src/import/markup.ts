@@ -1,4 +1,5 @@
 import { Marked } from 'marked'
+import { isPackagedReference } from './assets'
 import { isPublicNetworkUrl } from './common'
 import { escapeHtml } from './html'
 import type { ImportFinding } from './types'
@@ -364,6 +365,23 @@ export function sanitizeImportedHtml(
 
     if (tag === 'img') {
       summary.images += 1
+      /*
+       * A PACKAGED image survives, because its bytes are in the cartridge.
+       *
+       * Everything below this branch exists for an image whose bytes we do not
+       * have. That used to be every image on this path — the PDF module returns
+       * no bytes — so the placeholder was unconditional and correct. It stopped
+       * being correct the moment `pdf-images.ts` could recover the bytes: the
+       * importer would package 21 real figures into the archive and then replace
+       * every reference to them with the words "[Embedded image]", shipping a
+       * cartridge that carried its own pictures and showed none of them.
+       *
+       * `isPackagedReference` is the same predicate `allowlist.ts` fences on, so
+       * this cannot admit a src that the allowlist would later reject. An
+       * external or relative src is untouched and still becomes a placeholder.
+       */
+      const source = element.getAttribute('src') ?? ''
+      if (isPackagedReference(source)) continue
       summary.unavailableImages += 1
       const alt = element.getAttribute('alt')?.trim()
       /*

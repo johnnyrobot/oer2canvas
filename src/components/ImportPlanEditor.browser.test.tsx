@@ -50,13 +50,16 @@ test('a pdf whose scanned page is among readable ones leaves nothing publishable
   expect(screen.getByText(/an image of text with no text layer/)).toBeInTheDocument()
 })
 
-test('a pdf with a figure stays publishable, and says where the figure was', async () => {
+test('a pdf with a figure stays publishable, and brings the figure with it', async () => {
+  // Was: "says where the figure was" — a placeholder and a warning. The figure
+  // is now recovered, so the honest assertion is that it arrived.
   const imported = await importPdf(['text', 'text-and-figure'])
   render(<Harness initial={createImportDraft(imported)} />)
 
   expect(screen.getByRole('button', { name: /^Prepare / })).toBeEnabled()
-  expect(screen.getByText(/could not be imported/)).toBeInTheDocument()
-  expect(imported.work.sections[0]!.html).toContain('[Embedded image: Figure on page 2]')
+  expect(screen.queryByText(/could not be imported/)).not.toBeInTheDocument()
+  expect(imported.work.assets).toHaveLength(1)
+  expect(imported.work.sections[0]!.html).toMatch(/<img[^>]+\$IMS-CC-FILEBASE\$\/oer2canvas\//)
 })
 
 test('a fetched article with images cannot be prepared', async () => {

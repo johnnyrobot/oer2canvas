@@ -14,6 +14,13 @@ export interface PdfPageSummary {
   /** Module image placeholders found in this page's slice. */
   images: number
   /**
+   * How many of those figures were recovered as real bytes and packaged.
+   *
+   * Absent or 0 means none were, which is what every PDF did before `pdf-images.ts`
+   * existed and is still what happens where the capability is unavailable.
+   */
+  packagedImages?: number
+  /**
    * This page produced no marker and a page-restricted re-parse found an image
    * on it, so it is a page that is an image of text. It BLOCKS, exactly as a
    * page named in `pagesNeedingOcr` does.
@@ -60,8 +67,16 @@ const MIN_TEXT_CONTRADICTING_OCR = 40
  * than trying to find every one, so missing the short forms costs nothing as
  * long as the long forms are there, and a false positive costs a warning on a
  * clean document.
+ *
+ * `@` is deliberately NOT in the set. Measured against a real 28-page Pressbooks
+ * textbook, the ONLY in-word intruders in 77KB of text were two email addresses
+ * — `knelson@inverhills`, `braff@gcccd` — which the three-of-a-kind threshold
+ * happened to hold back. A third contributor would have tripped it, and a
+ * warning that fires on a staff directory is a warning people learn to ignore.
+ * No broken font subset emits `@` for a ligature: the glyph indices that leak
+ * are digits and bracket-shaped punctuation.
  */
-const IN_WORD_INTRUDER = /[a-z]{2,}([0-9(){}[\]<>|\\@#$%^&*+=~])[a-z]{2,}/gi
+const IN_WORD_INTRUDER = /[a-z]{2,}([0-9(){}[\]<>|\\#$%^&*+=~])[a-z]{2,}/gi
 
 /**
  * How many times ONE substituted character must appear inside words.
@@ -203,9 +218,16 @@ export function pdfFindings(
    * back out using the per-page attribution, so the count here is figures that
    * really are on the page it names.
    */
-  const figurePages = pages.filter((page) => page.images > 0 && !blocked.has(page.page))
+  /*
+   * Only what was actually LOST. A recovered figure is in the cartridge as an
+   * image, so naming it here would tell an instructor to go and add something
+   * Canvas already has — and on a document where every figure came through, the
+   * honest number is none and the warning should not appear at all.
+   */
+  const lost = (page: PdfPageSummary) => Math.max(0, page.images - (page.packagedImages ?? 0))
+  const figurePages = pages.filter((page) => lost(page) > 0 && !blocked.has(page.page))
   if (figurePages.length > 0) {
-    const figures = figurePages.reduce((total, page) => total + page.images, 0)
+    const figures = figurePages.reduce((total, page) => total + lost(page), 0)
     findings.push({
       code: 'pdf-figure-not-imported',
       severity: 'warning',

@@ -43,6 +43,7 @@
     "axe-core": "^4.13.0",
     "lucide-react": "^1.33.0",
     "marked": "18.0.11",
+    "pdfjs-dist": "^6.3.289",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "temml": "^0.13.4"

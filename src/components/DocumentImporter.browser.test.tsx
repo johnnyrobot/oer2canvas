@@ -97,11 +97,12 @@ test('a selected pdf is routed to the pdf importer and reaches the plan editor',
   const result = onImported.mock.calls[0]![0] as ImportResult
   // Routed on the capability's parser, so the anydoc importer never saw it.
   expect(result).toMatchObject({
-    work: { title: 'cells', format: 'pdf', assets: [] },
+    work: { title: 'cells', format: 'pdf' },
     report: { parser: 'pdf-inspector', format: 'pdf', pageCount: 2 },
   })
-  // The figure warns and marks its place; nothing about it blocks.
-  expect(result.work.sections[0]!.html).toContain('[Embedded image: Figure on page 2]')
+  // The figure is recovered and packaged, not marked and abandoned.
+  expect(result.work.assets).toHaveLength(1)
+  expect(result.work.sections[0]!.html).toMatch(/<img[^>]+\$IMS-CC-FILEBASE\$\/oer2canvas\//)
   expect(result.report.findings.some((finding) => finding.severity === 'blocker')).toBe(false)
 })
 

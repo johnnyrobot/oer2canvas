@@ -5,6 +5,8 @@ import { DOCUMENT_IMPORT_LIMITS } from './limits'
 import { documentIds, importProvenance, sha256Hex, validateImportMetadata } from './common'
 import { sanitizeImportedMarkdown } from './markup'
 import { splitPdfMarkdown, withPageCaptions } from './pdf-pages'
+import { prepareAssets, type PreparedAsset } from './assets'
+import type { PdfExtractedImage } from './pdf-images'
 import { glyphCorruptionSamples, pdfFindings, type PdfPageSummary } from './pdf-findings'
 import { MAX_TEXT_IMPORT_BYTES } from './text'
 
@@ -14,6 +16,16 @@ export interface PdfImportOptions extends StructuredDocumentImportOptions {
    * imported lazily, so importing this module does not pull in a Worker client.
    */
   probe?: (options: ParserProbeOptions) => Promise<ParserProbeResult>
+  /**
+   * Test seam for figure recovery, mirroring `probe`.
+   *
+   * Production leaves this undefined and the real extractor is imported lazily
+   * — pdf.js is a large chunk that a text-only PDF must not pay for, and the
+   * module is browser-only. When the capability is ABSENT (no `OffscreenCanvas`,
+   * i.e. jsdom) extraction is skipped entirely and the importer behaves exactly
+   * as it did before figures could be recovered: a placeholder and a warning.
+   */
+  extractImages?: (bytes: ArrayBuffer, options: { signal?: AbortSignal }) => Promise<PdfExtractedImage[]>
 }
 
 /*
@@ -83,6 +95,52 @@ export async function importPdfDocument(
     throw new Error('Text extracted from a PDF must be 2 MiB or smaller.')
   }
 
+  /*
+   * Recover the figures, but only for a document that HAS figures.
+   *
+   * The probe has already transferred and detached `bytes`, so this re-reads
+   * from the `File` rather than keeping a second multi-megabyte copy alive
+   * across the parse for the common case that needs none.
+   */
+  const extract = options.extractImages
+    ?? (typeof OffscreenCanvas === 'undefined'
+      ? undefined
+      : async (input: ArrayBuffer, run: { signal?: AbortSignal }) =>
+        (await import('./pdf-images')).extractPdfImages(input, run))
+  const referencesByPage = new Map<number, (string | undefined)[]>()
+  const packagedByPage = new Map<number, number>()
+  const assets: PreparedAsset[] = []
+  if (extract && (parsed.counts.images > 0 || /!\[Image: /.test(parsed.markdown ?? ''))) {
+    try {
+      options.signal?.throwIfAborted()
+      const recovered = await extract(await file.arrayBuffer(), { signal: options.signal })
+      const prepared = await prepareAssets(recovered.map((image, index) => ({
+        id: index,
+        mediaType: image.mediaType,
+        // The page is the only origin a PDF figure has: there is no package
+        // path to name it by, and `prepareAssets` dedupes on content anyway, so
+        // a figure repeated across pages still lands on one archive entry.
+        originPart: `page-${image.page}`,
+        data: image.data,
+      })))
+      const byName = new Map<string, PreparedAsset>()
+      recovered.forEach((image, index) => {
+        const entry = prepared.get(index)
+        if (!entry || 'rejected' in entry) return
+        const slots = referencesByPage.get(image.page) ?? []
+        slots[image.order] = entry.reference
+        referencesByPage.set(image.page, slots)
+        packagedByPage.set(image.page, (packagedByPage.get(image.page) ?? 0) + 1)
+        if (!byName.has(entry.name)) byName.set(entry.name, entry)
+      })
+      assets.push(...byName.values())
+    } catch (error) {
+      // Recovery is best-effort and must never cost the text. An abort is the
+      // user leaving, and still has to propagate.
+      if (options.signal?.aborted) throw error
+    }
+  }
+
   const split = splitPdfMarkdown(parsed.markdown ?? '')
   const summaries: PdfPageSummary[] = []
   const sanitized: { html: string; findings: ImportFinding[] }[] = []
@@ -99,7 +157,9 @@ export async function importPdfDocument(
       if (page !== undefined) summaries.push({ page, textLength: 0, images: 0 })
       return
     }
-    const source = page === undefined ? markdown : withPageCaptions(markdown, page)
+    const source = page === undefined
+      ? markdown
+      : withPageCaptions(markdown, page, referencesByPage.get(page) ?? [])
     // One finding per DOCUMENT, not per page: the caller raises its own, because
     // the default would give a multi-page PDF one blocker per page.
     const result = sanitizeImportedMarkdown(source, { deferImageFindings: true })
@@ -115,6 +175,7 @@ export async function importPdfDocument(
         page,
         textLength: visibleLength(result.html),
         images: [...markdown.matchAll(MODULE_IMAGE)].length,
+        packagedImages: packagedByPage.get(page) ?? 0,
       })
     }
   }
@@ -203,9 +264,22 @@ export async function importPdfDocument(
       title,
       format: 'pdf',
       sections: [{ id: sectionId, title, order: 0, html }],
-      // `PdfProcessResult` exposes no image bytes, so a PDF import can never
-      // package an asset. Every figure is a placeholder and a warning instead.
-      assets: [],
+      /*
+       * Figures recovered by `pdf-images.ts`. The module still exposes no bytes
+       * — this is pdf.js reading the image XObjects directly — but the result
+       * reaches the cartridge through exactly the pipeline DOCX images use, so a
+       * PDF figure is now a real Canvas image that the alt-text queue asks about
+       * and the local model can draft for.
+       */
+      assets: assets.map((asset) => ({
+        id: asset.sha256,
+        mediaType: asset.mediaType,
+        extension: asset.extension,
+        bytes: asset.bytes,
+        sha256: asset.sha256,
+        originPart: asset.originPart,
+        name: asset.name,
+      })),
       provenance: importProvenance(options.metadata, { kind: 'local-file', originalName: file.name }),
     },
     report: {
@@ -225,7 +299,7 @@ export async function importPdfDocument(
         equations: counts.equations,
         notes: counts.notes,
         unavailableAssets: counts.unavailableAssets,
-        packagedAssetBytes: 0,
+        packagedAssetBytes: assets.reduce((total, asset) => total + asset.bytes.byteLength, 0),
       },
     },
   }

@@ -99,14 +99,26 @@ test('a genuinely blank page still only warns', async () => {
   expect(empty?.sourcePage).toBe(2)
 })
 
-test('a figure on a readable page is still counted as a figure', async () => {
-  // Guards the subtraction: it must remove only images belonging to an un-marked
-  // page, never a figure that really is on the page it was found in.
+test('a figure on a readable page is recovered into the cartridge', async () => {
+  /*
+   * This test used to assert the opposite — that the figure warned and was
+   * left behind — because `PdfProcessResult` exposes no image bytes and that
+   * was taken as the end of the story. `pdf-images.ts` reads the image XObject
+   * with pdf.js instead, so the figure now arrives as a real packaged asset.
+   *
+   * Deliberately end-to-end through the REAL extractor rather than a seam: this
+   * is the browser project, pdf.js and `OffscreenCanvas` are genuine here, and
+   * the whole claim is that actual PDF bytes become an actual image.
+   */
   const file = new File([pdfFixturePages(['text', 'text-and-figure'])], 'chapter.pdf', { type: 'application/pdf' })
   const imported = await importPdfDocument(file, { metadata })
 
-  const figure = imported.report.findings.find((finding) => finding.code === 'pdf-figure-not-imported')
-  expect(figure?.severity).toBe('warning')
-  expect(figure?.message).toMatch(/1 figure/)
-  expect(figure?.sourcePage).toBe(2)
+  expect(imported.work.assets).toHaveLength(1)
+  expect(imported.report.counts.packagedAssetBytes).toBeGreaterThan(0)
+  expect(imported.work.sections[0]!.html).toMatch(/<img[^>]+\$IMS-CC-FILEBASE\$\/oer2canvas\//)
+  // Nothing was lost, so nothing is claimed to have been.
+  expect(imported.work.sections[0]!.html).not.toContain('[Embedded image')
+  expect(
+    imported.report.findings.find((finding) => finding.code === 'pdf-figure-not-imported'),
+  ).toBeUndefined()
 })

@@ -111,7 +111,7 @@ export const DOCUMENT_FORMAT_CAPABILITIES: readonly DocumentFormatCapability[] =
     status: 'enabled',
     limitations: [
       'Scanned pages have no text to import and block completion; this release does not run OCR in the browser.',
-      'Figures are marked in place but not imported — add them in Canvas afterwards.',
+      'Photographs and scans are imported; a figure drawn as vector art is marked in place instead.',
       'Multi-column and table reading order needs review.',
     ],
     probe: parserProbe('pdf-inspector', 'pdf'),

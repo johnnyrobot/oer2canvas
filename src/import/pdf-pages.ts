@@ -59,8 +59,23 @@ export function splitPdfMarkdown(markdown: string): PdfMarkdownSplit {
  * rewritten; anything else is left alone, so a future version that emits a real
  * caption keeps it (and the test above fails loudly if the form changes).
  */
-export function withPageCaptions(markdown: string, page: number): string {
-  return markdown.replace(/!\[Image: [^\]]*\]\(image\)/g, `![Figure on page ${page}](image)`)
+export function withPageCaptions(
+  markdown: string,
+  page: number,
+  /**
+   * Packaged references for this page's figures, in paint order, where the
+   * bytes were recovered. A missing entry keeps the module's `(image)` src,
+   * which `markup.ts` turns into the visible "[Embedded image]" placeholder —
+   * so a figure we could not recover still says where it was.
+   */
+  references: readonly (string | undefined)[] = [],
+): string {
+  let order = -1
+  return markdown.replace(/!\[Image: [^\]]*\]\(image\)/g, () => {
+    order += 1
+    const reference = references[order]
+    return `![Figure on page ${page}](${reference ?? 'image'})`
+  })
 }
 
 /**

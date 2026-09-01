@@ -105,3 +105,76 @@ test('a page that printed nothing does not raise a no-supported-content blocker'
   expect(result.report.findings.map((finding) => finding.code)).toContain('pdf-page-empty')
   expect(result.report.findings.every((finding) => finding.severity === 'warning')).toBe(true)
 })
+
+describe('recovered figures', () => {
+  const image = (page: number, order: number) => ({
+    page, order, mediaType: 'image/png', width: 2, height: 2,
+    // A real 2x2 PNG: `prepareAssets` sniffs the header, so invented bytes
+    // would be rejected and the test would pass for the wrong reason.
+    data: Uint8Array.from(atob(
+      'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGP8z8Dwn4GBgYkBBpgAGiwCA/JQdvIAAAAASUVORK5CYII=',
+    ), (c) => c.charCodeAt(0)),
+  })
+
+  it('packages a recovered figure and keeps the image in the html', async () => {
+    const result = await importPdfDocument(pdfFile(), {
+      metadata,
+      probe: stub({
+        markdown: '<!-- Page 1 -->\nSome prose.\n\n![Image: x](image)\n',
+        detection: detection({ pageCount: 1 }),
+      }),
+      extractImages: async () => [image(1, 0)],
+    })
+    // The bytes reach the cartridge...
+    expect(result.work.assets).toHaveLength(1)
+    expect(result.report.counts.packagedAssetBytes).toBeGreaterThan(0)
+    // ...and the html points at them rather than at the words "Embedded image".
+    expect(result.work.sections[0]!.html).toMatch(/<img[^>]+\$IMS-CC-FILEBASE\$\/oer2canvas\//)
+    expect(result.work.sections[0]!.html).not.toContain('[Embedded image')
+    // ...so there is nothing left to warn about.
+    expect(result.report.findings.find((f) => f.code === 'pdf-figure-not-imported')).toBeUndefined()
+  })
+
+  it('still warns about the figures it could NOT recover', async () => {
+    const result = await importPdfDocument(pdfFile(), {
+      metadata,
+      probe: stub({
+        markdown: '<!-- Page 1 -->\nProse.\n\n![Image: a](image)\n\n![Image: b](image)\n',
+        detection: detection({ pageCount: 1 }),
+      }),
+      // Only the first of the two figures came back.
+      extractImages: async () => [image(1, 0)],
+    })
+    expect(result.work.assets).toHaveLength(1)
+    const warning = result.report.findings.find((f) => f.code === 'pdf-figure-not-imported')
+    expect(warning?.message).toContain('1 figure')
+    // The unrecovered one still says where it was.
+    expect(result.work.sections[0]!.html).toContain('[Embedded image')
+  })
+
+  it('never lets a failed recovery cost the text', async () => {
+    const result = await importPdfDocument(pdfFile(), {
+      metadata,
+      probe: stub({
+        markdown: '<!-- Page 1 -->\nThe prose must survive.\n\n![Image: x](image)\n',
+        detection: detection({ pageCount: 1 }),
+      }),
+      extractImages: async () => { throw new Error('pdf.js blew up') },
+    })
+    expect(result.work.sections[0]!.html).toContain('The prose must survive.')
+    expect(result.work.assets).toEqual([])
+    expect(result.report.findings.find((f) => f.code === 'pdf-figure-not-imported')).toBeDefined()
+  })
+
+  it('behaves exactly as before when recovery is unavailable', async () => {
+    const result = await importPdfDocument(pdfFile(), {
+      metadata,
+      probe: stub({
+        markdown: '<!-- Page 1 -->\nProse.\n\n![Image: x](image)\n',
+        detection: detection({ pageCount: 1 }),
+      }),
+    })
+    expect(result.work.assets).toEqual([])
+    expect(result.work.sections[0]!.html).toContain('[Embedded image')
+  })
+})

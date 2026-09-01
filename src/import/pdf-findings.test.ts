@@ -226,3 +226,13 @@ describe('a page the module wants OCR on, that produced text anyway', () => {
     expect(findings.find((finding) => finding.code === 'pdf-ocr-required')?.message).toContain('page 2')
   })
 })
+
+test('a staff directory is not a broken font', () => {
+  // Measured: a real Pressbooks textbook's only in-word intruders were email
+  // addresses. Three of them must still not raise a corruption warning.
+  expect(
+    glyphCorruptionSamples(
+      'Contact knelson@inverhills or braff@gcccd or rlee@example for the syllabus.',
+    ),
+  ).toEqual([])
+})
