@@ -888,17 +888,29 @@ export default function App() {
         />
       )}
 
-      {phase === 'review' && queue && (
-        <QueueScreen
-          initial={queue}
-          incoming={audited}
-          compiling={compiling}
-          chapters={prepared}
-          drafting={localVlmDrafting}
-          onAnswers={setAnswers}
-          onSettled={onSettled}
-          ideaEdits={allIdeaEdits}
-        />
+      {/*
+        MOUNTED FOR THE LIFE OF THE QUEUE, hidden rather than unmounted when
+        another phase owns the main region. The session — its answers, its
+        rebuilt sections, its re-audits — lives inside `QueueScreen`, and
+        unmounting it on a visit to Chapters or IDEA threw all of that away:
+        the queue came back with every item unanswered, and the mount effect
+        reported an empty answers map, which recompiled every edited section
+        without its answers. `hidden` takes the subtree out of layout and the
+        accessibility tree, so nothing in it is announced or reachable.
+      */}
+      {queue && (
+        <div hidden={phase !== 'review'}>
+          <QueueScreen
+            initial={queue}
+            incoming={audited}
+            compiling={compiling}
+            chapters={prepared}
+            drafting={localVlmDrafting}
+            onAnswers={setAnswers}
+            onSettled={onSettled}
+            ideaEdits={allIdeaEdits}
+          />
+        </div>
       )}
       {/*
         §3.8. Nothing was ever queued, so the queue screen never renders at all
