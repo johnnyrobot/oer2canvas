@@ -23,7 +23,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Download, Trash2 } from 'lucide-react'
 import type { CompiledChapter } from '../../contracts/index'
-import { checkSection, findingsByCategory } from '../../engine/idea/findings'
+import { checkSection, findingsByCategory, type FindingTarget } from '../../engine/idea/findings'
 import { newEdits, type IdeaEdits, type IdeaEditsEvent } from '../../engine/idea/edits'
 import { appliedEdits } from '../../engine/idea/applied'
 import { IdeaChapterRender } from './IdeaChapterRender'
@@ -75,7 +75,7 @@ export function IdeaScreen({
   const [status, setStatus] = useState('')
   const [confirmForget, setConfirmForget] = useState(false)
   /** The element a focused finding is about, outlined in the render. */
-  const [focus, setFocus] = useState<{ sectionId: string; elementId: string } | undefined>()
+  const [focus, setFocus] = useState<FindingTarget | undefined>()
   // The benchmark field holds its own text so it can be emptied to retype;
   // only a finite number is dispatched, and blur restores the stored value.
   const [benchText, setBenchText] = useState(String(header.benchmark.bipocPercent))

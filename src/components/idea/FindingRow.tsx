@@ -7,7 +7,7 @@
  */
 import { useId, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
-import type { IdeaFinding } from '../../engine/idea/findings'
+import type { FindingTarget, IdeaFinding } from '../../engine/idea/findings'
 import type { IdeaEditsEvent } from '../../engine/idea/edits'
 import { IDEA_COPY } from './copy'
 
@@ -26,7 +26,7 @@ export function FindingRow({
   finding: IdeaFinding
   sectionTitle: string
   onEvent: (event: IdeaEditsEvent) => void
-  onFocus: (target: { sectionId: string; elementId: string } | undefined) => void
+  onFocus: (target: FindingTarget | undefined) => void
 }) {
   const id = useId()
   const [mode, setMode] = useState<Mode>('idle')

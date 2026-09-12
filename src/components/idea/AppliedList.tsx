@@ -5,8 +5,8 @@
  * but the compile step did not apply it, and the list must not claim it did.
  */
 import { useId } from 'react'
-import type { IdeaEdit } from '../../engine/idea/edits'
 import { parseIdeaEditKey } from '../../engine/idea/edits'
+import type { AppliedEdit } from '../../engine/idea/applied'
 import { IDEA_COPY } from './copy'
 
 const TARGET = 'min-h-9 min-w-9'
@@ -14,7 +14,7 @@ const TARGET = 'min-h-9 min-w-9'
 export function AppliedList({
   applied, onUndo,
 }: {
-  applied: readonly { key: string; edit: IdeaEdit; stale: boolean; sectionTitle: string }[]
+  applied: readonly AppliedEdit[]
   onUndo: (key: string) => void
 }) {
   const ids = useId()

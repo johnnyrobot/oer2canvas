@@ -50,6 +50,12 @@ export interface ObservationFinding {
 
 export type IdeaFinding = EditFinding | ObservationFinding
 
+/** The element a finding is about: outlined in the render while the finding's row has focus. */
+export interface FindingTarget {
+  sectionId: string
+  elementId: string
+}
+
 export type Finder = (sectionId: string, html: string) => IdeaFinding[]
 
 /**

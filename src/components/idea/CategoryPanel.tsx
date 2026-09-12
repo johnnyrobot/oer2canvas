@@ -17,8 +17,9 @@ import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import type { CategoryId, IdeaCategory, RubricRow } from '../../engine/idea/framework'
 import { RUBRIC_NA_TEXT } from '../../engine/idea/framework'
 import type { CategoryReview, IdeaReviewEvent, Rating } from '../../engine/idea/review'
-import type { IdeaFinding } from '../../engine/idea/findings'
-import type { IdeaEdit, IdeaEditsEvent } from '../../engine/idea/edits'
+import type { FindingTarget, IdeaFinding } from '../../engine/idea/findings'
+import type { IdeaEditsEvent } from '../../engine/idea/edits'
+import type { AppliedEdit } from '../../engine/idea/applied'
 import type { LlmProvider } from '../../engine/idea/llm/providers'
 import { DRAFTABLE, type DraftableCategory } from '../../engine/idea/llm/prompts'
 import { FindingRow } from './FindingRow'
@@ -66,10 +67,10 @@ export function CategoryPanel({
   onToggle: () => void
   onEvent: (event: IdeaReviewEvent) => void
   findings?: readonly IdeaFinding[]
-  applied?: readonly { key: string; edit: IdeaEdit; stale: boolean; sectionTitle: string }[]
+  applied?: readonly AppliedEdit[]
   sectionTitleOf?: (sectionId: string) => string
   onEditEvent?: (event: IdeaEditsEvent) => void
-  onFocusFinding?: (target: { sectionId: string; elementId: string } | undefined) => void
+  onFocusFinding?: (target: FindingTarget | undefined) => void
   /** Sections this category's rule check threw on (spec §7.1). */
   failures?: readonly { sectionTitle: string; message: string }[]
   /** Slice 4: the Ask-the-model zone, rendered only for the draftable categories. */

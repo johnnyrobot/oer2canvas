@@ -6,8 +6,8 @@ test('applied edits are listed with their change and Undo; stale ones say so', (
   render(
     <AppliedList
       applied={[
-        { key: 's1::a::0::suffers from', edit: { kind: 'replace', replacement: 'has' }, stale: false, sectionTitle: 'S' },
-        { key: 's1::b::0::the blind', edit: { kind: 'keep', context: 'as quoted' }, stale: true, sectionTitle: 'S' },
+        { key: 's1::a::0::suffers from', edit: { kind: 'replace', replacement: 'has' }, stale: false, sectionTitle: 'S', category: '7.6' },
+        { key: 's1::b::0::the blind', edit: { kind: 'keep', context: 'as quoted' }, stale: true, sectionTitle: 'S', category: '7.6' },
       ]}
       onUndo={onUndo}
     />,

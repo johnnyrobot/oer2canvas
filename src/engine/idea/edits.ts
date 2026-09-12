@@ -21,6 +21,11 @@ export function ideaEditKey(sectionId: string, elementId: string, occurrence: nu
   return [sectionId, elementId, String(occurrence), original].join(SEP)
 }
 
+/** Four `::`-separated parts at least, as `ideaEditKey` builds them. */
+export function isIdeaEditKey(value: unknown): value is string {
+  return typeof value === 'string' && value.split(SEP).length >= 4
+}
+
 export function parseIdeaEditKey(key: string): { sectionId: string; elementId: string; occurrence: number; original: string } {
   const [sectionId, elementId, occurrence, ...rest] = key.split(SEP)
   return { sectionId: sectionId!, elementId: elementId!, occurrence: Number(occurrence), original: rest.join(SEP) }

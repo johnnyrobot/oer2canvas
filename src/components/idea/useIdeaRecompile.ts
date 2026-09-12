@@ -21,7 +21,7 @@ import type { GateResult } from '../../engine/gate'
 import type { PublisherProfile } from '../../engine/compile/context'
 import type { QueueAnswer } from '../../engine/compile/answers'
 import { recompileSections } from '../../engine/compile/index'
-import { parseIdeaEditKey, type IdeaEdit, type IdeaEdits } from '../../engine/idea/edits'
+import { sectionsWithEdits, type IdeaEdit, type IdeaEdits } from '../../engine/idea/edits'
 import { reviewKeyOf } from './useIdeaReviews'
 
 export interface IdeaRecompileDeps {
@@ -42,13 +42,7 @@ export const defaultIdeaRecompileDeps: IdeaRecompileDeps = {
 
 /** Section ids that currently carry at least one edit, per chapter key. */
 function editedSections(edits: ReadonlyMap<string, IdeaEdits>): Map<string, Set<string>> {
-  const out = new Map<string, Set<string>>()
-  for (const [key, e] of edits) {
-    const ids = new Set<string>()
-    for (const k of e.edits.keys()) ids.add(parseIdeaEditKey(k).sectionId)
-    out.set(key, ids)
-  }
-  return out
+  return new Map([...edits].map(([key, e]) => [key, sectionsWithEdits(e)]))
 }
 
 export function useIdeaRecompile({

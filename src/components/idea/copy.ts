@@ -68,7 +68,6 @@ export const IDEA_COPY = {
   findings: {
     heading: 'What a rule found',
     none: 'No wording this rule set recognises. That is not a clean bill; the checklist below is the review.',
-    ruleSays: (source: string) => `${source} ↗`,
     inQuotation: 'inside a quotation',
     where: (sectionTitle: string) => `in ${sectionTitle}`,
     replace: 'Replace',

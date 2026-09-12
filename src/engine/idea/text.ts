@@ -98,6 +98,58 @@ export function isQuotation(el: Element): boolean {
   return CITATION.test(el.textContent ?? '')
 }
 
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * A phrase as a regex: case-insensitive, at word boundaries that also refuse
+ * a hyphen neighbour, so "crazy" does not fire inside "crazy-quilt" and "the
+ * blind" does not fire inside "the blind-spot".
+ */
+export function phrasePattern(phrase: string): RegExp {
+  return new RegExp(`(?<![\\w-])${escapeRe(phrase)}(?![\\w-])`, 'gi')
+}
+
+export interface PhraseHit<T> {
+  pattern: T
+  elementId: string
+  element: Element
+  /** The text as written, case preserved. */
+  original: string
+  /** Substring index over the block's text, as `findOccurrence` will count it. */
+  occurrence: number
+}
+
+/**
+ * Every hit of every pattern over the id-bearing blocks of a section's html,
+ * in document order. The one walk the finders share, so the occurrence a
+ * finder reports is the occurrence the compile step will look for.
+ *
+ * Blocks with no id are skipped: a hit that cannot be keyed cannot be acted
+ * on, and keying it on '' would collide every such block into one.
+ */
+export function matchPhrases<T extends { re: RegExp }>(html: string, patterns: readonly T[]): PhraseHit<T>[] {
+  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html')
+  const out: PhraseHit<T>[] = []
+  for (const element of blockElements(doc.body)) {
+    const elementId = element.getAttribute('id')
+    if (!elementId) continue
+    for (const node of textNodesOf(element)) {
+      for (const pattern of patterns) {
+        pattern.re.lastIndex = 0
+        let m: RegExpExecArray | null
+        while ((m = pattern.re.exec(node.data)) !== null) {
+          const original = m[0]
+          // Occurrence counted over the block's WHOLE text up to this node and
+          // offset, so the index matches what `findOccurrence` will count.
+          const occurrence = countOccurrences(textBefore(element, node, m.index), original)
+          out.push({ pattern, elementId, element, original, occurrence })
+        }
+      }
+    }
+  }
+  return out
+}
+
 /**
  * The block's text strictly before `offset` in `node` — every earlier text
  * node plus this node's prefix.

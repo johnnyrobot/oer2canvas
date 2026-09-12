@@ -24,6 +24,7 @@
  */
 import { useLayoutEffect, useRef } from 'react'
 import type { CompiledChapter } from '../../contracts/index'
+import type { FindingTarget } from '../../engine/idea/findings'
 import { CanvasShellStyles } from '../CanvasShellStyles'
 import { ChapterByline } from '../ChapterByline'
 import { usePackagedAssetUrls } from '../usePackagedAssetUrls'
@@ -36,7 +37,7 @@ export function IdeaChapterRender({
   compiled, target, pending,
 }: {
   compiled: CompiledChapter
-  target: { sectionId: string; elementId: string } | undefined
+  target: FindingTarget | undefined
   pending: ReadonlySet<string>
 }) {
   const { chapter } = compiled

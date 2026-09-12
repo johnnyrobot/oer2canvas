@@ -21,7 +21,7 @@
  * `restore` always returns an empty `dismissed` set.
  */
 import { IDEA_CATEGORY_IDS } from './framework'
-import { newEdits, reduceEdits, type IdeaEdits } from './edits'
+import { isIdeaEditKey, newEdits, reduceEdits, type IdeaEdits } from './edits'
 import {
   newHeader, newReview, reduceHeader, reduceReview,
   type ChecklistAnswer, type IdeaHeader, type IdeaReview, type Rating,
@@ -56,16 +56,13 @@ const isRating = (v: unknown): v is Rating => typeof v === 'string' && RATINGS.i
 const isAnswer = (v: unknown): v is ChecklistAnswer => typeof v === 'string' && ANSWERS.includes(v)
 const entries = (v: unknown): [unknown, unknown][] => (v instanceof Map ? [...v] : [])
 
-/** Four `::`-separated parts, as `ideaEditKey` builds them. */
-const isEditKey = (v: unknown): v is string => typeof v === 'string' && v.split('::').length >= 4
-
 function restoreEdits(value: unknown): ReadonlyMap<string, IdeaEdits> {
   const out = new Map<string, IdeaEdits>()
   for (const [key, raw] of entries(value)) {
     if (typeof key !== 'string' || !isRecord(raw)) continue
     let e = newEdits()
     for (const [editKey, edit] of entries(raw.edits)) {
-      if (!isEditKey(editKey) || !isRecord(edit)) continue
+      if (!isIdeaEditKey(editKey) || !isRecord(edit)) continue
       if (edit.kind === 'replace' && typeof edit.replacement === 'string') {
         e = reduceEdits(e, { type: 'replace', key: editKey, replacement: edit.replacement })
       } else if (edit.kind === 'keep' && (edit.context === undefined || typeof edit.context === 'string')) {
