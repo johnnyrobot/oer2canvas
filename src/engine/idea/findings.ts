@@ -11,12 +11,13 @@ import type { CategoryId } from './framework'
 import type { IdeaEdits } from './edits'
 import { findTerms } from './terms'
 import { findIdioms } from './idioms'
+import { findImages } from './images'
 
 export type FindingOrigin = 'rule' | 'draft'
 
 export interface RuleRef {
   id: string
-  source: 'terms' | 'idiom' | 'llm'
+  source: 'terms' | 'idiom' | 'inventory' | 'llm'
   note?: string
   sourceUrl?: string
 }
@@ -50,7 +51,7 @@ export type IdeaFinding = EditFinding | ObservationFinding
 
 export type Finder = (sectionId: string, html: string) => IdeaFinding[]
 
-export const RULE_FINDERS: readonly Finder[] = [findTerms, findIdioms]
+export const RULE_FINDERS: readonly Finder[] = [findTerms, findIdioms, findImages]
 
 export function findingsFor(section: { id: string; html: string }, edits: IdeaEdits): IdeaFinding[] {
   const out: IdeaFinding[] = []
