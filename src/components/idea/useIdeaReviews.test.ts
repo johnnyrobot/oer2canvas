@@ -4,6 +4,7 @@ import { IDEA_STORAGE_KEY, restore, toPersisted } from '../../engine/idea/store'
 import { newHeader, newReview, reduceReview } from '../../engine/idea/review'
 import type { KeyValueStore } from '../../canvas/credentials'
 import type { Chapter } from '../../sources/types'
+import { ideaEditKey, newEdits, reduceEdits } from '../../engine/idea/edits'
 
 const chapter = (title: string): Chapter => ({
   source: 'openstax',
@@ -55,7 +56,7 @@ test('the header is one per session, not per chapter', () => {
 test('a saved document is restored on mount', async () => {
   const k = reviewKeyOf(chapter('4: Nutrition'))
   const saved = reduceReview(newReview(), { type: 'note', categoryId: '7.6', notes: 'from last week' })
-  const { store } = memoryStore(toPersisted(newHeader(), new Map([[k, saved]])))
+  const { store } = memoryStore(toPersisted(newHeader(), new Map([[k, saved]]), new Map()))
   const { result } = renderHook(() => useIdeaReviews(store))
   expect(result.current.loaded).toBe(false)
   await waitFor(() => expect(result.current.loaded).toBe(true))
@@ -92,7 +93,7 @@ test('nothing is written before the load has settled', async () => {
 })
 
 test('forgetAll empties every review and the header and removes the stored document', async () => {
-  const { map, store } = memoryStore(toPersisted(newHeader(), new Map([['a', newReview()]])))
+  const { map, store } = memoryStore(toPersisted(newHeader(), new Map([['a', newReview()]]), new Map()))
   const { result } = renderHook(() => useIdeaReviews(store))
   await waitFor(() => expect(result.current.reviews.size).toBe(1))
   act(() => result.current.dispatchHeader({ type: 'benchmark', bipocPercent: 50 }))
@@ -118,4 +119,29 @@ test('a store that fails leaves the hook usable and unsaved', async () => {
   await new Promise((r) => setTimeout(r, SAVE_DELAY_MS * 2))
   act(() => result.current.forgetAll())
   expect(result.current.reviews.size).toBe(0)
+})
+
+test('edits are kept per chapter key, saved with the document, and forgotten with it', async () => {
+  const { map, store } = memoryStore()
+  const { result } = renderHook(() => useIdeaReviews(store))
+  await waitFor(() => expect(result.current.loaded).toBe(true))
+  const k = ideaEditKey('s1', 'a', 0, 'crazy')
+  expect(result.current.editsFor('ch1').edits.size).toBe(0)
+  act(() => result.current.dispatchEdit('ch1', { type: 'replace', key: k, replacement: 'wild' }))
+  expect(result.current.edits.get('ch1')?.edits.get(k)).toEqual({ kind: 'replace', replacement: 'wild' })
+  expect(result.current.editsFor('ch2').edits.size).toBe(0)
+  await waitFor(() => expect(map.has(IDEA_STORAGE_KEY)).toBe(true), { timeout: SAVE_DELAY_MS * 5 })
+  expect(restore(map.get(IDEA_STORAGE_KEY))!.edits.get('ch1')?.edits.get(k)).toEqual({ kind: 'replace', replacement: 'wild' })
+  act(() => result.current.forgetAll())
+  expect(result.current.edits.size).toBe(0)
+  await waitFor(() => expect(map.has(IDEA_STORAGE_KEY)).toBe(false))
+})
+
+test('a saved edit is restored on mount', async () => {
+  const k = ideaEditKey('s1', 'a', 0, 'crazy')
+  const e = reduceEdits(newEdits(), { type: 'replace', key: k, replacement: 'wild' })
+  const { store } = memoryStore(toPersisted(newHeader(), new Map(), new Map([['ch1', e]])))
+  const { result } = renderHook(() => useIdeaReviews(store))
+  await waitFor(() => expect(result.current.loaded).toBe(true))
+  expect(result.current.edits.get('ch1')?.edits.get(k)).toEqual({ kind: 'replace', replacement: 'wild' })
 })

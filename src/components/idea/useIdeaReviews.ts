@@ -24,6 +24,11 @@
  *
  * A write pending at unmount is dropped. The hook lives in `App`, which never
  * unmounts, so this costs nothing in practice; it is noted so nobody moves it.
+ *
+ * Edits (slice 2) ride in the same state and the same document. A dismissal
+ * is session-only and is dropped by `toPersisted`; an edit is the instructor's
+ * decision about the published bytes and survives a reload for the same
+ * reason a rating does.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { KeyValueStore } from '../../canvas/credentials'
@@ -33,6 +38,7 @@ import {
   type IdeaHeader, type IdeaHeaderEvent, type IdeaReview, type IdeaReviewEvent,
 } from '../../engine/idea/review'
 import { IDEA_STORAGE_KEY, restore, toPersisted } from '../../engine/idea/store'
+import { newEdits, reduceEdits, type IdeaEdits, type IdeaEditsEvent } from '../../engine/idea/edits'
 
 export const SAVE_DELAY_MS = 400
 
@@ -48,9 +54,10 @@ export function reviewKeyOf(chapter: Chapter): string {
 interface State {
   header: IdeaHeader
   reviews: ReadonlyMap<string, IdeaReview>
+  edits: ReadonlyMap<string, IdeaEdits>
 }
 
-const empty = (): State => ({ header: newHeader(), reviews: new Map() })
+const empty = (): State => ({ header: newHeader(), reviews: new Map(), edits: new Map() })
 
 export function useIdeaReviews(store?: KeyValueStore) {
   const [state, setState] = useState<State>(empty)
@@ -70,7 +77,11 @@ export function useIdeaReviews(store?: KeyValueStore) {
         // (nothing is written, so nothing resets it, until `loaded`).
         if (found) {
           setState((s) => (dirty.current
-            ? { header: s.header, reviews: new Map([...found.reviews, ...s.reviews]) }
+            ? {
+                header: s.header,
+                reviews: new Map([...found.reviews, ...s.reviews]),
+                edits: new Map([...found.edits, ...s.edits]),
+              }
             : found))
         }
       })
@@ -83,7 +94,7 @@ export function useIdeaReviews(store?: KeyValueStore) {
     if (!store || !loaded || !dirty.current) return
     const timer = setTimeout(() => {
       dirty.current = false
-      void store.set(IDEA_STORAGE_KEY, toPersisted(state.header, state.reviews)).catch(() => {})
+      void store.set(IDEA_STORAGE_KEY, toPersisted(state.header, state.reviews, state.edits)).catch(() => {})
     }, SAVE_DELAY_MS)
     return () => clearTimeout(timer)
   }, [store, loaded, state])
@@ -99,6 +110,17 @@ export function useIdeaReviews(store?: KeyValueStore) {
     })
   }, [])
 
+  const editsFor = useCallback((key: string) => state.edits.get(key) ?? newEdits(), [state.edits])
+
+  const dispatchEdit = useCallback((key: string, event: IdeaEditsEvent) => {
+    dirty.current = true
+    setState((s) => {
+      const edits = new Map(s.edits)
+      edits.set(key, reduceEdits(s.edits.get(key) ?? newEdits(), event))
+      return { ...s, edits }
+    })
+  }, [])
+
   const dispatchHeader = useCallback((event: IdeaHeaderEvent) => {
     dirty.current = true
     setState((s) => ({ ...s, header: reduceHeader(s.header, event) }))
@@ -110,5 +132,8 @@ export function useIdeaReviews(store?: KeyValueStore) {
     if (store) void store.remove(IDEA_STORAGE_KEY).catch(() => {})
   }, [store])
 
-  return { header: state.header, reviews: state.reviews, loaded, reviewFor, dispatch, dispatchHeader, forgetAll }
+  return {
+    header: state.header, reviews: state.reviews, loaded, reviewFor, dispatch, dispatchHeader, forgetAll,
+    edits: state.edits, editsFor, dispatchEdit,
+  }
 }

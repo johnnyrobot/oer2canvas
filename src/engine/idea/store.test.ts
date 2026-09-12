@@ -1,5 +1,6 @@
 import { newHeader, newReview, reduceHeader, reduceReview } from './review'
 import { IDEA_STORAGE_KEY, restore, toPersisted } from './store'
+import { ideaEditKey, newEdits, reduceEdits } from './edits'
 
 function sample() {
   let r = newReview()
@@ -19,7 +20,7 @@ test('the storage key is namespaced like the rest of the database', () => {
 
 test('a persisted document round-trips through restore', () => {
   const { review, header } = sample()
-  const doc = toPersisted(header, new Map([['k', review]]))
+  const doc = toPersisted(header, new Map([['k', review]]), new Map())
   expect(doc.version).toBe(1)
   const back = restore(doc)!
   expect(back.header).toEqual(header)
@@ -66,4 +67,50 @@ test('unknown ids and malformed values are dropped, known ones kept', () => {
   expect(r.categories['7.6'].ratings.size).toBe(0)
   expect(r.categories['7.6'].notes).toBe('')
   expect('8.1' in r.categories).toBe(false)
+})
+
+test('edits round-trip with the document; dismissals do not', () => {
+  const { review, header } = sample()
+  const k = ideaEditKey('s1', 'b2c-blk-0', 0, 'crazy')
+  let e = reduceEdits(newEdits(), { type: 'replace', key: k, replacement: 'wild' })
+  e = reduceEdits(e, { type: 'keep', key: ideaEditKey('s1', 'b2c-blk-1', 0, 'the blind'), context: 'as quoted' })
+  e = reduceEdits(e, { type: 'dismiss', key: ideaEditKey('s1', 'b2c-blk-2', 0, 'hit the books') })
+  const doc = toPersisted(header, new Map([['k', review]]), new Map([['k', e]]))
+  const back = restore(doc)!
+  expect(back.edits.get('k')?.edits.get(k)).toEqual({ kind: 'replace', replacement: 'wild' })
+  expect([...back.edits.get('k')!.edits.values()]).toHaveLength(2)
+  // Session-only by spec §2.3: a dismissal hides a finding for THIS session.
+  expect(back.edits.get('k')?.dismissed.size).toBe(0)
+})
+
+test('a document written before edits existed restores with none', () => {
+  const { review, header } = sample()
+  const { edits: _drop, ...older } = toPersisted(header, new Map([['k', review]]), new Map())
+  void _drop
+  expect(restore(older)!.edits.size).toBe(0)
+})
+
+test('malformed edits are dropped, well-formed ones kept', () => {
+  const back = restore({
+    version: 1,
+    header: {},
+    reviews: new Map(),
+    edits: new Map<string, unknown>([
+      ['k', { edits: new Map<string, unknown>([
+        ['s1::b2c-blk-0::0::crazy', { kind: 'replace', replacement: 'wild' }],
+        ['s1::b2c-blk-1::0::x', { kind: 'keep' }],
+        ['s1::b2c-blk-2::0::y', { kind: 'keep', context: 7 }],
+        ['s1::b2c-blk-3::0::z', { kind: 'delete' }],
+        ['not-a-key', { kind: 'replace', replacement: 'x' }],
+        ['s1::b2c-blk-4::0::w', 'replace'],
+      ]) }],
+      ['bad', 'not a record'],
+    ]),
+  })!
+  const e = back.edits.get('k')!
+  expect([...e.edits.entries()]).toEqual([
+    ['s1::b2c-blk-0::0::crazy', { kind: 'replace', replacement: 'wild' }],
+    ['s1::b2c-blk-1::0::x', { kind: 'keep' }],
+  ])
+  expect(back.edits.has('bad')).toBe(false)
 })

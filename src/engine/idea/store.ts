@@ -13,8 +13,15 @@
  * "nothing recorded for that row" instead of a rating nobody clicked. This is
  * also what keeps "the rating is never machine-written" true across a
  * reload: what comes back is only what went in through a `rate` event.
+ *
+ * Edits (slice 2) live in the same document, restored the same way: each
+ * stored entry is replayed through `reduceEdits`, so a malformed entry is
+ * dropped and a well-formed one becomes exactly the edit the instructor
+ * made. Dismissals are NOT stored — spec §2.3 makes them session-only — so
+ * `restore` always returns an empty `dismissed` set.
  */
 import { IDEA_CATEGORY_IDS } from './framework'
+import { newEdits, reduceEdits, type IdeaEdits } from './edits'
 import {
   newHeader, newReview, reduceHeader, reduceReview,
   type ChecklistAnswer, type IdeaHeader, type IdeaReview, type Rating,
@@ -26,10 +33,18 @@ export interface PersistedIdea {
   version: 1
   header: IdeaHeader
   reviews: ReadonlyMap<string, IdeaReview>
+  edits: ReadonlyMap<string, IdeaEdits>
 }
 
-export function toPersisted(header: IdeaHeader, reviews: ReadonlyMap<string, IdeaReview>): PersistedIdea {
-  return { version: 1, header, reviews }
+export function toPersisted(
+  header: IdeaHeader,
+  reviews: ReadonlyMap<string, IdeaReview>,
+  edits: ReadonlyMap<string, IdeaEdits>,
+): PersistedIdea {
+  // Dismissals stripped on the way out, so the document never carries them.
+  const stripped = new Map<string, IdeaEdits>()
+  for (const [key, e] of edits) stripped.set(key, { edits: e.edits, dismissed: new Set() })
+  return { version: 1, header, reviews, edits: stripped }
 }
 
 const RATINGS: readonly string[] = ['na', 'exclusive', 'emerging', 'inclusive']
@@ -41,7 +56,32 @@ const isRating = (v: unknown): v is Rating => typeof v === 'string' && RATINGS.i
 const isAnswer = (v: unknown): v is ChecklistAnswer => typeof v === 'string' && ANSWERS.includes(v)
 const entries = (v: unknown): [unknown, unknown][] => (v instanceof Map ? [...v] : [])
 
-export function restore(value: unknown): { header: IdeaHeader; reviews: ReadonlyMap<string, IdeaReview> } | undefined {
+/** Four `::`-separated parts, as `ideaEditKey` builds them. */
+const isEditKey = (v: unknown): v is string => typeof v === 'string' && v.split('::').length >= 4
+
+function restoreEdits(value: unknown): ReadonlyMap<string, IdeaEdits> {
+  const out = new Map<string, IdeaEdits>()
+  for (const [key, raw] of entries(value)) {
+    if (typeof key !== 'string' || !isRecord(raw)) continue
+    let e = newEdits()
+    for (const [editKey, edit] of entries(raw.edits)) {
+      if (!isEditKey(editKey) || !isRecord(edit)) continue
+      if (edit.kind === 'replace' && typeof edit.replacement === 'string') {
+        e = reduceEdits(e, { type: 'replace', key: editKey, replacement: edit.replacement })
+      } else if (edit.kind === 'keep' && (edit.context === undefined || typeof edit.context === 'string')) {
+        e = reduceEdits(e, edit.context === undefined ? { type: 'keep', key: editKey } : { type: 'keep', key: editKey, context: edit.context })
+      }
+    }
+    out.set(key, e)
+  }
+  return out
+}
+
+export function restore(value: unknown): {
+  header: IdeaHeader
+  reviews: ReadonlyMap<string, IdeaReview>
+  edits: ReadonlyMap<string, IdeaEdits>
+} | undefined {
   if (!isRecord(value) || value.version !== 1) return undefined
 
   let header = newHeader()
@@ -75,5 +115,7 @@ export function restore(value: unknown): { header: IdeaHeader; reviews: Readonly
     }
     reviews.set(key, review)
   }
-  return { header, reviews }
+  // A document with no `edits` field (written by slice 1) passes `undefined`
+  // to `entries`, which yields nothing.
+  return { header, reviews, edits: restoreEdits(value.edits) }
 }
