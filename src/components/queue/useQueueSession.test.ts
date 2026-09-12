@@ -64,6 +64,26 @@ describe('useQueueSession', () => {
     expect(deps.calls[0]).toEqual(['s1'])
   })
 
+  it('hands the IDEA edits to the recompile beside the answers, so an answer cannot strip an edit', async () => {
+    // The IDEA phase applies its edits from source on every recompile. If THIS
+    // recompile did not carry them, answering an alt item in an edited section
+    // would rebuild the section without its wording and hand those bytes to
+    // Plan — the export would depend on which of two audits landed last.
+    const deps = spyDeps()
+    const compiled = chapterOf(
+      [section('s1', [item('confirm-decorative', 'd1', 's1')])],
+      [item('confirm-decorative', 'd1', 's1')],
+    )
+    const ideaEdits = new Map([['s1::b::0::crazy', { kind: 'replace' as const, replacement: 'wild' }]])
+    const { result } = renderHook(() => useQueueSession(compiled, deps, { ideaEdits }))
+
+    act(() => result.current.answer('s1::d1', { type: 'decorative' }))
+    await waitFor(() => expect(deps.calls).toHaveLength(1))
+    const opts = (deps.recompile as ReturnType<typeof vi.fn>).mock.calls[0]![2] as { answers: Map<string, unknown>; ideaEdits: unknown }
+    expect(opts.ideaEdits).toBe(ideaEdits)
+    expect(opts.answers.get('s1::d1')).toEqual({ type: 'decorative' })
+  })
+
   it('recompiles EVERY section holding a copy of an image answered by hash', async () => {
     // The propagation D5.2 promises. The merged queue lists the image once; two
     // sections contain it, and both of their queues have to be rebuilt or the

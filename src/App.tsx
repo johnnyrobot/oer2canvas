@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SourceBrowser } from './components/SourceBrowser'
 import { ImportPlanEditor, createImportDraft, type ImportDraft } from './components/ImportPlanEditor'
 import { ChapterPicker } from './components/ChapterPicker'
@@ -24,6 +24,7 @@ import { isPublishable } from './contracts/index'
 import type { CompiledChapter, CompiledSection } from './contracts/index'
 import { mergeQueues } from './engine/compile/index'
 import { queueKeyOf, type QueueAnswer } from './engine/compile/answers'
+import type { IdeaEdit, IdeaEdits } from './engine/idea/edits'
 // Not decoration: `App.css` is what carries the WCAG 2.2 SC 2.5.8 target sizes
 // that `App.a11y.browser.test.tsx` holds this UI to. See the file's own header.
 import './App.css'
@@ -56,6 +57,12 @@ const webClients: Partial<Record<'libretexts' | 'pressbooks', WebBookClient>> = 
   libretexts: createLibreTextsClient({ fetch: (...args) => globalThis.fetch(...args), relayUrl: '/relay' }),
   pressbooks: createPressbooksClient({ fetch: (...args) => globalThis.fetch(...args), relayUrl: '/relay' }),
 }
+function flattenEdits(byChapter: ReadonlyMap<string, IdeaEdits>): ReadonlyMap<string, IdeaEdit> {
+  const out = new Map<string, IdeaEdit>()
+  for (const e of byChapter.values()) for (const [k, v] of e.edits) out.set(k, v)
+  return out
+}
+
 const publisherProfiles = {
   openstax: OPENSTAX,
   libretexts: LIBRETEXTS,
@@ -180,6 +187,7 @@ export function QueueScreen({
   drafting,
   onAnswers,
   onSettled,
+  ideaEdits,
 }: {
   initial: CompiledChapter
   incoming: readonly CompiledSection[]
@@ -198,8 +206,15 @@ export function QueueScreen({
   onAnswers?: (answers: ReadonlyMap<string, QueueAnswer>) => void
   /** The regrouped, answered chapters, once nothing is queued and nothing is re-checking. */
   onSettled?: (chapters: readonly CompiledChapter[]) => void
+  /**
+   * The IDEA phase's edits for every chapter in the session, one flat map.
+   * Applied on every recompile here, so an answer never strips an edit.
+   */
+  ideaEdits?: ReadonlyMap<string, IdeaEdit>
 }) {
-  const { session, answer, skip, revisit, jump, arrived } = useQueueSession(initial)
+  const { session, answer, skip, revisit, jump, arrived } = useQueueSession(
+    initial, undefined, ideaEdits ? { ideaEdits } : {},
+  )
 
   useEffect(() => {
     onAnswers?.(session.answers)
@@ -431,8 +446,13 @@ export default function App() {
     setConfirmedImport(undefined)
   }
 
-  const onAnswers = useCallback((next: ReadonlyMap<string, QueueAnswer>) => setAnswers(next), [])
   const onSettled = useCallback((chapters: readonly CompiledChapter[]) => setPrepared([...chapters]), [])
+  /**
+   * Every chapter's edits as one map for the queue session, which works on ONE
+   * merged chapter. Keys embed the section id and `applyIdeaEdits` matches on
+   * it, so flattening cannot apply one chapter's edit to another.
+   */
+  const allIdeaEdits = useMemo(() => flattenEdits(ideaReviews.edits), [ideaReviews.edits])
 
   /** Compile and audit every source through one UI/state lifecycle. */
   async function compileForReview(
@@ -875,8 +895,9 @@ export default function App() {
           compiling={compiling}
           chapters={prepared}
           drafting={localVlmDrafting}
-          onAnswers={onAnswers}
+          onAnswers={setAnswers}
           onSettled={onSettled}
+          ideaEdits={allIdeaEdits}
         />
       )}
       {/*

@@ -11,6 +11,7 @@ import type { CompiledChapter, CompiledSection } from '../../contracts/index'
 import type { Chapter } from '../../sources/types'
 import type { GateResult } from '../../engine/gate'
 import type { QueueAnswer } from '../../engine/compile/answers'
+import type { IdeaEdit } from '../../engine/idea/edits'
 import { recompileSections } from '../../engine/compile'
 import { validateAllowlist } from '../../engine/allowlist'
 import { newSession, reduce, sectionsAffectedBy, type QueueSession } from './session'
@@ -26,14 +27,14 @@ export interface QueueSessionDeps {
   recompile: (
     chapter: Chapter,
     sectionIds: readonly string[],
-    answers: ReadonlyMap<string, QueueAnswer>,
+    opts: { answers: ReadonlyMap<string, QueueAnswer>; ideaEdits?: ReadonlyMap<string, IdeaEdit> },
   ) => Promise<readonly Rebuilt[]>
   audit: (html: string) => Promise<GateResult>
 }
 
 export const defaultDeps: QueueSessionDeps = {
-  async recompile(chapter, sectionIds, answers) {
-    const sections = recompileSections(chapter, sectionIds, { answers })
+  async recompile(chapter, sectionIds, opts) {
+    const sections = recompileSections(chapter, sectionIds, opts)
     // Repaired here rather than at render time, because `ChapterView`'s rule is
     // that only repaired html is ever set as innerHTML — repair is what removes
     // `on*` handlers and `<script>` subtrees, and it is a safety invariant, not
@@ -51,8 +52,22 @@ export const defaultDeps: QueueSessionDeps = {
 /** Identity of a verdict-in-waiting: a section AND the bytes it would describe. */
 const stamp = (sectionId: string, html: string): string => `${sectionId} ${html}`
 
-export function useQueueSession(compiled: CompiledChapter, deps: QueueSessionDeps = defaultDeps) {
+/**
+ * `ideaEdits` are the IDEA phase's decisions, applied by the compile step from
+ * source. They travel with every recompile here so that an answer in an
+ * edited section rebuilds it WITH its wording — otherwise the bytes handed to
+ * Plan would depend on whether this rebuild or the IDEA phase's landed last.
+ * Read through a ref: a change to the edits is the IDEA phase's recompile to
+ * make, not this one's.
+ */
+export function useQueueSession(
+  compiled: CompiledChapter,
+  deps: QueueSessionDeps = defaultDeps,
+  opts: { ideaEdits?: ReadonlyMap<string, IdeaEdit> } = {},
+) {
   const [session, dispatch] = useReducer(reduce, compiled, newSession)
+  const ideaEdits = useRef(opts.ideaEdits)
+  ideaEdits.current = opts.ideaEdits
 
   const answer = useCallback(
     (key: string, value: QueueAnswer) => dispatch({ type: 'answer', key, answer: value }),
@@ -94,7 +109,8 @@ export function useQueueSession(compiled: CompiledChapter, deps: QueueSessionDep
     if (ids.length === 0) return
 
     let live = true
-    void deps.recompile(session.compiled.chapter, ids, session.answers).then((sections) => {
+    const recompileOpts = { answers: session.answers, ...(ideaEdits.current ? { ideaEdits: ideaEdits.current } : {}) }
+    void deps.recompile(session.compiled.chapter, ids, recompileOpts).then((sections) => {
       if (live && sections.length > 0) dispatch({ type: 'recompiled', sections })
     })
     return () => {
