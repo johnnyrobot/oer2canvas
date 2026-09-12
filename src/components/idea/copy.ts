@@ -97,6 +97,17 @@ export const IDEA_COPY = {
     announceUndone: 'Undone.',
     announceDismissed: 'Dismissed.',
   },
+  inventory: {
+    heading: 'Inventory',
+    none: 'Nothing to list in this section.',
+    imagesSummary: (images: number, people: number) =>
+      `${images} image${images === 1 ? '' : 's'} · ${people} mention${people === 1 ? 's' : ''} people`,
+    items: (n: number) => `${n} item${n === 1 ? '' : 's'}`,
+    guidance71:
+      'Read the descriptions and captions as a set: who is shown, in what role, and where the picture does not relate to identity. Then tally for Rubric 1.',
+    guidance77:
+      'These are the terms and names the section signals as important. Rubric 1 asks whether diverse scholars and perspectives appear among them.',
+  },
   render: {
     pending: 'Re-checking this section…',
   },

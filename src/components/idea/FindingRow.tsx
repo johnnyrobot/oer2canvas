@@ -60,12 +60,14 @@ export function FindingRow({
   )
 
   if (finding.kind === 'observation') {
-    const suggestion = finding.columns.suggestion
+    // An inventory row is a list entry, not a claim: nothing to dismiss or apply.
+    const inventory = finding.rule?.source === 'inventory'
+    const suggestion = inventory ? undefined : finding.columns.suggestion
     return (
       <li className={rowClass} {...focusProps}>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           {origin}
-          <span className="font-semibold">{c.observation}</span>
+          <span className="font-semibold">{inventory ? IDEA_COPY.inventory.heading : c.observation}</span>
           <span className={MUTED}>{c.where(sectionTitle)}</span>
         </div>
         <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
@@ -89,7 +91,7 @@ export function FindingRow({
             {dismiss}
           </div>
         ) : (
-          <div>{dismiss}</div>
+          !inventory && <div>{dismiss}</div>
         )}
       </li>
     )

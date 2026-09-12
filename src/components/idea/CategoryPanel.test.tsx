@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { CategoryPanel } from './CategoryPanel'
 import { categoryById } from '../../engine/idea/framework'
 import { newReview, reduceReview, type IdeaReviewEvent } from '../../engine/idea/review'
-import type { EditFinding } from '../../engine/idea/findings'
+import type { EditFinding, ObservationFinding } from '../../engine/idea/findings'
 
 function renderPanel(id: '7.1' | '7.2' | '7.6' = '7.6', open = true) {
   const onEvent = vi.fn<(e: IdeaReviewEvent) => void>()
@@ -135,4 +135,25 @@ test('with no findings the zone says so without claiming a clean bill', () => {
 test('categories with no rule finder show no findings zone at all', () => {
   render(<CategoryPanel category={categoryById('7.4')} review={newReview().categories['7.4']} open onToggle={vi.fn()} onEvent={vi.fn()} findings={[]} applied={[]} sectionTitleOf={() => ''} />)
   expect(screen.queryByRole('group', { name: 'What a rule found' })).not.toBeInTheDocument()
+})
+
+const inventoryRows: ObservationFinding[] = [
+  { kind: 'observation', key: 's1::i1::0::image', category: '7.1', sectionId: 's1', elementId: 'i1', columns: { image: 'a.png', description: 'A nurse', 'mentions people': 'yes' }, rule: { id: 'inventory-image', source: 'inventory' }, origin: 'rule' },
+  { kind: 'observation', key: 's1::summary::7.1', category: '7.1', sectionId: 's1', columns: { images: '1', 'mention people': '1', decorative: '0', 'no alt text': '0' }, rule: { id: 'inventory-image-summary', source: 'inventory' }, origin: 'rule' },
+]
+
+test('7.1 shows an Inventory zone whose header line is the summary', () => {
+  render(<CategoryPanel category={categoryById('7.1')} review={newReview().categories['7.1']} open onToggle={vi.fn()} onEvent={vi.fn()} findings={inventoryRows} applied={[]} sectionTitleOf={() => 'S'} />)
+  expect(screen.getByRole('button', { name: /7\.1 .*1 image · 1 mentions people/ })).toBeInTheDocument()
+  expect(screen.getByRole('group', { name: 'Inventory' })).toBeInTheDocument()
+  expect(screen.queryByRole('group', { name: 'What a rule found' })).not.toBeInTheDocument()
+})
+
+test('7.7 shows an Inventory zone with a row count', () => {
+  const rows: ObservationFinding[] = [
+    { kind: 'observation', key: 's1::h1::0::heading', category: '7.7', sectionId: 's1', elementId: 'h1', columns: { kind: 'heading', text: 'Lifespan' }, rule: { id: 'inventory-heading', source: 'inventory' }, origin: 'rule' },
+  ]
+  render(<CategoryPanel category={categoryById('7.7')} review={newReview().categories['7.7']} open onToggle={vi.fn()} onEvent={vi.fn()} findings={rows} applied={[]} sectionTitleOf={() => 'S'} />)
+  expect(screen.getByRole('button', { name: /7\.7 .*1 item/ })).toBeInTheDocument()
+  expect(screen.getByRole('group', { name: 'Inventory' })).toBeInTheDocument()
 })

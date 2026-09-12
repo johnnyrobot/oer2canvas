@@ -84,3 +84,15 @@ test('a draft finding is labelled draft', () => {
   render(<FindingRow finding={{ ...edit, origin: 'draft' }} sectionTitle="s" onEvent={vi.fn()} onFocus={vi.fn()} />)
   expect(screen.getByText('draft')).toBeInTheDocument()
 })
+
+test('an inventory observation has no Dismiss and no suggestion controls', () => {
+  const inv: ObservationFinding = {
+    kind: 'observation', key: 's1::i1::0::image', category: '7.1', sectionId: 's1', elementId: 'i1',
+    columns: { image: 'a.png', description: 'A nurse', 'mentions people': 'yes' },
+    rule: { id: 'inventory-image', source: 'inventory' }, origin: 'rule',
+  }
+  render(<FindingRow finding={inv} sectionTitle="s" onEvent={vi.fn()} onFocus={vi.fn()} />)
+  expect(screen.getByText('A nurse')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Dismiss' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Use this wording' })).not.toBeInTheDocument()
+})

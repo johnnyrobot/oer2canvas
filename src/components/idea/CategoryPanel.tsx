@@ -7,8 +7,10 @@
  * row is asking; the column text is the question.
  *
  * Slice 2 adds a "What a rule found" zone between the requirement and the
- * checklist; slice 4 adds "Ask the model" after it. Both are zones inside this
- * panel, which is why the panel and not the screen owns the category.
+ * checklist; slice 3 puts an "Inventory" zone in the same place for the two
+ * categories that list rather than suggest; slice 4 adds "Ask the model" after
+ * it. All are zones inside this panel, which is why the panel and not the
+ * screen owns the category.
  */
 import { useId } from 'react'
 import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
@@ -33,6 +35,22 @@ const CHOICE =
 
 /** The categories a rule finder exists for. Only these show a findings zone. */
 const RULE_CATEGORIES = new Set<CategoryId>(['7.3', '7.6'])
+/** The categories whose findings are an inventory to read, not suggestions to act on. */
+const INVENTORY_CATEGORIES = new Set<CategoryId>(['7.1', '7.7'])
+
+const isImageSummary = (f: IdeaFinding) => f.key.endsWith('::summary::7.1')
+
+/** The header's trailing count: the 7.1 summary line, the 7.7 row count, or the rule categories' suggestion count. */
+function countLine(id: CategoryId, found: readonly IdeaFinding[]): string | undefined {
+  if (id === '7.1') {
+    const summary = found.find(isImageSummary)
+    if (summary?.kind !== 'observation') return undefined
+    return IDEA_COPY.inventory.imagesSummary(Number(summary.columns.images), Number(summary.columns['mention people']))
+  }
+  if (id === '7.7') return IDEA_COPY.inventory.items(found.length)
+  if (RULE_CATEGORIES.has(id)) return `${found.length} suggestion${found.length === 1 ? '' : 's'}`
+  return undefined
+}
 
 export function CategoryPanel({
   category, review, open, onToggle, onEvent, findings, applied, sectionTitleOf, onEditEvent, onFocusFinding,
@@ -51,7 +69,20 @@ export function CategoryPanel({
   const bodyId = useId()
   const rated = category.rows.filter((r) => review.ratings.has(r.id)).length
   const hasRules = RULE_CATEGORIES.has(category.id)
+  const isInventory = INVENTORY_CATEGORIES.has(category.id)
   const found = findings ?? []
+  // 7.1 reads summary first, then the rows; the finder appends the summary last.
+  const listed = category.id === '7.1'
+    ? [...found.filter(isImageSummary), ...found.filter((f) => !isImageSummary(f))]
+    : found
+  const count = countLine(category.id, found)
+  const zone = isInventory
+    ? {
+        heading: IDEA_COPY.inventory.heading,
+        none: IDEA_COPY.inventory.none,
+        guidance: category.id === '7.1' ? IDEA_COPY.inventory.guidance71 : IDEA_COPY.inventory.guidance77,
+      }
+    : { heading: IDEA_COPY.findings.heading, none: IDEA_COPY.findings.none, guidance: undefined }
   return (
     <section className={PANEL} aria-labelledby={`${bodyId}-h`}>
       <h3 id={`${bodyId}-h`} className="m-0">
@@ -69,9 +100,9 @@ export function CategoryPanel({
           <span className="text-xs font-normal text-neutral-600 dark:text-neutral-400">
             {IDEA_COPY.ratedSummary(rated, category.rows.length)}
           </span>
-          {hasRules && (
+          {count && (
             <span className="ml-1 text-xs font-normal text-neutral-600 dark:text-neutral-400">
-              {`· ${found.length} suggestion${found.length === 1 ? '' : 's'}`}
+              {`· ${count}`}
             </span>
           )}
         </button>
@@ -84,14 +115,17 @@ export function CategoryPanel({
             <p className="text-sm text-neutral-800 dark:text-neutral-200">{category.restorative}</p>
           </div>
 
-          {hasRules && (
+          {(hasRules || isInventory) && (
             <fieldset className="m-0 border-0 p-0">
-              <legend className="mb-2 text-sm font-semibold">{IDEA_COPY.findings.heading}</legend>
-              {found.length === 0
-                ? <p className="m-0 text-sm text-neutral-700 dark:text-neutral-300">{IDEA_COPY.findings.none}</p>
+              <legend className="mb-2 text-sm font-semibold">{zone.heading}</legend>
+              {zone.guidance && (
+                <p className="mb-2 text-sm text-neutral-700 dark:text-neutral-300">{zone.guidance}</p>
+              )}
+              {listed.length === 0
+                ? <p className="m-0 text-sm text-neutral-700 dark:text-neutral-300">{zone.none}</p>
                 : (
                   <ul className="m-0 flex list-none flex-col gap-2 p-0">
-                    {found.map((f) => (
+                    {listed.map((f) => (
                       <FindingRow
                         key={f.key}
                         finding={f}
@@ -102,9 +136,11 @@ export function CategoryPanel({
                     ))}
                   </ul>
                 )}
-              <div className="mt-3">
-                <AppliedList applied={applied ?? []} onUndo={(key) => onEditEvent?.({ type: 'undo', key })} />
-              </div>
+              {hasRules && (
+                <div className="mt-3">
+                  <AppliedList applied={applied ?? []} onUndo={(key) => onEditEvent?.({ type: 'undo', key })} />
+                </div>
+              )}
             </fieldset>
           )}
 
