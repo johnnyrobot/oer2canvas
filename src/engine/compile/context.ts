@@ -9,6 +9,7 @@
  */
 import type { Attribution, ContentSourceId } from '../../sources/types'
 import type { QueueAnswer } from './answers'
+import type { IdeaEdit } from '../idea/edits'
 
 export interface PublisherProfile {
   id: ContentSourceId
@@ -179,4 +180,10 @@ export interface CompileContext {
    * exactly as they did — asserted against the goldens in `context.test.ts`.
    */
   answers?: ReadonlyMap<string, QueueAnswer>
+  /**
+   * What the instructor decided in the IDEA phase, keyed by `ideaEditKey`.
+   * Absent everywhere the phase has not been used; the spread in
+   * `sectionContext` keeps it absent rather than `undefined`.
+   */
+  ideaEdits?: ReadonlyMap<string, IdeaEdit>
 }

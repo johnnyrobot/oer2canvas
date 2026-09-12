@@ -14,7 +14,7 @@ describe('compileSection', () => {
 
   it('unwraps a whole document down to its body', () => {
     const out = compileSection(section('<html><head><title>t</title></head><body><p>b</p></body></html>'), ctx)
-    expect(out.html).toContain('<p>b</p>')
+    expect(out.html).toContain('<p id="b2c-blk-0">b</p>')
     expect(out.html).not.toContain('<title>')
   })
 

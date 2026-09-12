@@ -85,6 +85,9 @@ export const applyCanvasTemplate: Step = (doc, ctx, sink) => {
   // that case).
   if (!title && ctx.sectionTitle?.trim()) {
     title = doc.createElement('h2')
+    // Marked as the template's own, like the footer, so `ensureBlockIds` does
+    // not mint an id for it on a recompile of compiled output.
+    title.className = 'b2c-canvas-title'
     title.textContent = ctx.sectionTitle.trim()
     body.insertBefore(title, body.firstChild)
   }
@@ -153,6 +156,7 @@ export const applyCanvasTemplate: Step = (doc, ctx, sink) => {
   outer.appendChild(inner)
 
   const footer = doc.createElement('div')
+  footer.className = 'b2c-canvas-footer'
   footer.setAttribute('style', FOOTER_STYLE)
   const note = doc.createElement('p')
   note.setAttribute('style', 'text-align: right;')

@@ -5,6 +5,7 @@ import { enforceGate } from './gate'
 import type { GateDeps, GateResult } from './gate'
 import { compileSection, sectionContext, mergeQueues } from './compile/index'
 import type { QueueAnswer } from './compile/answers'
+import type { IdeaEdit } from './idea/edits'
 import type { Step } from './compile/index'
 import { OPENSTAX } from './compile/context'
 import type { PublisherProfile } from './compile/context'
@@ -107,6 +108,8 @@ export async function compileAndAuditChapter(
      * rebuilt and re-gated with every answer applied.
      */
     answers?: ReadonlyMap<string, QueueAnswer>
+    /** The IDEA phase's edits, keyed by `ideaEditKey`, applied from source on this compile. */
+    ideaEdits?: ReadonlyMap<string, IdeaEdit>
     /** Test seams. Production passes neither. */
     deps?: GateDeps
     steps?: readonly Step[]
@@ -128,7 +131,7 @@ export async function compileAndAuditChapter(
       await new Promise<void>((resolve) => setTimeout(resolve, 0))
       const compiled = compileSection(
         section,
-        sectionContext(chapter, section, profile, opts.answers),
+        sectionContext(chapter, section, profile, opts.answers, opts.ideaEdits),
         opts.steps,
       )
 

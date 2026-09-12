@@ -22,6 +22,13 @@ describe('CompileContext', () => {
     expect(ctx.answers).toBe(answers)
   })
 
+  it('leaves ideaEdits absent when the caller supplies none, and passes a map through', () => {
+    const chapter = chapterFixture()
+    expect(sectionContext(chapter, chapter.sections[0]!, OPENSTAX).ideaEdits).toBeUndefined()
+    const edits = new Map([['k', { kind: 'keep' } as const]])
+    expect(sectionContext(chapter, chapter.sections[0]!, OPENSTAX, undefined, edits).ideaEdits).toBe(edits)
+  })
+
   it('compiles byte-identically when no answers are supplied', () => {
     // The load-bearing assertion of this task. Every later task assumes that
     // adding the answers channel changed nothing for a caller that does not use
