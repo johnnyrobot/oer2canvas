@@ -88,6 +88,24 @@ export const IDEA_COPY = {
     rule: 'rule',
     failed: (categoryId: string, sectionTitle: string) => `${categoryId} couldn’t be checked on ${sectionTitle}`,
     failedDetail: 'Error',
+    count: (n: number) => `${n} suggestion${n === 1 ? '' : 's'}`,
+    /** Read by a screen reader between the original and its replacement. */
+    replaceWith: 'replace with',
+    /** Labels for an observation's columns; a key with no label is shown as itself. */
+    columns: {
+      text: 'Text',
+      context: 'Context',
+      idiom: 'Idiom',
+      gloss: 'Meaning',
+      image: 'Image',
+      description: 'Description',
+      caption: 'Caption',
+      reference: 'Referenced as',
+      images: 'Images',
+      decorative: 'Decorative',
+      kind: 'Kind',
+      detail: 'Detail',
+    } as Readonly<Record<string, string>>,
   },
   applied: {
     heading: 'Applied',

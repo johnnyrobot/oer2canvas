@@ -139,8 +139,8 @@ describe('compile page-packaged-image', () => {
 describe('compile page-section with IDEA edits', () => {
   const { section, ctx } = fixtureContext('page-section')
   // The first block with a MINTED id (the fixture's h2 keeps its own, so
-  // that is `b2c-blk-1`, the Learning Objectives heading). Its first three
-  // words are the original, so the case stays anchored to text that exists.
+  // this is the Learning Objectives heading, index 1). Its first three words
+  // are the original, so the case stays anchored to text that exists.
   const plain = compileSection(section, ctx)
   const first = new DOMParser().parseFromString(`<body>${plain.html}</body>`, 'text/html').querySelector('[id^="b2c-blk-"]')!
   const original = (first.textContent ?? '').trim().split(/\s+/).slice(0, 3).join(' ')

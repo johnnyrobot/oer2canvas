@@ -1,5 +1,6 @@
 import type { CompiledChapter } from '../contracts/index'
 import { AuditPanel } from './AuditPanel'
+import { ChapterByline } from './ChapterByline'
 import { CanvasShellStyles } from './CanvasShellStyles'
 import { usePackagedAssetUrls } from './usePackagedAssetUrls'
 
@@ -20,13 +21,7 @@ export function ChapterView({ compiled }: { compiled: CompiledChapter }) {
           `CanvasShellStyles`. */}
       <CanvasShellStyles />
       <h2 id="chapter-heading">{chapter.title}</h2>
-      <p>
-        From {chapter.attribution.url
-          ? <a href={chapter.attribution.url}>{chapter.attribution.bookTitle}</a>
-          : chapter.attribution.bookTitle} by{' '}
-        {chapter.attribution.publisher}
-        {chapter.attribution.license ? ` — ${chapter.attribution.license.name}` : ''}
-      </p>
+      <ChapterByline attribution={chapter.attribution} />
       {compiled.queue.length > 0 && (
         <p>
           {compiled.queue.length} item(s) need review before this chapter can be published.

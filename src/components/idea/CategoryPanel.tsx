@@ -48,7 +48,7 @@ function countLine(id: CategoryId, found: readonly IdeaFinding[]): string | unde
     return IDEA_COPY.inventory.imagesSummary(Number(summary.columns.images), Number(summary.columns['mention people']))
   }
   if (id === '7.7') return IDEA_COPY.inventory.items(found.length)
-  if (RULE_CATEGORIES.has(id)) return `${found.length} suggestion${found.length === 1 ? '' : 's'}`
+  if (RULE_CATEGORIES.has(id)) return IDEA_COPY.findings.count(found.length)
   return undefined
 }
 

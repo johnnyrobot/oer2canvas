@@ -11,9 +11,12 @@
  * new bytes, briefly". Packaged-asset tokens are resolved for display only,
  * exactly as `ChapterView` does it.
  *
- * The outline is found INSIDE the target's section. Block ids are minted per
- * section (`b2c-blk-0` exists in every section), so a document-wide id
- * lookup would light up the first section's paragraph for every finding.
+ * The outline is found INSIDE the target's section. Block ids carry a hash of
+ * the section id and so do not repeat across sections today; the scoped
+ * lookup is kept because a publisher's own ids (which `ensureBlockIds`
+ * preserves) can repeat, and because a target is a (section, element) pair
+ * by definition — a document-wide lookup would be answering a narrower
+ * question than the one asked.
  *
  * `data-section` rather than `id={s.id}` on the article: a section id is
  * publisher data and could collide with a block id inside the body; a data
@@ -22,6 +25,7 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { CompiledChapter } from '../../contracts/index'
 import { CanvasShellStyles } from '../CanvasShellStyles'
+import { ChapterByline } from '../ChapterByline'
 import { usePackagedAssetUrls } from '../usePackagedAssetUrls'
 import { IDEA_COPY } from './copy'
 import './idea.css'
@@ -56,13 +60,7 @@ export function IdeaChapterRender({
     <section ref={root} className="b2c-idea-render" aria-labelledby="idea-chapter-heading">
       <CanvasShellStyles />
       <h2 id="idea-chapter-heading">{chapter.title}</h2>
-      <p>
-        From {chapter.attribution.url
-          ? <a href={chapter.attribution.url}>{chapter.attribution.bookTitle}</a>
-          : chapter.attribution.bookTitle} by{' '}
-        {chapter.attribution.publisher}
-        {chapter.attribution.license ? ` — ${chapter.attribution.license.name}` : ''}
-      </p>
+      <ChapterByline attribution={chapter.attribution} />
       {compiled.sections.map((s) => (
         <article key={s.id} data-section={s.id} aria-label={s.title}>
           {pending.has(s.id) || !s.gate
