@@ -1,3 +1,9 @@
+/**
+ * Smoke: drive the LIVE production site through a two-chapter prepare and
+ * download the cartridge, logging each step to /tmp/cart/run.log. Run by
+ * hand (`node scripts/cartridge-download-smoke.mjs`); needs `playwright`
+ * with Chromium installed and a network path to the public origin.
+ */
 import { chromium } from 'playwright'
 import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
 mkdirSync('/tmp/cart', { recursive: true })
