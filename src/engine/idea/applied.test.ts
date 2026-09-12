@@ -6,7 +6,7 @@ const sections = [
   { id: 's2', title: 'Digestion', html: '<p id="b">hit the books (study hard)</p>' },
 ]
 
-test('an applied replace is present when its replacement is at the element; its category is the finding’s', () => {
+test('an applied replace is present when its replacement is at the element; its category comes from the original', () => {
   const k = ideaEditKey('s1', 'a', 0, 'suffers from')
   const e = reduceEdits(newEdits(), { type: 'replace', key: k, replacement: 'has' })
   expect(appliedEdits(sections, e)).toEqual([
@@ -15,7 +15,9 @@ test('an applied replace is present when its replacement is at the element; its 
 })
 
 test('a gendered noun edit is filed under 7.3; an idiom gloss under 7.6', () => {
-  let e = reduceEdits(newEdits(), { type: 'replace', key: ideaEditKey('s1', 'a', 0, 'chairman'), replacement: 'chair' })
+  // From the key's original alone (case-insensitively), never from the html:
+  // after a replace the original is not in the bytes to be found.
+  let e = reduceEdits(newEdits(), { type: 'replace', key: ideaEditKey('s1', 'a', 0, 'Chairman'), replacement: 'chair' })
   e = reduceEdits(e, { type: 'replace', key: ideaEditKey('s2', 'b', 0, 'hit the books'), replacement: 'hit the books (study hard)' })
   expect(appliedEdits(sections, e).map((a) => a.category)).toEqual(['7.3', '7.6'])
 })

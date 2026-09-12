@@ -205,3 +205,17 @@ test('a dismissal and an undo are announced too', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
   expect(screen.getByRole('status')).toHaveTextContent('Undone.')
 })
+
+test('an applied edit is listed under its own category only', () => {
+  const c = withHtml('4: Nutrition', '<p id="b2c-blk-0">The chair spoke. He has asthma.</p>')
+  const k = reviewKeyOf(chapter('4: Nutrition'))
+  let e = reduceEdits(newEdits(), { type: 'replace', key: ideaEditKey('4: Nutrition-s1', 'b2c-blk-0', 0, 'chairman'), replacement: 'chair' })
+  e = reduceEdits(e, { type: 'replace', key: ideaEditKey('4: Nutrition-s1', 'b2c-blk-0', 0, 'suffers from'), replacement: 'has' })
+  render(<IdeaScreen {...base} chapters={[c]} edits={new Map([[k, e]])} />)
+  fireEvent.click(screen.getByRole('button', { name: /^7\.3 / }))
+  expect(screen.getByText('“chairman” → “chair”')).toBeInTheDocument()
+  expect(screen.queryByText('“suffers from” → “has”')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /^7\.6 / }))
+  expect(screen.getByText('“suffers from” → “has”')).toBeInTheDocument()
+  expect(screen.queryByText('“chairman” → “chair”')).not.toBeInTheDocument()
+})

@@ -24,8 +24,8 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Download, Trash2 } from 'lucide-react'
 import type { CompiledChapter } from '../../contracts/index'
 import { checkSection, findingsByCategory } from '../../engine/idea/findings'
-import { newEdits, parseIdeaEditKey, type IdeaEdits, type IdeaEditsEvent } from '../../engine/idea/edits'
-import { findOccurrence } from '../../engine/idea/text'
+import { newEdits, type IdeaEdits, type IdeaEditsEvent } from '../../engine/idea/edits'
+import { appliedEdits } from '../../engine/idea/applied'
 import { IdeaChapterRender } from './IdeaChapterRender'
 import {
   FRAMEWORK_ATTRIBUTION, IDEA_FRAMEWORK, RUBRIC_SUGGESTIONS_HINT, RUBRIC_SUMMARY_HINT, type CategoryId,
@@ -108,25 +108,11 @@ export function IdeaScreen({
   }, [current, chapterEdits])
   const byCategory = findingsByCategory(checked.findings)
   const sectionTitleOf = (id: string) => current.sections.find((s) => s.id === id)?.title ?? ''
-  /**
-   * Stale = the edit's original is no longer at its key in the CURRENT bytes.
-   * Computed here, against the same html the render shows, rather than
-   * carried in the map: the map records a decision, not whether it landed.
-   */
-  const applied = [...chapterEdits.edits.entries()].map(([k, edit]) => {
-    const { sectionId, elementId, occurrence, original } = parseIdeaEditKey(k)
-    const section = current.sections.find((s) => s.id === sectionId)
-    const html = section?.gate?.html ?? section?.html ?? ''
-    const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html')
-    const el = doc.getElementById(elementId)
-    // After a replace the original is GONE by design; a stale replace is one
-    // where neither the original nor the replacement is at that element.
-    const present = el !== null && (
-      (edit.kind === 'replace' && (el.textContent ?? '').includes(edit.replacement)) ||
-      (edit.kind === 'keep' && findOccurrence(el, original, occurrence) !== undefined)
-    )
-    return { key: k, edit, stale: !present, sectionTitle: section?.title ?? '' }
-  })
+  // Against the same html the render shows, so "stale" means what the reader sees.
+  const applied = useMemo(
+    () => appliedEdits(current.sections.map((s) => ({ id: s.id, title: s.title, html: s.gate?.html ?? s.html })), chapterEdits),
+    [current, chapterEdits],
+  )
 
   /**
    * Spec §5.3: Applied / Undone announced through the live region. A dismissal
@@ -277,7 +263,7 @@ export function IdeaScreen({
                 failures={checked.failures
                   .filter((f) => f.category === category.id)
                   .map((f) => ({ sectionTitle: sectionTitleOf(f.sectionId), message: f.message }))}
-                applied={applied}
+                applied={applied.filter((a) => a.category === category.id)}
                 sectionTitleOf={sectionTitleOf}
                 onEditEvent={editEvent}
                 onFocusFinding={setFocus}

@@ -7,17 +7,19 @@
  * design, so a stale replace is one where neither the original nor the
  * replacement is at that element; a keep is stale once the original is gone.
  *
- * `category` is what files the row under one panel. An edit's key does not
- * carry it — the key names text, not a rule — so the finders are run once more
- * WITHOUT suppression and the key is looked up among what they would have
- * said. An edit no finder recognises any more (its text is gone, or the rule
- * changed) is filed under 7.6, the terminology category, which is where most
- * edits come from and where a stale row is least surprising.
+ * `category` is what files the row under one panel. An edit's key names text,
+ * not a rule, and once a replacement is in the bytes no finder would produce
+ * that key again — so the category is read off the ORIGINAL text against the
+ * term list (a gendered noun files under 7.3, everything else the rules know
+ * under 7.6). Text no rule recognises — an idiom gloss, or a phrase the list
+ * has since dropped — files under 7.6, the terminology category, where most
+ * edits come from. When slice 4 adds model drafts in other categories, the
+ * edit itself should carry its category; the key cannot.
  */
 import type { CategoryId } from './framework'
-import { findingsFor } from './findings'
+import { termCategoryOf } from './terms'
 import { findOccurrence } from './text'
-import { newEdits, parseIdeaEditKey, type IdeaEdit, type IdeaEdits } from './edits'
+import { parseIdeaEditKey, type IdeaEdit, type IdeaEdits } from './edits'
 
 export interface AppliedEdit {
   key: string
@@ -33,10 +35,6 @@ export function appliedEdits(
   sections: readonly { id: string; title: string; html: string }[],
   edits: IdeaEdits,
 ): AppliedEdit[] {
-  if (edits.edits.size === 0) return []
-  const categoryOf = new Map<string, CategoryId>()
-  for (const s of sections) for (const f of findingsFor(s, newEdits())) categoryOf.set(f.key, f.category)
-
   return [...edits.edits.entries()].map(([key, edit]) => {
     const { sectionId, elementId, occurrence, original } = parseIdeaEditKey(key)
     const section = sections.find((s) => s.id === sectionId)
@@ -47,7 +45,7 @@ export function appliedEdits(
       (edit.kind === 'keep' && findOccurrence(el, original, occurrence) !== undefined)
     )
     return {
-      key, edit, stale: !present, sectionTitle: section?.title ?? '', category: categoryOf.get(key) ?? FALLBACK,
+      key, edit, stale: !present, sectionTitle: section?.title ?? '', category: termCategoryOf(original) ?? FALLBACK,
     }
   })
 }

@@ -45,6 +45,18 @@ const COMPILED: { rule: TermRule; phrase: string; replacement: string; re: RegEx
 
 const categoryOf = (rule: TermRule): CategoryId => (rule.category === 'gender' ? '7.3' : '7.6')
 
+/**
+ * The category a phrase would be reported under, from the phrase alone. An
+ * applied edit's key carries the original text but not the rule, and once
+ * the replacement is in the bytes no finder will produce that key again —
+ * so the Applied list asks the list directly.
+ */
+export function termCategoryOf(phrase: string): CategoryId | undefined {
+  const needle = phrase.trim().toLowerCase()
+  const hit = COMPILED.find((c) => c.phrase === needle)
+  return hit ? categoryOf(hit.rule) : undefined
+}
+
 export const findTerms: Finder = (sectionId, html) => {
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html')
   const out: IdeaFinding[] = []
