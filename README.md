@@ -377,7 +377,10 @@ suggestions from a vendored, curated list (CC BY 4.0; the list names its sources
 never changes the page until the instructor presses Replace; a term inside a quotation is offered
 "Keep, add context" first, following the Framework's guidance for historical usage. Every applied
 change is listed with Undo, and the page's Source-and-license block records that wording was
-modified, as CC BY requires.
+modified, as CC BY requires. Two more categories — illustrations and photos, and
+keywords/glossary — get an inventory of what the section contains (image descriptions, captions,
+headings, key terms, recurring names), listed for the instructor to weigh; the app never infers
+race, gender, age, or disability from an image or a name.
 
 IDEA reviews, the assessor, and the benchmark are saved in this browser on this device (the app's
 IndexedDB database) so a reload or a re-prepare does not lose them; **Forget all IDEA reviews**

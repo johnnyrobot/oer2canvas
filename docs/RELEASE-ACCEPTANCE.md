@@ -252,3 +252,12 @@ silent, even if nothing was broken outright.
    answered alt (Task 1's lift).
 8. **Forget all IDEA reviews** → confirm. Applied is empty; the render shows the original wording
    after the recompile.
+
+## 6. IDEA review — slice 3
+
+1. Prepare an OpenStax chapter with figures (Biology 2e, any chapter).
+2. IDEA → 7.1's header reads "N images · M mention people"; open it. The first row is the summary;
+   each image row shows description, caption, reference; focusing a row outlines the image in the
+   chapter render beside the panels and scrolls it into view.
+3. 7.7's header reads "N items"; open it: headings, key terms, and recurring names are listed.
+4. Neither zone has Replace, Use this wording, or Dismiss.

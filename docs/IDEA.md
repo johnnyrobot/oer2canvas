@@ -3,7 +3,7 @@
 This file states, in one place, what the IDEA phase does with data. It is kept current slice by
 slice; the design is in `IDEA_REVIEW_SPEC.md`.
 
-## Slices 1–2 (this release)
+## Slices 1–3 (this release)
 
 - **Network:** none. The Framework text is vendored; the Rubric 1 export is built in the browser
   and handed to the browser's download.
@@ -32,6 +32,12 @@ slice; the design is in `IDEA_REVIEW_SPEC.md`.
   dismissed suggestion is not saved — it is hidden for this session only.
 - **The queue's answers now leave the queue screen:** Plan's count and the export describe the
   answered chapter (a pre-existing gap closed by this slice's first task).
+- **Inventories:** 7.1 lists every image's alt text, caption, and preceding sentence and whether
+  that text names a person (a fixed noun list — "nurse", "students", "family" — over the image's
+  own text). 7.7 lists headings, glossary and defined terms, key-takeaway blocks, and capitalised
+  names that recur. Neither infers anything about anyone; both exist so the assessor can tally for
+  Rubric 1 from a list rather than by scrolling. Inventory rows are recomputed from the prepared
+  HTML on every render and are never stored.
 
 ## Licensing of what ships
 
@@ -42,7 +48,6 @@ slice; the design is in `IDEA_REVIEW_SPEC.md`.
 
 ## Later slices (not yet shipped)
 
-- Inventories (7.1, 7.7) run in the browser with no network.
 - Model calls go browser → the chosen provider, on click only, with the user's key stored in
   the user's browser on the user's device and nowhere else. No key ever transits the relay.
 - Image search goes browser → Wikimedia Commons / Openverse, query text only.
