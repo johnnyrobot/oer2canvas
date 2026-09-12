@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import { playwright } from '@vitest/browser-playwright'
+import tailwindcss from '@tailwindcss/vite'
 
 /**
  * Three projects, because exactly one kind of test needs a real browser and one
@@ -131,6 +132,14 @@ export default defineConfig({
       },
       {
         define: PUBLIC_BUILD_DEFINES,
+        /*
+         * Tailwind, so a browser test that imports `src/styles/theme.css` gets
+         * the same utilities the shipped app does. Target-size assertions on
+         * controls sized by a utility class (`min-h-9` on the IDEA screen's
+         * radio labels) measure nothing real without it. The jsdom projects
+         * have no layout, so they do not carry the plugin.
+         */
+        plugins: [tailwindcss()],
         test: {
           name: 'browser',
           globals: true,
@@ -157,6 +166,7 @@ export default defineConfig({
       },
       {
         define: PUBLIC_BUILD_DEFINES,
+        plugins: [tailwindcss()],
         test: {
           name: 'browser-forced-colors',
           globals: true,
