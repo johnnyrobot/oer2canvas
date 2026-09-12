@@ -458,3 +458,10 @@ describe('the queue screen’s arrival and departure', () => {
     expect(container.textContent).not.toMatch(/fixed/i)
   })
 })
+
+test('the sidebar carries an IDEA phase that is shut before chapters are prepared', () => {
+  render(<App />)
+  const idea = screen.getByRole('button', { name: /IDEA/ })
+  expect(idea).toHaveAttribute('aria-disabled', 'true')
+  expect(idea).toHaveTextContent('select chapters first')
+})

@@ -203,3 +203,13 @@ test('a passing plan still commits, so the guard refuses only what the gate refu
   fireEvent.click(button)
   expect(onCommit).toHaveBeenCalledTimes(1)
 })
+
+test('the plan states the IDEA review status above the commit control', () => {
+  render(<PlanScreen destination={{ kind: 'cartridge' }} chapters={CHAPTERS} unansweredCount={0} ideaSummary="3 of 8 rated" />)
+  expect(screen.getByText('IDEA review — 3 of 8 rated')).toBeInTheDocument()
+})
+
+test('with no IDEA summary the plan says nothing about it', () => {
+  render(<PlanScreen destination={{ kind: 'cartridge' }} chapters={CHAPTERS} unansweredCount={0} />)
+  expect(screen.queryByText(/IDEA review —/)).not.toBeInTheDocument()
+})

@@ -41,6 +41,13 @@ import { mergeSelection, regroup, toggle } from './shell/selection'
 import type { ImportResult } from './import/types'
 import { toChapter } from './import/to-chapter'
 import { isAbortError, messageOf } from './errors'
+import { IdeaScreen } from './components/idea/IdeaScreen'
+import { reviewKeyOf, useIdeaReviews } from './components/idea/useIdeaReviews'
+import { ratedCount } from './engine/idea/review'
+import { IDEA_CATEGORY_IDS } from './engine/idea/framework'
+import { rubric1Filename, rubric1Json, rubric1Markdown } from './engine/idea/rubric-export'
+import { downloadTextFile } from './engine/idea/download'
+import { ideaSummary } from './shell/phases'
 
 const openstaxClient = createDefaultOpenStaxClient()
 const webClients: Partial<Record<'libretexts' | 'pressbooks', WebBookClient>> = {
@@ -279,6 +286,16 @@ export default function App() {
   const [selected, setSelected] = useState<readonly ChapterOutline[]>([])
   /** One `CompiledChapter` per prepared chapter, kept apart so each keeps its identity. */
   const [prepared, setPrepared] = useState<readonly CompiledChapter[]>([])
+  /**
+   * One IDEA review per prepared chapter, keyed by `reviewKeyOf`, plus the
+   * session's assessor and benchmark, all kept in the same IndexedDB the
+   * credential store uses. Lives here rather than in the screen so it survives
+   * a visit to Review or Plan. NOT reset by `clearDerivedOutput`: a review is
+   * the instructor's, not derived from the output, and a re-prepared chapter
+   * must find it again. It is keyed by chapter identity, so a different book
+   * starts blank on its own.
+   */
+  const ideaReviews = useIdeaReviews(disk)
   /**
    * The browser import being planned: the parse result plus every edit to its
    * proposed pages and metadata. Owned here rather than by the Content screen so
@@ -616,6 +633,24 @@ export default function App() {
     }
   }
 
+  /** Rubric 1 as a file. Download only — never packaged into the cartridge. */
+  function exportRubric(key: string, format: 'md' | 'json'): string {
+    const compiled = prepared.find((c) => reviewKeyOf(c.chapter) === key)
+    const review = ideaReviews.reviewFor(key)
+    const chapterTitle = compiled?.chapter.title ?? ''
+    const ctx = {
+      bookTitle: compiled?.chapter.attribution.bookTitle ?? '',
+      chapterTitle,
+      ...(compiled?.chapter.attribution.publisher ? { publisher: compiled.chapter.attribution.publisher } : {}),
+      ...(compiled?.chapter.attribution.url ? { sourceUrl: compiled.chapter.attribution.url } : {}),
+      exportedAt: new Date(),
+    }
+    const name = rubric1Filename(chapterTitle, ctx.exportedAt, format)
+    if (format === 'md') downloadTextFile(name, rubric1Markdown(review, ideaReviews.header, ctx), 'text/markdown')
+    else downloadTextFile(name, JSON.stringify(rubric1Json(review, ideaReviews.header, ctx), null, 2), 'application/json')
+    return name
+  }
+
   /**
    * Push the prepared chapters into the chosen course.
    *
@@ -669,6 +704,8 @@ export default function App() {
     selectedCount: imported ? 1 : selected.length,
     preparedCount: compiling ? prepared.length : prepared.length,
     unansweredCount: partial?.queue.length ?? 0,
+    ideaRated: prepared.reduce((n, c) => n + ratedCount(ideaReviews.reviewFor(reviewKeyOf(c.chapter))), 0),
+    ideaTotal: prepared.length * IDEA_CATEGORY_IDS.length,
     committed: committed !== undefined,
   }
 
@@ -805,11 +842,24 @@ export default function App() {
         </p>
       )}
 
+      {phase === 'idea' && (
+        <IdeaScreen
+          chapters={prepared}
+          reviews={ideaReviews.reviews}
+          header={ideaReviews.header}
+          onEvent={ideaReviews.dispatch}
+          onHeaderEvent={ideaReviews.dispatchHeader}
+          onForget={ideaReviews.forgetAll}
+          onExport={exportRubric}
+        />
+      )}
+
       {phase === 'plan' && (
         <PlanScreen
           destination={destination}
           chapters={prepared}
           unansweredCount={partial?.queue.length ?? 0}
+          {...(prepared.length > 0 ? { ideaSummary: ideaSummary(shell.ideaRated, shell.ideaTotal) } : {})}
           {...(confirmedImport ? {
             assetCount: confirmedImport.work.assets.length,
             assetBytes: confirmedImport.report.counts.packagedAssetBytes,

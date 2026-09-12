@@ -41,7 +41,7 @@ const formatBytes = (bytes: number): string =>
  * would lose the only structure the user actually chose.
  */
 export function PlanScreen({
-  destination, chapters, unansweredCount, onCommit, existingPages, assetCount, assetBytes, importFindings,
+  destination, chapters, unansweredCount, onCommit, existingPages, assetCount, assetBytes, importFindings, ideaSummary,
 }: {
   destination?: Destination
   chapters: readonly CompiledChapter[]
@@ -58,6 +58,8 @@ export function PlanScreen({
   assetBytes?: number
   /** Parser uncertainty remains visible after the import preview is left behind. */
   importFindings?: readonly ImportFinding[]
+  /** What the sidebar says about the optional IDEA review; absent before any chapter is prepared. */
+  ideaSummary?: string
 }) {
   const plan = buildPlan(chapters, destination, unansweredCount, existingPages)
   const behaviour = reRunBehaviour(destination)
@@ -185,6 +187,12 @@ export function PlanScreen({
           </div>
         ))}
       </div>
+
+      {ideaSummary && (
+        <p className="text-sm text-neutral-700 dark:text-neutral-300">
+          {`IDEA review — ${ideaSummary}`}
+        </p>
+      )}
 
       <div className="mt-8 border-t border-neutral-200 pt-5 dark:border-neutral-800">
         <button
