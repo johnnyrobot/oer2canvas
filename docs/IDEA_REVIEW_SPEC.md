@@ -1,6 +1,9 @@
 # IDEA review — design
 
-Date: 2026-09-11. Status: approved in brainstorming; awaiting implementation plan.
+Date: 2026-09-11. Status: approved in brainstorming; slice 1 plan written and reviewed the same day.
+Revised after that review in four places, each marked *(revised)* below: ratings are per Rubric 1
+row; the assessor and benchmark are entered once per session; reviews persist in the browser; the
+chapter renders on the IDEA screen.
 
 ## 1. What this is
 
