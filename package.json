@@ -28,6 +28,7 @@
     "verify:edge-rate-limit": "node scripts/verify-edge-rate-limit.mjs",
     "verify:firecrawl-cors": "node scripts/verify-firecrawl-cors.mjs",
     "verify:idea-llm-cors": "node scripts/idea-llm-cors-probe.mjs",
+    "verify:idea-image-api": "node scripts/idea-image-api-probe.mjs",
     "verify:canvas-live": "node --env-file-if-exists=.env.local scripts/verify-canvas-release.mjs",
     "test:watch": "vitest",
     "probe:canvas-images:run": "node --env-file-if-exists=.env.local scripts/canvas-image-probe-run.mjs",
