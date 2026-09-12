@@ -24,10 +24,17 @@ body {
   line-height: 1.5;
 }
 
-main {
+/*
+ * A reading column: the width a rendered chapter is judged at on Review. It
+ * used to be `main`'s own max-width, from before the shell existed — which
+ * boxed EVERY screen to 60rem on a 2500px display, and the IDEA screen, two
+ * columns wide by design, into 456px a column. `main` now runs the width the
+ * shell gives it and pads itself; a screen that wants the reading width says
+ * so with this class, and the queue's own rule does the same.
+ */
+.b2c-reading {
   max-width: 60rem;
-  margin: 0 auto;
-  padding: 1rem;
+  margin-inline: auto;
 }
 
 /* SC 2.5.8: the 24x24 floor, applied to every interactive control. */

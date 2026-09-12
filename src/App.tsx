@@ -155,10 +155,10 @@ const READY = {
 export function ChapterHandoff({ compiled, answered }: { compiled: CompiledChapter; answered: number }) {
   const ready = isPublishable(compiled)
   return (
-    <>
+    <div className="b2c-reading">
       {ready && <p>{answered > 0 ? READY.answered(answered) : READY.nothing}</p>}
       <ChapterView compiled={compiled} />
-    </>
+    </div>
   )
 }
 

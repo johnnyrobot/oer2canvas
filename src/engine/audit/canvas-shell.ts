@@ -66,7 +66,7 @@ export const CANVAS_SHELL_CSS = [
  * the column's `padding:24px` land on one element, so the later rule wins and the
  * preview insets by 24px where the audit insets by 40px. Box parity was never
  * available anyway — the audit lays out in a 1280px frame and the app inside
- * `main`'s 60rem — and the shell cannot fix that from here.
+ * the review column's 60rem — and the shell cannot fix that from here.
  */
 const SHELL_DOCUMENT_SELECTORS: ReadonlySet<string> = new Set(['body', '#b2c-content'])
 

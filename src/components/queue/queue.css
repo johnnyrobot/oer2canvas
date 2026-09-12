@@ -5,6 +5,12 @@
  * on a 1.4.3 obligation for no benefit. Nothing here reopens that.
  */
 
+/* The reading column, the same 60rem `.b2c-reading` gives the review handoff. */
+.b2c-queue {
+  max-width: 60rem;
+  margin-inline: auto;
+}
+
 /*
  * Region B: present in the accessibility tree, absent from the screen.
  *

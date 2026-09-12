@@ -26,7 +26,7 @@ import '../../App.css'
  *
  * Scoped deliberately to what the shell can control. Line length is NOT asserted:
  * the audit lays the column out in a 1280px frame and the app lays it out inside
- * `main`'s 60rem, so the two boxes cannot be equal without the app adopting the
+ * the review column's 60rem, so the two boxes cannot be equal without the app adopting the
  * audit's viewport. That divergence is real, pre-existing, and out of this test's
  * reach; typography and colour are not.
  */
