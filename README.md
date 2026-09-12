@@ -361,6 +361,24 @@ This is a content transformation aid, not a legal or institutional accessibility
 certification; instructors remain responsible for reviewing imported results in their Canvas
 instance. See [ACCESSIBILITY.md](ACCESSIBILITY.md).
 
+## IDEA review (optional)
+
+After the accessibility review, an optional **IDEA** phase applies the ASCCC OERI Inclusion,
+Diversity, Equity, and Anti-Racism (IDEA) Framework to each prepared chapter, with the chapter's
+own pages shown beside the rubric so you read what you rate. It offers the Framework's eight
+categories as checklists, its Rubric 1 rows rated by the instructor, notes, the rubric's Summary
+and Suggestions, an editable BIPOC benchmark (77% by default, per the Framework's §9.0), and a
+Rubric 1 download as Markdown or JSON. The IDEA review is optional and never blocks publishing;
+ratings are entered by a person and are never computed by the app. The rubric file is a download
+only and is never packaged into the cartridge.
+
+IDEA reviews, the assessor, and the benchmark are saved in this browser on this device (the app's
+IndexedDB database) so a reload or a re-prepare does not lose them; **Forget all IDEA reviews**
+removes them, and clearing site data does too. Nothing about a review is sent anywhere; nothing in
+this phase makes a network request. Framework text is reproduced in full from the
+ASCCC OERI IDEA Framework and Implementation Guide (March 2025), licensed CC BY 4.0, and is
+attributed on screen and in `THIRD-PARTY-NOTICES.md`.
+
 ## Project documents
 
 - [Production operations runbook](docs/OPERATIONS.md)

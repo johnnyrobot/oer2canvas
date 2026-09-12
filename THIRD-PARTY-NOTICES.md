@@ -32,3 +32,13 @@ The root lockfile applies security overrides for Transformers.js's Node-only tra
 packages (`onnxruntime-node@1.29.0` and `sharp@0.35.4`; `adm-zip@0.6.0` is resolved below
 onnxruntime-node). These packages are not imported by the browser export, but the overrides
 keep the installed production graph on fixed versions for auditability.
+
+The IDEA phase reproduces, in full, the category descriptions ("Restorative Requirements"),
+"Elements for Consideration", Rubric 1 rows and instructions, and the Additional Resources links
+from the "ASCCC OERI Inclusion, Diversity, Equity, and Anti-Racism (IDEA) Framework and
+Implementation Guide, March 2025" by the ASCCC Open Educational Resources Initiative
+(https://asccc-oeri.org/asccc-oeri-inclusion-diversity-equity-and-anti-racism-idea-audit-framework/),
+licensed CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). The text is vendored in
+`src/engine/idea/framework.ts`, where the one editorial choice (an unbulleted example paragraph
+kept with its bullet) is recorded; element and row ids there are ours, stable, and never
+renumbered.

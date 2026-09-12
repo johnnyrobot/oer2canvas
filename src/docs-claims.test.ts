@@ -50,6 +50,9 @@ test('every obligation in criterion 5 is stated in a file a user reads', () => {
     ['no OCR', /OCR/],
     ['resource limits', /16 MiB|2 MiB/],
     ['recovery guidance', /try again|retry/i],
+    ['idea framework attribution', /IDEA Framework[^.\n]*CC BY 4\.0/i],
+    ['idea never gates', /IDEA[^.\n]*(optional|never (blocks|gates))/i],
+    ['idea reviews stay in this browser', /IDEA[^.\n]*(IndexedDB|in (this|your) browser)/i],
   ]
   const all = Object.values(USER_FACING).join('\n')
   for (const [name, pattern] of obligations) {

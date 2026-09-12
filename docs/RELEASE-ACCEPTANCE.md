@@ -207,3 +207,28 @@ silent, even if nothing was broken outright.
 | Date | Operator | Result | Notes |
 | --- | --- | --- | --- |
 | 2026-08-30 | johnnylibretexts | PASS | One full document import completed end to end with VoiceOver on macOS: the import form, the findings, the page plan, and the export. Operator reported it worked fine and raised no specific confusion. Recorded as reported. NOTE, so a later reader is not misled about how much this row covers: this section asks for what was UNCLEAR rather than a verdict, and no unclear item was reported, so the Notes column is thin by circumstance rather than because every announcement was examined and found good. Two constructs that `scripts/screen-reader-worksheet.mjs` had flagged in advance were NOT reported as problems by the operator and are therefore not defects on this run's evidence — both concatenate a label and its explanation into one accessible name with no separator ("A Canvas coursePushes pages straight into a course you choose…" and "Content— choose where this goes first"). If a later run finds either confusing, that repetition is the useful evidence this table exists to collect. |
+
+## 4. IDEA review — slice 1
+
+1. Prepare one OpenStax chapter through Review until the queue is clear.
+2. Sidebar: **IDEA — optional** is enabled; **Plan** is enabled regardless.
+3. Open IDEA. The chapter's pages are readable beside the panels, with no accessibility panels
+   in them. Only 7.1 is expanded. Rate all three 7.1 rows; the header reads "3 of 3 rows rated"
+   and the sidebar reads **IDEA — 1 of 8 rated**. Plan shows "IDEA review — 1 of 8 rated".
+4. Answer two checklist items and type a note under 7.6. Rate 7.6 "Not Applicable"; its header
+   reads "rated".
+5. Set the benchmark to 62 and the assessor name. Type a Summary and a Suggestion.
+6. **Reload the tab.** Prepare the same chapter again. Open IDEA: every rating, note, the
+   summary, the benchmark, and the assessor are still there.
+7. Download Markdown. The status line names the file. Open it: header carries the textbook,
+   chapter, assessor, and "62%"; the table has 10 rows (3 + 7) under Rubric 1's own area titles;
+   7.6 reads "Not Applicable" with the note; unrated rows read "Not rated"; the Category count
+   block sums to 10; Summary and Suggestions carry what was typed; the CC BY 4.0 attribution is
+   at the foot.
+8. Download JSON. `areas[0].rows` has three entries with ratings; `areas[5].rows[0].rating` is
+   `"na"`; `counts` sums to 10; `summary` and `suggestions` are present.
+9. Prepare a second chapter of the same book. Its review starts blank; the assessor and
+   benchmark are already filled in.
+10. **Forget all IDEA reviews** → confirm. Both reviews, the assessor, and the benchmark reset.
+    Reload: still empty.
+11. Build the cartridge. Confirm no `idea-rubric1-*` file is inside it.

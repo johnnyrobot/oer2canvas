@@ -52,6 +52,12 @@ Small workflow values remain browser-local. A one-time migration removes Canvas 
 saved by earlier releases from both the current and legacy IndexedDB databases. Clearing site
 data removes other browser-local state.
 
+The optional IDEA review keeps its ratings, checklist answers, notes, assessor name and title, and
+BIPOC benchmark in this browser's IndexedDB database on this device, so that a reload does not
+lose them. They are never sent to the relay, to a publisher, or to any other host, and are removed
+by **Forget all IDEA reviews** on the IDEA screen or by clearing site data. On a shared computer,
+forget them when you are done.
+
 The repository contains an optional direct-push mode only for an operator who self-hosts and
 administers both the PWA/relay and the paired Canvas instance. In that mode, the Canvas origin
 is fixed by the deployment; the user's token and page content pass through the operator's own
