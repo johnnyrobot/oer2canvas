@@ -244,7 +244,8 @@ compile worker path, results cached per `(sectionId, htmlHash)`.
 
 - Engine: word-boundary phrase matching over the **text nodes** of each block element (one text
   node at a time), so a hit maps to an `elementId` and an occurrence index. Every outermost block
-  element receives a deterministic id at compile time (`ensureBlockIds`, `b2c-blk-<n>`) so
+  element receives a deterministic id at compile time (`ensureBlockIds`, `b2c-blk-<section>-<n>`,
+  the section part a short hash so two sections rendered on one app page cannot collide) so
   findings and edits key on elements that exist in the published bytes.
 - **Curated rule set**, hand-vendored as `src/engine/idea/data/idea-terms.json` (CC BY 4.0, ours;
   retext-equality consulted as the reference list and credited in the file — no runtime `unified`/

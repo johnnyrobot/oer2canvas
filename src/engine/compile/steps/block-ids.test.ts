@@ -1,4 +1,4 @@
-import { ensureBlockIds } from './block-ids'
+import { blockId, ensureBlockIds } from './block-ids'
 import { createSink } from '../sink'
 import { fixtureContext } from '../fixture-context'
 
@@ -13,7 +13,13 @@ const run = (html: string) => {
 test('every outermost block gets a deterministic id; existing ids are kept', () => {
   const { doc } = run('<p>a</p><p id="own">b</p><ul><li>c<p>nested</p></li></ul>')
   const ids = Array.from(doc.body.querySelectorAll('p, li')).map((e) => e.id)
-  expect(ids).toEqual(['b2c-blk-0', 'own', 'b2c-blk-2', ''])
+  const { ctx } = fixtureContext('page-section')
+  expect(ids).toEqual([blockId(ctx.sectionId, 0), 'own', blockId(ctx.sectionId, 2), ''])
+})
+
+test('ids differ between sections, so two sections on one page cannot collide', () => {
+  expect(blockId('s1', 0)).not.toBe(blockId('s2', 0))
+  expect(blockId('s1', 0)).toMatch(/^b2c-blk-[0-9a-z]{1,7}-0$/)
 })
 
 test('the same input yields the same ids on a second run', () => {

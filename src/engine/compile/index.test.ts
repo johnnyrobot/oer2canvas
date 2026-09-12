@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { compileSection, compileChapter } from './index'
 import { LIBRETEXTS, OPENSTAX } from './context'
 import { ctx, section } from './test-support'
+import { blockId } from './steps/block-ids'
 import type { Chapter, Section } from '../../sources/types'
 import preface from '../../sources/fixtures/openstax/page.json'
 
@@ -14,7 +15,7 @@ describe('compileSection', () => {
 
   it('unwraps a whole document down to its body', () => {
     const out = compileSection(section('<html><head><title>t</title></head><body><p>b</p></body></html>'), ctx)
-    expect(out.html).toContain('<p id="b2c-blk-0">b</p>')
+    expect(out.html).toContain(`<p id="${blockId(ctx.sectionId, 0)}">b</p>`)
     expect(out.html).not.toContain('<title>')
   })
 
