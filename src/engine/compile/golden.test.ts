@@ -7,6 +7,7 @@ import type { CompileContext } from './context'
 import type { Section } from '../../sources/types'
 import { fixtureContext, type FixtureName } from './fixture-context'
 import { packagedAssetName, packagedReference } from '../../import/assets'
+import { ideaEditKey, type IdeaEdit } from '../idea/edits'
 
 // `fileURLToPath(new URL(...))` rather than `import.meta.dirname`: this module
 // goes through Vite's transform, and only `import.meta.url` is guaranteed there.
@@ -132,5 +133,23 @@ describe('compile page-packaged-image', () => {
 
   it('matches the queue golden', () => {
     golden('page-packaged-image.queue.json', `${JSON.stringify(out.queue, null, 2)}\n`)
+  })
+})
+
+describe('compile page-section with IDEA edits', () => {
+  const { section, ctx } = fixtureContext('page-section')
+  // The first block with a MINTED id (the fixture's h2 keeps its own, so
+  // that is `b2c-blk-1`, the Learning Objectives heading). Its first three
+  // words are the original, so the case stays anchored to text that exists.
+  const plain = compileSection(section, ctx)
+  const first = new DOMParser().parseFromString(`<body>${plain.html}</body>`, 'text/html').querySelector('[id^="b2c-blk-"]')!
+  const original = (first.textContent ?? '').trim().split(/\s+/).slice(0, 3).join(' ')
+  const edits = new Map<string, IdeaEdit>([[ideaEditKey(section.id, first.id, 0, original), { kind: 'replace', replacement: 'REPLACED WORDS HERE' }]])
+  const out = compileSection(section, { ...ctx, ideaEdits: edits })
+
+  it('applies the edit and appends the change note; nothing else moves', () => {
+    expect(out.html).toContain('REPLACED WORDS HERE')
+    expect(out.html).toContain('b2c-idea-change')
+    golden('page-section.idea-edits.compiled.html', `${out.html}\n`)
   })
 })

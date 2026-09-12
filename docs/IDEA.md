@@ -3,7 +3,7 @@
 This file states, in one place, what the IDEA phase does with data. It is kept current slice by
 slice; the design is in `IDEA_REVIEW_SPEC.md`.
 
-## Slice 1 (this release)
+## Slices 1–2 (this release)
 
 - **Network:** none. The Framework text is vendored; the Rubric 1 export is built in the browser
   and handed to the browser's download.
@@ -20,6 +20,18 @@ slice; the design is in `IDEA_REVIEW_SPEC.md`.
 - **Gate:** none. `phaseAvailability(...).plan` reads no IDEA field. IDEA never blocks Plan.
 - **What is shown:** the chapter's gated, repaired HTML — the same bytes Review approved — beside
   the rubric. Nothing from the raw or un-audited compile is rendered there.
+- **Rule checks:** the terminology, gendered-noun, and idiom lists are vendored JSON
+  (`src/engine/idea/data/`, CC BY 4.0) and run in the browser over the compiled section; no
+  network.
+- **Edits:** an accepted suggestion is a map entry applied by a compile step on every recompile,
+  including the first compile of a re-prepared chapter. The section is re-audited before it can be
+  published again. Every applied edit adds one sentence to the page's Source-and-license block:
+  "Modified from the original: wording updated for inclusive language."
+- **Storage, extended:** edits are saved in the same IndexedDB document as the ratings and
+  restored through the same validating replay; *Forget all IDEA reviews* removes them too. A
+  dismissed suggestion is not saved — it is hidden for this session only.
+- **The queue's answers now leave the queue screen:** Plan's count and the export describe the
+  answered chapter (a pre-existing gap closed by this slice's first task).
 
 ## Licensing of what ships
 
@@ -30,7 +42,7 @@ slice; the design is in `IDEA_REVIEW_SPEC.md`.
 
 ## Later slices (not yet shipped)
 
-- Rule checks and inventories run in the browser with no network.
+- Inventories (7.1, 7.7) run in the browser with no network.
 - Model calls go browser → the chosen provider, on click only, with the user's key stored in
   the user's browser on the user's device and nowhere else. No key ever transits the relay.
 - Image search goes browser → Wikimedia Commons / Openverse, query text only.

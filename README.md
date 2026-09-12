@@ -372,6 +372,13 @@ Rubric 1 download as Markdown or JSON. The IDEA review is optional and never blo
 ratings are entered by a person and are never computed by the app. The rubric file is a download
 only and is never packaged into the cartridge.
 
+Two categories — appropriate terminology and gender-inclusive nouns — also get rule-based
+suggestions from a vendored, curated list (CC BY 4.0; the list names its sources). A suggestion
+never changes the page until the instructor presses Replace; a term inside a quotation is offered
+"Keep, add context" first, following the Framework's guidance for historical usage. Every applied
+change is listed with Undo, and the page's Source-and-license block records that wording was
+modified, as CC BY requires.
+
 IDEA reviews, the assessor, and the benchmark are saved in this browser on this device (the app's
 IndexedDB database) so a reload or a re-prepare does not lose them; **Forget all IDEA reviews**
 removes them, and clearing site data does too. Nothing about a review is sent anywhere; nothing in

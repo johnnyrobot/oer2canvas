@@ -232,3 +232,23 @@ silent, even if nothing was broken outright.
 10. **Forget all IDEA reviews** → confirm. Both reviews, the assessor, and the benchmark reset.
     Reload: still empty.
 11. Build the cartridge. Confirm no `idea-rubric1-*` file is inside it.
+
+## 5. IDEA review — slice 2
+
+1. Prepare an OpenStax chapter whose text contains "suffers from" or "chairman" (Human Biology
+   4.2 Nutrients, or paste a paragraph via the Text tab).
+2. IDEA → 7.6 shows "N suggestions" in its header; open it. Focus the Replace button: the
+   paragraph is outlined in the chapter render beside the panels and scrolled into view.
+3. Replace one; it moves to Applied; the render shows "Re-checking this section…" and then the
+   new wording within a second, and the Source-and-license block ends with the "Modified from the
+   original" sentence.
+4. Undo it; the wording and the sentence revert.
+5. Replace it again. **Reload the tab** and prepare the same chapter: the replacement is already
+   applied in the render, listed under Applied, and the sentence is present — without pressing
+   anything. Dismiss a different suggestion, reload again: it is back.
+6. Export the cartridge, unzip: the page HTML carries the replacement and the sentence; no
+   `idea-rubric1-*` file is inside.
+7. Answer an alt-text item in Review before step 6 if any exist: the exported page carries the
+   answered alt (Task 1's lift).
+8. **Forget all IDEA reviews** → confirm. Applied is empty; the render shows the original wording
+   after the recompile.
