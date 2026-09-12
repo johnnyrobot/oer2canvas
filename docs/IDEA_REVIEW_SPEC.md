@@ -342,7 +342,7 @@ OERI's Appendix A templates, one per category, adapted only where the input shap
   in the text from what you infer or recommend" instruction are kept verbatim.
 - **Grounding:** OERI's prompts say "[Link to Framework]". A browser model call can't follow
   links, so the category's *Restorative Requirements* + *Elements for Consideration* text is
-  inlined as the lens (from `data/idea-framework.json`), and the category's Additional Resources
+  inlined as the lens (from `src/engine/idea/framework.ts`), and the category's Additional Resources
   URLs are listed as citations the model may name but not fetch.
 - **Input per category:** 7.1 → the image inventory table (alt/caption/reference only, no
   pixels); 7.7 → the metadata inventory; 7.2 / 7.4 / 7.5 / 7.8 → the section's text; all → chapter
@@ -538,6 +538,8 @@ A failure in the IDEA phase never affects publishability or the accessibility ga
 ### 7.2 Data boundary (also written to `docs/IDEA.md` and a README paragraph)
 
 - Rule checks and inventories: in-browser, no network.
+- Reviews, assessor, benchmark: this browser's IndexedDB on this device (§2.7), forgettable from
+  the screen, never sent anywhere.
 - Model calls: browser → chosen provider, on click only, section text + image descriptions only,
   user's key stored in the browser on the user's device (IndexedDB) and nowhere else, provider's
   data-use sentence beside the button.
@@ -552,8 +554,12 @@ A failure in the IDEA phase never affects publishability or the accessibility ga
 ### 7.3 Testing (matching the repo's tiers)
 
 - **Pure unit:** `terms.ts`, `idioms.ts`, `images.ts`, `metadata.ts`, `applyIdeaEdits` (match,
-  no-match, capitalization, inline-boundary skip, keep-with-context), the `IdeaReview` reducer,
-  `rubric1Export`, prompt builders (snapshot per category), response parsers (valid JSON,
+  no-match, capitalization, inline-boundary skip, keep-with-context), the `IdeaReview` and
+  `IdeaHeader` reducers, the storage restore (round-trip, unknown ids dropped, malformed values
+  dropped), the hook against an in-memory `KeyValueStore` (restore on mount, debounced write, no
+  write before load, forget removes, a failing store degrades to unsaved), the vendored Framework
+  (element counts pinned, full-text sentinels), `rubric1Export`, prompt builders (snapshot per
+  category), response parsers (valid JSON,
   malformed, plain text, verbatim-match gating), each provider's request shape against a fake
   `fetch`, each image adapter's license filter against canned responses (unparseable → dropped,
   do-not-use → dropped, BY-SA labeled).
@@ -571,9 +577,11 @@ A failure in the IDEA phase never affects publishability or the accessibility ga
 
 Each a shippable PR with its own tests; order fixed by dependency.
 
-1. **Phase + review model + checklists + Rubric 1 export.** Shell change, `data/idea-framework.json`,
-   `IdeaReview` reducer, the screen with all eight panels showing checklist + rubric only,
-   Markdown/JSON export (docx if cheap).
+1. **Phase + review model + checklists + Rubric 1 export.** Shell change, the Framework vendored
+   in full, `IdeaReview` and `IdeaHeader` reducers, browser storage with a validating restore and
+   a forget control, the screen with all eight panels showing checklist + rubric + notes, Summary
+   and Suggestions, the chapter rendered beside the panels, Markdown/JSON export in Rubric 1's
+   shape (docx if cheap). Plan: `IDEA_REVIEW_SLICE1_PLAN.md`.
 2. **Term and idiom findings + edits.** First, lift the queue's answers and settled chapters out
    of `QueueScreen` into `App` (today they never leave it, so Plan's count and the export describe
    the first compile) — the one path that both answers and IDEA edits then share. Then `terms.ts`,
