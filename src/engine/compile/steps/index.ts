@@ -13,6 +13,7 @@ import { resolveAlt } from './alt'
 import { appendAttribution } from './attribution'
 import { ensureBlockIds } from './block-ids'
 import { applyIdeaEdits } from './idea-edits'
+import { insertIdeaImages } from './idea-images'
 import { applyCanvasTemplate } from './canvas-template'
 
 /** One transform over the shared detached document. Mutates in place. */
@@ -36,8 +37,8 @@ export type Step = (doc: Document, ctx: CompileContext, sink: Sink) => void
  *   AUDIT LAST, on final html — auditing anything but the exact bytes being
  *     published is theater. That is why repair+audit stay in `enforceGate`,
  *     downstream of every step here.
- *   BLOCK IDS AFTER STRUCTURE, IDEA EDITS AFTER ATTRIBUTION — see the comments
- *     in the array.
+ *   BLOCK IDS AFTER STRUCTURE, IDEA IMAGES AFTER BLOCK IDS, IDEA EDITS AFTER
+ *     ATTRIBUTION — see the comments in the array.
  *   CANVAS TEMPLATE LAST OF THE STEPS — it wraps the whole body, so anything
  *     that ran after it would be reaching into a container it did not expect.
  *     Its banner puts white text on a brand colour and its rules sit beside
@@ -58,6 +59,9 @@ export const STEPS: readonly Step[] = [
   // creating and unwrapping blocks, so the index an id is minted from is the
   // index a finding computed on the compiled html.
   ensureBlockIds,
+  // IDEA IMAGES AFTER BLOCK IDS, BEFORE ALT — ids must not shift; the new
+  // image is judged like any other.
+  insertIdeaImages,
   normalizeContrast,
   resolveAlt,
   appendAttribution,

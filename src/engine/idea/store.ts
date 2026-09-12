@@ -19,9 +19,17 @@
  * dropped and a well-formed one becomes exactly the edit the instructor
  * made. Dismissals are NOT stored — spec §2.3 makes them session-only — so
  * `restore` always returns an empty `dismissed` set.
+ *
+ * Image edits (slice 5) are references to packaged bytes, so the bytes are
+ * stored beside them (`assets`, by chapter key) and an image edit whose bytes
+ * did not survive is dropped on restore — a figure that cannot ship must not
+ * be restored as if it could. An asset is bytes, not a decision, so nothing
+ * is replayed for it; but nothing is trusted either: every field is checked
+ * and the entry is rebuilt from the checked fields.
  */
 import { IDEA_CATEGORY_IDS } from './framework'
-import { isIdeaEditKey, newEdits, reduceEdits, type IdeaEdits } from './edits'
+import { isIdeaEditKey, newEdits, reduceEdits, type IdeaEdits, type ImageEdit } from './edits'
+import type { ImportedAsset } from '../../import/types'
 import {
   newHeader, newReview, reduceHeader, reduceReview,
   type ChecklistAnswer, type IdeaHeader, type IdeaReview, type Rating,
@@ -34,17 +42,20 @@ export interface PersistedIdea {
   header: IdeaHeader
   reviews: ReadonlyMap<string, IdeaReview>
   edits: ReadonlyMap<string, IdeaEdits>
+  /** The bytes the image edits refer to, by chapter key. */
+  assets: ReadonlyMap<string, readonly ImportedAsset[]>
 }
 
 export function toPersisted(
   header: IdeaHeader,
   reviews: ReadonlyMap<string, IdeaReview>,
   edits: ReadonlyMap<string, IdeaEdits>,
+  assets: ReadonlyMap<string, readonly ImportedAsset[]> = new Map(),
 ): PersistedIdea {
   // Dismissals stripped on the way out, so the document never carries them.
   const stripped = new Map<string, IdeaEdits>()
   for (const [key, e] of edits) stripped.set(key, { edits: e.edits, dismissed: new Set() })
-  return { version: 1, header, reviews, edits: stripped }
+  return { version: 1, header, reviews, edits: stripped, assets }
 }
 
 const RATINGS: readonly string[] = ['na', 'exclusive', 'emerging', 'inclusive']
@@ -56,10 +67,54 @@ const isRating = (v: unknown): v is Rating => typeof v === 'string' && RATINGS.i
 const isAnswer = (v: unknown): v is ChecklistAnswer => typeof v === 'string' && ANSWERS.includes(v)
 const entries = (v: unknown): [unknown, unknown][] => (v instanceof Map ? [...v] : [])
 
-function restoreEdits(value: unknown): ReadonlyMap<string, IdeaEdits> {
+const isFinite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+/** Rebuilt from checked fields, never the stored object. */
+function restoreImageEdit(v: Record<string, unknown>): ImageEdit | undefined {
+  const p = v.placement
+  const a = v.attribution
+  if (!isRecord(p) || (p.kind !== 'replace' && p.kind !== 'insert-after') || typeof p.elementId !== 'string') return undefined
+  if (typeof v.assetName !== 'string' || typeof v.alt !== 'string' || typeof v.caption !== 'string') return undefined
+  if (!isFinite(v.width) || !isFinite(v.height)) return undefined
+  if (!isRecord(a) || typeof a.text !== 'string' || typeof a.sourcePageUrl !== 'string' || typeof a.licenseName !== 'string') return undefined
+  if (typeof a.shareAlike !== 'boolean' || (a.licenseUrl !== undefined && typeof a.licenseUrl !== 'string')) return undefined
+  return {
+    kind: 'image',
+    placement: { kind: p.kind, elementId: p.elementId },
+    assetName: v.assetName, width: v.width, height: v.height, alt: v.alt, caption: v.caption,
+    attribution: {
+      text: a.text, sourcePageUrl: a.sourcePageUrl, licenseName: a.licenseName, shareAlike: a.shareAlike,
+      ...(a.licenseUrl === undefined ? {} : { licenseUrl: a.licenseUrl }),
+    },
+  }
+}
+
+function restoreAssets(value: unknown): ReadonlyMap<string, readonly ImportedAsset[]> {
+  const out = new Map<string, ImportedAsset[]>()
+  for (const [key, raw] of entries(value)) {
+    if (typeof key !== 'string' || !Array.isArray(raw)) continue
+    const kept: ImportedAsset[] = []
+    for (const a of raw) {
+      if (!isRecord(a)) continue
+      const { id, mediaType, extension, sha256, originPart, name, bytes } = a
+      if ([id, mediaType, extension, sha256, originPart, name].some((f) => typeof f !== 'string')) continue
+      // Structured clone keeps a Uint8Array a Uint8Array; anything else is not bytes.
+      if (!(bytes instanceof Uint8Array)) continue
+      kept.push({
+        id: id as string, mediaType: mediaType as string, extension: extension as string,
+        sha256: sha256 as string, originPart: originPart as string, name: name as string, bytes,
+      })
+    }
+    if (kept.length > 0) out.set(key, kept)
+  }
+  return out
+}
+
+function restoreEdits(value: unknown, assets: ReadonlyMap<string, readonly ImportedAsset[]>): ReadonlyMap<string, IdeaEdits> {
   const out = new Map<string, IdeaEdits>()
   for (const [key, raw] of entries(value)) {
     if (typeof key !== 'string' || !isRecord(raw)) continue
+    const assetNames = new Set((assets.get(key) ?? []).map((a) => a.name))
     let e = newEdits()
     for (const [editKey, edit] of entries(raw.edits)) {
       if (!isIdeaEditKey(editKey) || !isRecord(edit)) continue
@@ -67,6 +122,9 @@ function restoreEdits(value: unknown): ReadonlyMap<string, IdeaEdits> {
         e = reduceEdits(e, { type: 'replace', key: editKey, replacement: edit.replacement })
       } else if (edit.kind === 'keep' && (edit.context === undefined || typeof edit.context === 'string')) {
         e = reduceEdits(e, edit.context === undefined ? { type: 'keep', key: editKey } : { type: 'keep', key: editKey, context: edit.context })
+      } else if (edit.kind === 'image') {
+        const image = restoreImageEdit(edit)
+        if (image && assetNames.has(image.assetName)) e = reduceEdits(e, { type: 'image', key: editKey, edit: image })
       }
     }
     out.set(key, e)
@@ -78,6 +136,7 @@ export function restore(value: unknown): {
   header: IdeaHeader
   reviews: ReadonlyMap<string, IdeaReview>
   edits: ReadonlyMap<string, IdeaEdits>
+  assets: ReadonlyMap<string, readonly ImportedAsset[]>
 } | undefined {
   if (!isRecord(value) || value.version !== 1) return undefined
 
@@ -112,7 +171,9 @@ export function restore(value: unknown): {
     }
     reviews.set(key, review)
   }
-  // A document with no `edits` field (written by slice 1) passes `undefined`
-  // to `entries`, which yields nothing.
-  return { header, reviews, edits: restoreEdits(value.edits) }
+  // A document with no `edits` field (written by slice 1) or no `assets`
+  // field (before slice 5) passes `undefined` to `entries`, which yields
+  // nothing. Assets first: an image edit is kept only if its bytes are.
+  const assets = restoreAssets(value.assets)
+  return { header, reviews, edits: restoreEdits(value.edits, assets), assets }
 }

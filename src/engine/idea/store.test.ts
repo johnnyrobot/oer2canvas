@@ -1,6 +1,7 @@
 import { newHeader, newReview, reduceHeader, reduceReview } from './review'
 import { IDEA_STORAGE_KEY, restore, toPersisted } from './store'
-import { ideaEditKey, newEdits, reduceEdits } from './edits'
+import { ideaEditKey, imageEditKey, newEdits, reduceEdits } from './edits'
+import type { ImportedAsset } from '../../import/types'
 
 function sample() {
   let r = newReview()
@@ -113,4 +114,53 @@ test('malformed edits are dropped, well-formed ones kept', () => {
     ['s1::b2c-blk-1::0::x', { kind: 'keep' }],
   ])
   expect(back.edits.has('bad')).toBe(false)
+})
+
+const asset: ImportedAsset = {
+  id: 'idea-abc', mediaType: 'image/png', extension: 'png', bytes: new Uint8Array([137, 80, 78, 71]), sha256: 'abc', originPart: 'idea/commons/File:Dot.png', name: 'dot-abc12345.png',
+}
+const imageEdit = {
+  kind: 'image' as const, placement: { kind: 'insert-after' as const, elementId: 'b2c-blk-0' }, assetName: asset.name, width: 1, height: 1,
+  alt: 'A dot.', caption: '', attribution: { text: '“Dot” by A, Wikimedia Commons, CC BY 4.0', sourcePageUrl: 'https://commons.wikimedia.org/wiki/File:Dot.png', licenseName: 'CC BY 4.0', shareAlike: false },
+}
+
+test('an image edit and its asset round-trip together', () => {
+  const { review, header } = sample()
+  const e = reduceEdits(newEdits(), { type: 'image', key: imageEditKey('s1', asset.name), edit: imageEdit })
+  const doc = toPersisted(header, new Map([['k', review]]), new Map([['k', e]]), new Map([['k', [asset]]]))
+  const back = restore(doc)!
+  expect(back.edits.get('k')?.edits.get(imageEditKey('s1', asset.name))).toEqual(imageEdit)
+  expect(back.assets.get('k')).toEqual([asset])
+})
+
+// A packaged reference to bytes that are not there is a blocking finding at
+// export (spec §6.5). Better to lose the edit on restore and say nothing was
+// added than to restore a figure that cannot ship.
+test('an image edit whose asset is missing or malformed is dropped', () => {
+  const { review, header } = sample()
+  const e = reduceEdits(newEdits(), { type: 'image', key: imageEditKey('s1', asset.name), edit: imageEdit })
+  const noAsset = restore(toPersisted(header, new Map([['k', review]]), new Map([['k', e]]), new Map()))!
+  expect(noAsset.edits.get('k')?.edits.size).toBe(0)
+  const badBytes = restore({ ...toPersisted(header, new Map(), new Map([['k', e]]), new Map()), assets: new Map([['k', [{ ...asset, bytes: 'not bytes' }]]]) })!
+  expect(badBytes.assets.get('k') ?? []).toEqual([])
+  expect(badBytes.edits.get('k')?.edits.size).toBe(0)
+})
+
+test('a malformed image edit is dropped, a well-formed one kept', () => {
+  const back = restore({
+    version: 1, header: {}, reviews: new Map(),
+    assets: new Map([['k', [asset]]]),
+    edits: new Map([['k', { edits: new Map([
+      [imageEditKey('s1', asset.name), imageEdit],
+      [imageEditKey('s1', 'other.png'), { ...imageEdit, assetName: 'other.png' }],          // no such asset
+      [imageEditKey('s1', 'x.png'), { ...imageEdit, placement: { kind: 'sideways', elementId: 'a' } }],
+      [imageEditKey('s1', 'y.png'), { ...imageEdit, attribution: 'a string' }],
+    ]) }]]),
+  })!
+  expect([...back.edits.get('k')!.edits.keys()]).toEqual([imageEditKey('s1', asset.name)])
+})
+
+test('a document written before slice 5 restores with no assets', () => {
+  const { assets: _drop, ...older } = toPersisted(newHeader(), new Map(), new Map())
+  expect(restore(older)!.assets.size).toBe(0)
 })

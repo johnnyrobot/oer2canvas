@@ -26,7 +26,9 @@ export function AppliedList({
       <ul className="m-0 flex list-none flex-col gap-1 p-0">
         {applied.map(({ key, edit, stale, sectionTitle }, i) => {
           const { original } = parseIdeaEditKey(key)
-          const what = edit.kind === 'replace' ? c.replaced(original, edit.replacement) : c.kept(original, edit.context)
+          const what = edit.kind === 'replace' ? c.replaced(original, edit.replacement)
+            : edit.kind === 'image' ? c.image(edit.alt)
+            : c.kept(original, edit.context)
           // The button's NAME stays "Undo"; the change it undoes is its
           // description, so a screen reader hears both without the visible
           // text appearing twice.

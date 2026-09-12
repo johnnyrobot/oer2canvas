@@ -15,11 +15,14 @@
  * has since dropped — files under 7.6, the terminology category, where most
  * edits come from. When slice 4 adds model drafts in other categories, the
  * edit itself should carry its category; the key cannot.
+ *
+ * An image edit (slice 5) is present while its figure is in the bytes, and
+ * files under 7.1, the only category that adds images.
  */
 import type { CategoryId } from './framework'
 import { termCategoryOf } from './terms'
 import { findOccurrence } from './text'
-import { parseIdeaEditKey, type IdeaEdit, type IdeaEdits } from './edits'
+import { ideaFigureId, parseIdeaEditKey, type IdeaEdit, type IdeaEdits } from './edits'
 
 export interface AppliedEdit {
   key: string
@@ -39,6 +42,9 @@ export function appliedEdits(
     const { sectionId, elementId, occurrence, original } = parseIdeaEditKey(key)
     const section = sections.find((s) => s.id === sectionId)
     const doc = new DOMParser().parseFromString(`<body>${section?.html ?? ''}</body>`, 'text/html')
+    if (edit.kind === 'image') {
+      return { key, edit, stale: doc.getElementById(ideaFigureId(edit)) === null, sectionTitle: section?.title ?? '', category: '7.1' }
+    }
     const el = doc.getElementById(elementId)
     const present = el !== null && (
       (edit.kind === 'replace' && (el.textContent ?? '').includes(edit.replacement)) ||

@@ -202,6 +202,7 @@ export function IdeaScreen({
   const ANNOUNCE: Record<IdeaEditsEvent['type'], string> = {
     replace: IDEA_COPY.applied.announceApplied,
     keep: IDEA_COPY.applied.announceApplied,
+    image: IDEA_COPY.applied.announceApplied,
     undo: IDEA_COPY.applied.announceUndone,
     dismiss: IDEA_COPY.applied.announceDismissed,
   }

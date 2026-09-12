@@ -112,6 +112,7 @@ export const IDEA_COPY = {
     stale: 'no longer matches; not applied',
     replaced: (from: string, to: string) => `“${from}” → “${to}”`,
     kept: (term: string, context?: string) => (context ? `“${term}” kept, with “(${context})”` : `“${term}” kept as is`),
+    image: (alt: string) => `Image added: “${alt}”`,
     announceApplied: 'Applied.',
     announceUndone: 'Undone.',
     announceDismissed: 'Dismissed.',

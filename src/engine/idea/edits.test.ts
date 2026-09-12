@@ -1,4 +1,4 @@
-import { ideaEditKey, newEdits, parseIdeaEditKey, reduceEdits, sectionsWithEdits } from './edits'
+import { ideaEditKey, imageEditKey, newEdits, parseIdeaEditKey, reduceEdits, sectionsWithEdits } from './edits'
 
 const k = ideaEditKey('s1', 'b2c-blk-3', 1, 'suffers from')
 
@@ -38,4 +38,15 @@ test('the reducer does not mutate its input', () => {
   const before = newEdits()
   reduceEdits(before, { type: 'replace', key: k, replacement: 'has' })
   expect(before.edits.size).toBe(0)
+})
+
+test('an image edit is stored under its own key and undone like any other', () => {
+  const edit = { kind: 'image' as const, placement: { kind: 'insert-after' as const, elementId: 'b2c-blk-2' }, assetName: 'students-abc12345.jpg', width: 800, height: 600, alt: 'Two students at a lab bench', caption: 'Students in a chemistry lab.', attribution: { text: '“Lab” by A, Wikimedia Commons, CC BY 4.0', sourcePageUrl: 'https://commons.wikimedia.org/wiki/File:Lab.jpg', licenseName: 'CC BY 4.0', licenseUrl: 'https://creativecommons.org/licenses/by/4.0/', shareAlike: false } }
+  const key = imageEditKey('s1', edit.assetName)
+  expect(parseIdeaEditKey(key)).toEqual({ sectionId: 's1', elementId: 'image', occurrence: 0, original: edit.assetName })
+  let e = reduceEdits(newEdits(), { type: 'image', key, edit })
+  expect(e.edits.get(key)).toEqual(edit)
+  expect([...sectionsWithEdits(e)]).toEqual(['s1'])
+  e = reduceEdits(e, { type: 'undo', key })
+  expect(e.edits.size).toBe(0)
 })

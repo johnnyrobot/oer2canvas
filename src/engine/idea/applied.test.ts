@@ -1,5 +1,5 @@
 import { appliedEdits } from './applied'
-import { ideaEditKey, newEdits, reduceEdits } from './edits'
+import { ideaEditKey, imageEditKey, newEdits, reduceEdits, type ImageEdit } from './edits'
 
 const sections = [
   { id: 's1', title: 'Nutrients', html: '<p id="a">He has asthma and is a chairman.</p>' },
@@ -32,4 +32,15 @@ test('an edit whose text is gone is stale and falls back to 7.6', () => {
   const k = ideaEditKey('s1', 'a', 0, 'gone')
   const e = reduceEdits(newEdits(), { type: 'replace', key: k, replacement: 'x' })
   expect(appliedEdits(sections, e)[0]).toMatchObject({ stale: true, category: '7.6', sectionTitle: 'Nutrients' })
+})
+
+test('an image edit is present while its figure is in the bytes, and files under 7.1', () => {
+  const image: ImageEdit = {
+    kind: 'image', placement: { kind: 'insert-after', elementId: 'a' }, assetName: 'lab-abc12345.jpg', width: 1, height: 1, alt: 'A lab.', caption: '',
+    attribution: { text: '“Lab”, Wikimedia Commons, CC0', sourcePageUrl: 's', licenseName: 'CC0', shareAlike: false },
+  }
+  const e = reduceEdits(newEdits(), { type: 'image', key: imageEditKey('s1', image.assetName), edit: image })
+  expect(appliedEdits(sections, e)[0]).toMatchObject({ stale: true, category: '7.1', sectionTitle: 'Nutrients' })
+  const placed = [{ ...sections[0]!, html: '<p id="a">x</p><div class="b2c-figure" id="b2c-idea-img-lab-abc12345"><img src="y" alt="A lab."></div>' }]
+  expect(appliedEdits(placed, e)[0]!.stale).toBe(false)
 })

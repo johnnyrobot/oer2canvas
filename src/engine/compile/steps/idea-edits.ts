@@ -10,9 +10,15 @@
  * Runs AFTER `appendAttribution`, because the change sentence CC BY asks for
  * ("indicate if changes were made") belongs in the attribution block, and this
  * is the only step that knows whether a change was made.
+ *
+ * Image edits (slice 5) were placed by `insertIdeaImages` earlier; here they
+ * get their line in the Source-and-license block — TASL with the licence as
+ * a link, once per asset, and the share-alike sentence where CC BY-SA asks
+ * for it. Only an image whose figure is actually in the document is credited:
+ * a credit for an image that could not be placed would be a lie.
  */
 import type { Step } from './index'
-import { parseIdeaEditKey } from '../../idea/edits'
+import { ideaFigureId, parseIdeaEditKey, type ImageEdit } from '../../idea/edits'
 import { findOccurrence, preserveCase, replaceAt } from '../../idea/text'
 
 export const IDEA_CHANGE_NOTE = 'Modified from the original: wording updated for inclusive language.'
@@ -23,9 +29,11 @@ export const applyIdeaEdits: Step = (doc, ctx, sink) => {
 
   let applied = 0
   let stale = 0
+  const images: ImageEdit[] = []
   for (const [key, edit] of edits) {
     const { sectionId, elementId, occurrence, original } = parseIdeaEditKey(key)
     if (sectionId !== ctx.sectionId) continue
+    if (edit.kind === 'image') { images.push(edit); continue }
     if (edit.kind === 'keep' && edit.context === undefined) continue
 
     const el = doc.getElementById(elementId)
@@ -42,8 +50,15 @@ export const applyIdeaEdits: Step = (doc, ctx, sink) => {
     applied += 1
   }
 
+  const block = doc.body.querySelector('.b2c-attribution')
+  for (const edit of images) {
+    if (!block || !doc.getElementById(ideaFigureId(edit))) continue
+    if (block.querySelector(`.b2c-idea-image-credit[data-asset="${CSS.escape(edit.assetName)}"]`)) { applied += 1; continue }
+    block.appendChild(imageCredit(doc, edit))
+    applied += 1
+  }
+
   if (applied > 0) {
-    const block = doc.body.querySelector('.b2c-attribution')
     if (block && !block.querySelector('.b2c-idea-change')) {
       const p = doc.createElement('p')
       p.className = 'b2c-idea-change'
@@ -56,4 +71,30 @@ export const applyIdeaEdits: Step = (doc, ctx, sink) => {
     // Singular-shaped on purpose; the count field carries the number.
     sink.note('idea-edits', `${stale} inclusive-language edit no longer matched and was not applied`, stale)
   }
+}
+
+/** "Additional image: Title by Author, Source, <a>Licence</a> (source)." plus the share-alike sentence. */
+function imageCredit(doc: Document, edit: ImageEdit): HTMLParagraphElement {
+  const { attribution } = edit
+  const p = doc.createElement('p')
+  p.className = 'b2c-idea-image-credit'
+  p.setAttribute('data-asset', edit.assetName)
+  // The TASL text ends in ", <licence>"; the licence is emitted once, as a link.
+  p.append(doc.createTextNode(`Additional image: ${attribution.text.replace(/, [^,]+$/, '')}, `))
+  if (attribution.licenseUrl) {
+    const a = doc.createElement('a')
+    a.setAttribute('href', attribution.licenseUrl)
+    a.textContent = attribution.licenseName
+    p.append(a)
+  } else {
+    p.append(doc.createTextNode(attribution.licenseName))
+  }
+  const src = doc.createElement('a')
+  src.setAttribute('href', attribution.sourcePageUrl)
+  src.textContent = 'source'
+  p.append(doc.createTextNode(' ('), src, doc.createTextNode(').'))
+  if (attribution.shareAlike) {
+    p.append(doc.createTextNode(' This image is licensed share-alike; adaptations of it must carry the same licence.'))
+  }
+  return p
 }
