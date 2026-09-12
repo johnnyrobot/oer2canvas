@@ -86,6 +86,8 @@ export const IDEA_COPY = {
     useSuggestion: 'Use this wording',
     draft: 'draft',
     rule: 'rule',
+    failed: (categoryId: string, sectionTitle: string) => `${categoryId} couldn’t be checked on ${sectionTitle}`,
+    failedDetail: 'Error',
   },
   applied: {
     heading: 'Applied',

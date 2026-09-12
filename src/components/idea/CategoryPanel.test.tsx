@@ -157,3 +157,13 @@ test('7.7 shows an Inventory zone with a row count', () => {
   expect(screen.getByRole('button', { name: /7\.7 .*1 item/ })).toBeInTheDocument()
   expect(screen.getByRole('group', { name: 'Inventory' })).toBeInTheDocument()
 })
+
+test('a category a rule could not check on a section says so, with the error in a collapsed detail', () => {
+  render(
+    <CategoryPanel category={categoryById('7.6')} review={newReview().categories['7.6']} open onToggle={vi.fn()} onEvent={vi.fn()}
+      findings={[]} applied={[]} sectionTitleOf={() => 'S1'} failures={[{ sectionTitle: 'S1', message: 'regex blew up' }]} />,
+  )
+  expect(screen.getByText('7.6 couldn’t be checked on S1')).toBeInTheDocument()
+  const detail = screen.getByText('regex blew up').closest('details')!
+  expect(detail).not.toHaveAttribute('open')
+})

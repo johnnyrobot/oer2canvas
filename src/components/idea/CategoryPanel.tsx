@@ -53,7 +53,7 @@ function countLine(id: CategoryId, found: readonly IdeaFinding[]): string | unde
 }
 
 export function CategoryPanel({
-  category, review, open, onToggle, onEvent, findings, applied, sectionTitleOf, onEditEvent, onFocusFinding,
+  category, review, open, onToggle, onEvent, findings, applied, sectionTitleOf, onEditEvent, onFocusFinding, failures,
 }: {
   category: IdeaCategory
   review: CategoryReview
@@ -65,6 +65,8 @@ export function CategoryPanel({
   sectionTitleOf?: (sectionId: string) => string
   onEditEvent?: (event: IdeaEditsEvent) => void
   onFocusFinding?: (target: { sectionId: string; elementId: string } | undefined) => void
+  /** Sections this category's rule check threw on (spec §7.1). */
+  failures?: readonly { sectionTitle: string; message: string }[]
 }) {
   const bodyId = useId()
   const rated = category.rows.filter((r) => review.ratings.has(r.id)).length
@@ -121,6 +123,15 @@ export function CategoryPanel({
               {zone.guidance && (
                 <p className="mb-2 text-sm text-neutral-700 dark:text-neutral-300">{zone.guidance}</p>
               )}
+              {(failures ?? []).map((f, i) => (
+                <div key={i} className="mb-2 text-sm">
+                  <p className="m-0">{IDEA_COPY.findings.failed(category.id, f.sectionTitle)}</p>
+                  <details>
+                    <summary className="cursor-pointer text-neutral-700 dark:text-neutral-300">{IDEA_COPY.findings.failedDetail}</summary>
+                    <pre className="m-0 whitespace-pre-wrap text-xs">{f.message}</pre>
+                  </details>
+                </div>
+              ))}
               {listed.length === 0
                 ? <p className="m-0 text-sm text-neutral-700 dark:text-neutral-300">{zone.none}</p>
                 : (

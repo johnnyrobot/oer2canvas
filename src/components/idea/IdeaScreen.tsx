@@ -23,7 +23,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Download, Trash2 } from 'lucide-react'
 import type { CompiledChapter } from '../../contracts/index'
-import { findingsByCategory, findingsFor } from '../../engine/idea/findings'
+import { checkSection, findingsByCategory } from '../../engine/idea/findings'
 import { newEdits, parseIdeaEditKey, type IdeaEdits, type IdeaEditsEvent } from '../../engine/idea/edits'
 import { findOccurrence } from '../../engine/idea/text'
 import { IdeaChapterRender } from './IdeaChapterRender'
@@ -102,11 +102,11 @@ export function IdeaScreen({
   const dispatch = (event: IdeaReviewEvent) => onEvent(key, event)
 
   const chapterEdits = edits.get(key) ?? NO_EDITS
-  const findings = useMemo(
-    () => current.sections.flatMap((s) => findingsFor({ id: s.id, html: s.gate?.html ?? s.html }, chapterEdits)),
-    [current, chapterEdits],
-  )
-  const byCategory = findingsByCategory(findings)
+  const checked = useMemo(() => {
+    const results = current.sections.map((s) => checkSection({ id: s.id, html: s.gate?.html ?? s.html }, chapterEdits))
+    return { findings: results.flatMap((r) => r.findings), failures: results.flatMap((r) => r.failures) }
+  }, [current, chapterEdits])
+  const byCategory = findingsByCategory(checked.findings)
   const sectionTitleOf = (id: string) => current.sections.find((s) => s.id === id)?.title ?? ''
   /**
    * Stale = the edit's original is no longer at its key in the CURRENT bytes.
@@ -274,6 +274,9 @@ export function IdeaScreen({
                 onToggle={() => setOpen((o) => (o === category.id ? o : category.id))}
                 onEvent={dispatch}
                 findings={byCategory.get(category.id) ?? []}
+                failures={checked.failures
+                  .filter((f) => f.category === category.id)
+                  .map((f) => ({ sectionTitle: sectionTitleOf(f.sectionId), message: f.message }))}
                 applied={applied}
                 sectionTitleOf={sectionTitleOf}
                 onEditEvent={editEvent}
