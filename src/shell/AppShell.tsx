@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   BookOpen, Check, CheckCircle2, ClipboardList, Compass, ListChecks,
-  Monitor, Moon, PanelLeft, Settings, Sun, type LucideIcon,
+  Monitor, Moon, PanelLeft, Scale, Settings, Sun, type LucideIcon,
 } from 'lucide-react'
 import {
   PHASE_LABEL, PHASE_ORDER, destinationLabel, phaseAvailability, selectionLabel,
@@ -25,6 +25,7 @@ const PHASE_ICON: Readonly<Record<PhaseId, LucideIcon>> = {
   destination: Compass,
   chapters: BookOpen,
   review: ListChecks,
+  idea: Scale,
   plan: ClipboardList,
   result: CheckCircle2,
 }
@@ -383,6 +384,12 @@ function PhaseButton({
           <Check className="ml-auto hidden size-4 shrink-0 text-brand-700 md:inline dark:text-brand-300" aria-hidden="true" />
           <span className="sr-only">done</span>
         </>
+      )}
+      {availability.state === 'available' && availability.detail && (
+        <span className="ml-auto hidden truncate text-xs text-neutral-600 md:inline dark:text-neutral-400">
+          <span className="sr-only">, </span>
+          {availability.detail}
+        </span>
       )}
       {/*
         The reason travels with the control rather than living in a tooltip: it

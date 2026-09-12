@@ -38,3 +38,16 @@ test('screen heading is focusable for navigation handoff', () => {
   renderShell()
   expect(screen.getByRole('heading', { name: 'Destination' })).toHaveAttribute('tabindex', '-1')
 })
+
+test('an available phase with a detail says it beside its name', () => {
+  render(
+    <AppShell
+      active="review"
+      onNavigate={vi.fn()}
+      shell={{ ...EMPTY_SHELL, destination: { kind: 'cartridge' }, selectedCount: 1, preparedCount: 1, ideaRated: 2, ideaTotal: 8 }}
+    >
+      <p>content</p>
+    </AppShell>,
+  )
+  expect(screen.getByRole('button', { name: /IDEA.*2 of 8 rated/ })).not.toHaveAttribute('aria-disabled', 'true')
+})

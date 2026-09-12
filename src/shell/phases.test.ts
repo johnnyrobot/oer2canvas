@@ -72,3 +72,35 @@ test('both chips say something in every state, including empty', () => {
   expect(destinationLabel(CANVAS)).toBe('Intro Algebra')
   expect(destinationLabel({ kind: 'cartridge' })).toBe('Cartridge file')
 })
+
+import { PHASE_ORDER, ideaSummary } from './phases'
+
+test('IDEA sits between Review and Plan', () => {
+  expect(PHASE_ORDER).toEqual(['destination', 'chapters', 'review', 'idea', 'plan', 'result'])
+})
+
+test('IDEA is shut until the selection is prepared, then open, and never done', () => {
+  expect(phaseAvailability(state()).idea).toEqual({ state: 'unavailable', reason: 'select chapters first' })
+  expect(phaseAvailability(state({ destination: CANVAS, selectedCount: 3, preparedCount: 1 })).idea)
+    .toEqual({ state: 'unavailable', reason: 'checks are still running' })
+  expect(phaseAvailability(state({ destination: CANVAS, selectedCount: 3, preparedCount: 3 })).idea)
+    .toEqual({ state: 'available', detail: 'optional' })
+  expect(phaseAvailability(state({ destination: CANVAS, selectedCount: 1, preparedCount: 1, ideaRated: 3, ideaTotal: 8 })).idea)
+    .toEqual({ state: 'available', detail: '3 of 8 rated' })
+  expect(phaseAvailability(state({ destination: CANVAS, selectedCount: 1, preparedCount: 1, ideaRated: 8, ideaTotal: 8, committed: true })).idea)
+    .toEqual({ state: 'available', detail: '8 of 8 rated' })
+})
+
+// The spec's whole stance: IDEA is reflective, the accessibility queue is the
+// legal gate. Plan reads nothing IDEA-shaped.
+test('Plan ignores the IDEA review entirely', () => {
+  const base = { destination: CANVAS, selectedCount: 2, preparedCount: 2 }
+  expect(phaseAvailability(state({ ...base, ideaRated: 0, ideaTotal: 16 })).plan).toEqual({ state: 'available' })
+  expect(phaseAvailability(state({ ...base, ideaRated: 16, ideaTotal: 16 })).plan).toEqual({ state: 'available' })
+})
+
+test('the IDEA summary reads optional until something is rated', () => {
+  expect(ideaSummary(0, 8)).toBe('optional')
+  expect(ideaSummary(0, 0)).toBe('optional')
+  expect(ideaSummary(1, 8)).toBe('1 of 8 rated')
+})
