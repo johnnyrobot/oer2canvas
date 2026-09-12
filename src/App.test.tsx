@@ -457,6 +457,35 @@ describe('the queue screen’s arrival and departure', () => {
     ).toBeInTheDocument()
     expect(container.textContent).not.toMatch(/fixed/i)
   })
+
+  it('reports the answered, regrouped chapters once the queue settles', () => {
+    const empty = section('s1', [])
+    const onSettled = vi.fn()
+    render(
+      <QueueScreen initial={chapterOf([empty])} incoming={[empty]} compiling={undefined} chapters={[chapterOf([empty])]} onSettled={onSettled} />,
+    )
+    // Reported on mount and again when the arrival effect finalises the
+    // session — the same chapters both times, so the consumer reads the last.
+    expect(onSettled).toHaveBeenCalled()
+    const settled = onSettled.mock.calls.at(-1)![0] as CompiledChapter[]
+    expect(settled).toHaveLength(1)
+    expect(settled[0]!.sections.map((s) => s.id)).toEqual(['s1'])
+  })
+
+  it('reports the answers map as it changes', () => {
+    const onAnswers = vi.fn()
+    render(
+      <QueueScreen initial={chapterOf([s1])} incoming={[s1]} compiling={undefined} onAnswers={onAnswers} />,
+    )
+    // The first report is the empty map, on mount — a consumer that starts with
+    // its own empty map and only listens for changes would otherwise never
+    // learn that nothing has been answered yet.
+    expect(onAnswers).toHaveBeenCalledWith(new Map())
+    fireEvent.click(screen.getByRole('button', { name: /Confirm decorative/ }))
+    const last = onAnswers.mock.calls.at(-1)![0] as ReadonlyMap<string, unknown>
+    expect(last.size).toBe(1)
+    expect([...last.values()][0]).toEqual({ type: 'decorative' })
+  })
 })
 
 test('the sidebar carries an IDEA phase that is shut before chapters are prepared', () => {

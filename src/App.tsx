@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { SourceBrowser } from './components/SourceBrowser'
 import { ImportPlanEditor, createImportDraft, type ImportDraft } from './components/ImportPlanEditor'
 import { ChapterPicker } from './components/ChapterPicker'
@@ -23,6 +23,7 @@ import {
 import { isPublishable } from './contracts/index'
 import type { CompiledChapter, CompiledSection } from './contracts/index'
 import { mergeQueues } from './engine/compile/index'
+import { queueKeyOf, type QueueAnswer } from './engine/compile/answers'
 // Not decoration: `App.css` is what carries the WCAG 2.2 SC 2.5.8 target sizes
 // that `App.a11y.browser.test.tsx` holds this UI to. See the file's own header.
 import './App.css'
@@ -176,6 +177,8 @@ export function QueueScreen({
   */
   chapters,
   drafting,
+  onAnswers,
+  onSettled,
 }: {
   initial: CompiledChapter
   incoming: readonly CompiledSection[]
@@ -190,8 +193,16 @@ export function QueueScreen({
       signal: AbortSignal,
     ) => Promise<string>
   }
+  /** Every change to the session's answers, including the initial empty map. */
+  onAnswers?: (answers: ReadonlyMap<string, QueueAnswer>) => void
+  /** The regrouped, answered chapters, once nothing is queued and nothing is re-checking. */
+  onSettled?: (chapters: readonly CompiledChapter[]) => void
 }) {
   const { session, answer, skip, revisit, jump, arrived } = useQueueSession(initial)
+
+  useEffect(() => {
+    onAnswers?.(session.answers)
+  }, [session.answers, onAnswers])
 
   /*
     Sections from the FIRST compile, handed over as they land (§3.6).
@@ -217,11 +228,20 @@ export function QueueScreen({
   const clear =
     compiling === undefined && session.compiled.queue.length === 0 && session.dirty.size === 0
 
-  if (clear) {
-    // Regrouped from the SESSION's chapter, never from the originals: an answer
-    // rebuilds the section it touched, so the pre-answer copy is stale and would
-    // put every gate panel beside bytes it no longer describes.
-    const groups = chapters?.length ? regroup(chapters, session.compiled) : [session.compiled]
+  // Regrouped from the SESSION's chapter, never from the originals: an answer
+  // rebuilds the section it touched, so the pre-answer copy is stale and would
+  // put every gate panel beside bytes it no longer describes.
+  const groups = clear
+    ? (chapters?.length ? regroup(chapters, session.compiled) : [session.compiled])
+    : undefined
+  useEffect(() => {
+    if (groups) onSettled?.(groups)
+    // `groups` is a fresh array each render; keying on `clear` and the session's
+    // compiled identity is what makes this fire once per settle, not per render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clear, session.compiled, onSettled])
+
+  if (clear && groups) {
     return (
       <>
         {/* §3.4's announcement, said once, on the screen it hands off to. */}
@@ -286,6 +306,12 @@ export default function App() {
   const [selected, setSelected] = useState<readonly ChapterOutline[]>([])
   /** One `CompiledChapter` per prepared chapter, kept apart so each keeps its identity. */
   const [prepared, setPrepared] = useState<readonly CompiledChapter[]>([])
+  /**
+   * The queue's answers, lifted out of the session so the IDEA phase can
+   * recompile with them and so Plan's count and the export describe the
+   * answered chapter rather than the first compile.
+   */
+  const [answers, setAnswers] = useState<ReadonlyMap<string, QueueAnswer>>(new Map())
   /**
    * One IDEA review per prepared chapter, keyed by `reviewKeyOf`, plus the
    * session's assessor and benchmark, all kept in the same IndexedDB the
@@ -378,11 +404,15 @@ export default function App() {
     setAudited([])
     setCompiling(undefined)
     setPrepared([])
+    setAnswers(new Map())
     setQueue(undefined)
     setCommitted(undefined)
     setPush(undefined)
     setConfirmedImport(undefined)
   }
+
+  const onAnswers = useCallback((next: ReadonlyMap<string, QueueAnswer>) => setAnswers(next), [])
+  const onSettled = useCallback((chapters: readonly CompiledChapter[]) => setPrepared([...chapters]), [])
 
   /** Compile and audit every source through one UI/state lifecycle. */
   async function compileForReview(
@@ -699,11 +729,14 @@ export default function App() {
    * model that can disagree with the work is worse than none, because it is
    * believed.
    */
+  const unansweredCount = partial
+    ? partial.queue.filter((i) => !answers.has(queueKeyOf(i))).length
+    : 0
   const shell: ShellState = {
     destination,
     selectedCount: imported ? 1 : selected.length,
     preparedCount: compiling ? prepared.length : prepared.length,
-    unansweredCount: partial?.queue.length ?? 0,
+    unansweredCount,
     ideaRated: prepared.reduce((n, c) => n + ratedCount(ideaReviews.reviewFor(reviewKeyOf(c.chapter))), 0),
     ideaTotal: prepared.length * IDEA_CATEGORY_IDS.length,
     committed: committed !== undefined,
@@ -818,6 +851,8 @@ export default function App() {
           compiling={compiling}
           chapters={prepared}
           drafting={localVlmDrafting}
+          onAnswers={onAnswers}
+          onSettled={onSettled}
         />
       )}
       {/*
@@ -858,7 +893,7 @@ export default function App() {
         <PlanScreen
           destination={destination}
           chapters={prepared}
-          unansweredCount={partial?.queue.length ?? 0}
+          unansweredCount={unansweredCount}
           {...(prepared.length > 0 ? { ideaSummary: ideaSummary(shell.ideaRated, shell.ideaTotal) } : {})}
           {...(confirmedImport ? {
             assetCount: confirmedImport.work.assets.length,
