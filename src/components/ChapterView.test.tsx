@@ -120,4 +120,15 @@ describe('ChapterView', () => {
     )
     expect(screen.getByText('2 item(s) need review before this chapter can be published.')).toBeInTheDocument()
   })
+
+  // The IDEA screen shows the chapter so the instructor can read what they are
+  // rating. The accessibility verdicts belong to Review and would be noise
+  // there — but the body must be the SAME gated bytes, never `s.html`.
+  it('with audit off, renders the gated body and no accessibility panel', () => {
+    render(<ChapterView compiled={compiledWith(gate('<p>gated</p>'), [{} as CompiledChapter['queue'][number]])} audit={false} />)
+    expect(screen.getByText('gated')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Accessibility' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/need review before/)).not.toBeInTheDocument()
+    expect(screen.queryByText('compiled but unaudited')).not.toBeInTheDocument()
+  })
 })
