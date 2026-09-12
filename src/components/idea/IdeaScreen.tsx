@@ -303,9 +303,9 @@ export function IdeaScreen({
   }
 
   return (
-    // Two columns wide by design, so it takes the width `main` gives it, up to
-    // a ceiling that keeps the chapter render at a readable measure.
-    <div className="mx-auto flex w-full max-w-[100rem] flex-col gap-4">
+    // Two columns wide by design, so it takes the full width `main` gives it:
+    // the rubric on one side and the chapter on the other both want the room.
+    <div className="flex w-full flex-col gap-4">
       <p className="m-0 text-sm text-neutral-700 dark:text-neutral-300">{IDEA_COPY.intro}</p>
 
       <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2 lg:items-start">
