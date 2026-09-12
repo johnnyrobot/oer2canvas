@@ -97,3 +97,22 @@ export function isQuotation(el: Element): boolean {
   if (el.closest('blockquote, q, cite')) return true
   return CITATION.test(el.textContent ?? '')
 }
+
+/**
+ * The block's text strictly before `offset` in `node` — every earlier text
+ * node plus this node's prefix.
+ *
+ * `findOccurrence` counts node by node and never spans two, while this
+ * concatenates earlier nodes, so a phrase straddling two EARLIER nodes is
+ * counted here and not there. The phrase itself would have to contain an
+ * inline boundary, and the only effect is that the edit later fails to match
+ * and is dropped with a note — the fail-safe branch, never a wrong replacement.
+ */
+export function textBefore(el: Element, node: Text, offset: number): string {
+  let s = ''
+  for (const t of textNodesOf(el)) {
+    if (t === node) return s + t.data.slice(0, offset)
+    s += t.data
+  }
+  return s
+}

@@ -12,8 +12,11 @@
 import type { CategoryId } from './framework'
 import type { Finder, IdeaFinding } from './findings'
 import { ideaEditKey } from './edits'
-import { blockElements, countOccurrences, isQuotation, textNodesOf } from './text'
+import { blockElements, countOccurrences, isQuotation, textBefore, textNodesOf } from './text'
 import data from './data/idea-terms.json'
+
+/** Lived here in slice 2; now in `text.ts` beside its siblings. Re-exported so both imports work. */
+export { textBefore } from './text'
 
 interface TermRule {
   id: string
@@ -81,21 +84,3 @@ export const findTerms: Finder = (sectionId, html) => {
   return out
 }
 
-/**
- * The block's text strictly before `offset` in `node` — every earlier text
- * node plus this node's prefix.
- *
- * `findOccurrence` counts node by node and never spans two, while this
- * concatenates earlier nodes, so a phrase straddling two EARLIER nodes is
- * counted here and not there. The phrase itself would have to contain an
- * inline boundary, and the only effect is that the edit later fails to match
- * and is dropped with a note — the fail-safe branch, never a wrong replacement.
- */
-export function textBefore(el: Element, node: Text, offset: number): string {
-  let s = ''
-  for (const t of textNodesOf(el)) {
-    if (t === node) return s + t.data.slice(0, offset)
-    s += t.data
-  }
-  return s
-}
