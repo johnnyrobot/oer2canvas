@@ -113,6 +113,43 @@ export const IDEA_COPY = {
   render: {
     pending: 'Re-checking this section…',
   },
+  llm: {
+    legend: 'Model provider (optional)',
+    intro: 'Bring your own API key to draft suggestions for the categories a rule cannot check. Drafts are never applied on their own.',
+    provider: 'Provider',
+    key: 'API key',
+    model: 'Model',
+    save: 'Save on this device',
+    forget: 'Forget key',
+    showKey: 'Show key',
+    hideKey: 'Hide key',
+    stored: 'Your key is stored in this browser on this device (not on any server) and stays until you choose Forget key. On a shared computer, forget it when you are done. Forget all IDEA reviews does not remove it.',
+    notOffered: (label: string) => `${label} cannot be called from a browser directly, so it is not offered here.`,
+    evidence: 'measured',
+    terms: (label: string) => `${label} terms`,
+    none: 'No provider set. Add a key above to draft suggestions for this category, or use the checklist.',
+    heading: 'Ask the model',
+    send: (label: string) => `Send this section to ${label}`,
+    sending: (label: string) => `Waiting for ${label}…`,
+    cancel: 'Cancel',
+    sends: 'What leaves your browser when you press the button: this section’s text and its image descriptions (for 7.1, only the image descriptions). Nothing is sent until you press it.',
+    draftLabel: 'Drafts',
+    error: {
+      'bad-key': 'The provider rejected this key. Check it in the settings above.',
+      'model-not-found': 'The provider does not know this model name. Check it in the settings above.',
+      'rate-limited': 'The provider is rate-limiting this key.',
+      unreachable: 'The provider could not be reached from this browser.',
+      timeout: 'The provider did not answer in time.',
+      aborted: 'Cancelled.',
+    } as const,
+    rubricDraft: {
+      button: (label: string) => `Draft a Rubric 1 review with ${label}`,
+      column: 'Model draft',
+      noDraft: 'no draft',
+      useNote: 'Use this note',
+      cannotCopy: 'A draft rating is shown for comparison only; choose your own rating.',
+    },
+  },
 } as const
 
 export const RATING_COPY: Readonly<Record<Rating, string>> = {
