@@ -5,6 +5,7 @@ import { newHeader, newReview, reduceReview } from '../../engine/idea/review'
 import type { KeyValueStore } from '../../canvas/credentials'
 import type { Chapter } from '../../sources/types'
 import { ideaEditKey, newEdits, reduceEdits } from '../../engine/idea/edits'
+import type { ImportedAsset } from '../../import/types'
 
 const chapter = (title: string): Chapter => ({
   source: 'openstax',
@@ -144,4 +145,31 @@ test('a saved edit is restored on mount', async () => {
   const { result } = renderHook(() => useIdeaReviews(store))
   await waitFor(() => expect(result.current.loaded).toBe(true))
   expect(result.current.edits.get('ch1')?.edits.get(k)).toEqual({ kind: 'replace', replacement: 'wild' })
+})
+
+const asset: ImportedAsset = {
+  id: 'idea-abc', mediaType: 'image/png', extension: 'png', bytes: new Uint8Array([137, 80, 78, 71]), sha256: 'abc', originPart: 'idea/commons/File:Dot.png', name: 'dot-abc12345.png',
+}
+
+test('an added asset is kept per chapter, saved with the document, restored, and forgotten with it', async () => {
+  const { map, store } = memoryStore()
+  const { result } = renderHook(() => useIdeaReviews(store))
+  await waitFor(() => expect(result.current.loaded).toBe(true))
+  expect(result.current.assetsFor('ch1')).toEqual([])
+  act(() => result.current.addAsset('ch1', asset))
+  expect(result.current.assetsFor('ch1')).toEqual([asset])
+  await waitFor(() => expect(map.has(IDEA_STORAGE_KEY)).toBe(true), { timeout: SAVE_DELAY_MS * 5 })
+  expect(restore(map.get(IDEA_STORAGE_KEY))!.assets.get('ch1')).toEqual([asset])
+  const again = renderHook(() => useIdeaReviews(store))
+  await waitFor(() => expect(again.result.current.assetsFor('ch1')).toEqual([asset]))
+  act(() => again.result.current.forgetAll())
+  expect(again.result.current.assetsFor('ch1')).toEqual([])
+})
+
+test('adding an asset with a name already present replaces it rather than duplicating', () => {
+  const { result } = renderHook(() => useIdeaReviews())
+  act(() => result.current.addAsset('ch1', asset))
+  act(() => result.current.addAsset('ch1', { ...asset, sha256: 'def' }))
+  expect(result.current.assetsFor('ch1')).toHaveLength(1)
+  expect(result.current.assetsFor('ch1')[0]!.sha256).toBe('def')
 })

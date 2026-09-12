@@ -19,12 +19,20 @@
  *
  * Export is two plain buttons, not a menu: a `role="menu"` owes arrow-key and
  * Escape handling it would not get here, and two buttons need neither.
+ *
+ * Slice 5: the image search opens under 7.1 and the placement dialog under
+ * it. The screen builds the placement options from the section the finding
+ * came from (or the first section, from the Find button) and hands the
+ * choice to App's `onAddImage`; the fetch, the asset, and the edit are
+ * App's, because the chapter's asset list is.
  */
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Download, Trash2 } from 'lucide-react'
 import type { CompiledChapter } from '../../contracts/index'
 import { checkSection, findingsByCategory, type FindingTarget } from '../../engine/idea/findings'
-import { newEdits, type IdeaEdits, type IdeaEditsEvent } from '../../engine/idea/edits'
+import { newEdits, type IdeaEdits, type IdeaEditsEvent, type ImagePlacement } from '../../engine/idea/edits'
+import type { ImageHit, ImageSearch as ImageSearchPort } from '../../engine/idea/images/search'
+import { blockElements } from '../../engine/idea/text'
 import { appliedEdits } from '../../engine/idea/applied'
 import { IdeaChapterRender } from './IdeaChapterRender'
 import {
@@ -42,8 +50,12 @@ import type { RubricDraft } from '../../engine/idea/llm/parse'
 import type { IdeaFinding } from '../../engine/idea/findings'
 import { CategoryPanel } from './CategoryPanel'
 import { LlmSettingsPanel } from './LlmSettingsPanel'
+import { ImageSearch } from './ImageSearch'
+import { PlaceImageDialog, type PlacementOption } from './PlaceImageDialog'
+import type { AddImageRequest } from './useAddImage'
 import { rubricRunKey, runKey, type RunState } from './useModelRuns'
 import { IDEA_COPY } from './copy'
+import { categoryById } from '../../engine/idea/framework'
 import { reviewKeyOf } from './useIdeaReviews'
 
 const TARGET = 'min-h-9 min-w-9'
@@ -94,8 +106,21 @@ function categoryRunState(states: readonly RunState[]): RunState {
   return IDLE
 }
 
+/**
+ * Slice 5: adding an image, owned by App (`useAddImage`) because the bytes
+ * land in the chapter's asset list, which App owns.
+ */
+export interface IdeaImageProps {
+  /** Resolves true when the image was added; false when `error` says why not. */
+  add: (request: AddImageRequest) => Promise<boolean>
+  busy: boolean
+  error: string
+  /** Test seam; production uses the search hook's default providers. */
+  providers?: readonly ImageSearchPort[]
+}
+
 export function IdeaScreen({
-  chapters, reviews, header, onEvent, onHeaderEvent, onForget, onExport, edits, onEditEvent, pending, llm,
+  chapters, reviews, header, onEvent, onHeaderEvent, onForget, onExport, edits, onEditEvent, pending, llm, image,
 }: {
   chapters: readonly CompiledChapter[]
   reviews: ReadonlyMap<string, IdeaReview>
@@ -111,6 +136,7 @@ export function IdeaScreen({
   /** Section ids whose recompile is in flight; the render says so for them. */
   pending: ReadonlySet<string>
   llm: IdeaLlmProps
+  image: IdeaImageProps
 }) {
   const ids = useId()
   const [index, setIndex] = useState(0)
@@ -123,6 +149,10 @@ export function IdeaScreen({
   // only a finite number is dispatched, and blur restores the stored value.
   const [benchText, setBenchText] = useState(String(header.benchmark.bipocPercent))
   const forgetButton = useRef<HTMLButtonElement>(null)
+  /** The image search under 7.1, seeded from the row or the button that opened it. */
+  const [imageSearch, setImageSearch] = useState<{ query: string; sectionId: string } | undefined>()
+  /** The hit whose placement is being decided. */
+  const [placing, setPlacing] = useState<ImageHit | undefined>()
 
   useEffect(() => {
     setBenchText(String(header.benchmark.bipocPercent))
@@ -209,6 +239,42 @@ export function IdeaScreen({
   const editEvent = (event: IdeaEditsEvent) => {
     onEditEvent(key, event)
     setStatus(ANNOUNCE[event.type])
+  }
+
+  /**
+   * Where an image can go in the section the search was opened for: in place
+   * of any image already there, or after any block. Labels are the row's
+   * caption or alt and the block's first words — what the render shows.
+   */
+  const placementOptions = (sectionId: string): PlacementOption[] => {
+    const section = current.sections.find((s) => s.id === sectionId) ?? current.sections[0]
+    if (!section) return []
+    const html = section.gate?.html ?? section.html
+    const replace = imageInventory(section.id, html).map((row): PlacementOption => ({
+      placement: { kind: 'replace', elementId: row.elementId },
+      label: IDEA_COPY.placeImage.replace(row.caption || row.alt || row.src.split('/').pop() || row.elementId),
+    }))
+    const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html')
+    const after = blockElements(doc.body).flatMap((el): PlacementOption[] => {
+      const id = el.getAttribute('id')
+      const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim()
+      if (!id || !text) return []
+      return [{ placement: { kind: 'insert-after', elementId: id }, label: IDEA_COPY.placeImage.after(text.length > 50 ? `${text.slice(0, 50)}…` : text) }]
+    })
+    return [...replace, ...after]
+  }
+  const openImageSearch = (query: string, sectionId?: string) => {
+    setPlacing(undefined)
+    setImageSearch({ query, sectionId: sectionId ?? current.sections[0]?.id ?? '' })
+  }
+  const placeImage = async (choice: { placement: ImagePlacement; alt: string; caption: string }) => {
+    if (!placing || !imageSearch) return
+    const added = await image.add({ chapterKey: key, sectionId: imageSearch.sectionId, hit: placing, ...choice })
+    if (added) {
+      setPlacing(undefined)
+      setImageSearch(undefined)
+      setStatus(IDEA_COPY.placeImage.announceAdded)
+    }
   }
 
   const exportAs = (format: 'md' | 'json') => {
@@ -379,9 +445,34 @@ export function IdeaScreen({
                 onFocusFinding={setFocus}
                 {...(isDraftable(category.id) ? askModelFor(category.id) : {})}
                 {...(rubricDraft?.areas.find((a) => a.id === category.id) ? { rubricDraft: rubricDraft.areas.find((a) => a.id === category.id)! } : {})}
+                {...(category.id === '7.1'
+                  ? { onFindImage: (query: string) => openImageSearch(query, byCategory.get('7.1')?.find((f) => f.kind === 'observation' && f.columns.description === query)?.sectionId) }
+                  : {})}
               />
             ))}
           </div>
+
+          {imageSearch && open === '7.1' && (
+            <ImageSearch
+              key={`${key}:${imageSearch.query}`}
+              initialQuery={imageSearch.query}
+              onChoose={setPlacing}
+              onClose={() => { setImageSearch(undefined); setPlacing(undefined) }}
+              sources={categoryById('7.1').resources}
+              {...(image.providers ? { providers: image.providers } : {})}
+            />
+          )}
+          {imageSearch && placing && open === '7.1' && (
+            <PlaceImageDialog
+              key={`${placing.provider}:${placing.id}`}
+              hit={placing}
+              options={placementOptions(imageSearch.sectionId)}
+              onUse={(choice) => { void placeImage(choice) }}
+              onCancel={() => setPlacing(undefined)}
+              busy={image.busy}
+              error={image.error}
+            />
+          )}
 
           <fieldset className={`${CARD} m-0`}>
             <legend className="text-sm font-semibold">{IDEA_COPY.chapterLevel.legend}</legend>

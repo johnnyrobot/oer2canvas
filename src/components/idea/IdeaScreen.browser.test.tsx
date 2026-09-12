@@ -4,6 +4,7 @@ import { IdeaScreen } from './IdeaScreen'
 import { newHeader } from '../../engine/idea/review'
 import type { CompiledChapter, CompiledSection } from '../../contracts/index'
 import type { Chapter } from '../../sources/types'
+import type { ImageHit, ImageSearch } from '../../engine/idea/images/search'
 // Both, in the app's own order: the theme carries Tailwind (the utilities that
 // size the radio labels), App.css the floor beneath it.
 import '../../styles/theme.css'
@@ -38,10 +39,17 @@ const compiled: CompiledChapter = {
   sections: [{ id: 's1', title: 'Nutrients', html: '<p>x</p>', notes: [], queue: [], gate: GATE }],
   queue: [],
 }
+const hit: ImageHit = {
+  provider: 'commons', id: 'File:A.jpg', title: 'Students', thumbUrl: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=', fullUrl: 'https://f/a',
+  width: 4, height: 3, license: { kind: 'by-sa', name: 'CC BY-SA 4.0', url: 'u' }, creator: 'Jane', sourcePageUrl: 'https://s/a',
+}
+const commons: ImageSearch = { id: 'commons', label: 'Wikimedia Commons', offered: true, evidence: 'e', search: async () => [hit] }
+
 const props = {
   reviews: new Map(), header: newHeader(), onEvent: () => {}, onHeaderEvent: () => {}, onForget: () => {}, onExport: () => 'x.md',
   edits: new Map(), pending: new Set<string>(), onEditEvent: () => {},
   llm: { settings: undefined, onSave: () => {}, onForget: () => {}, runs: new Map(), rubricDrafts: new Map(), runCategory: () => {}, runRubric: () => {}, cancel: () => {} },
+  image: { add: async () => true, busy: false, error: '' },
 }
 
 async function violationsIn(container: Element): Promise<string[]> {
@@ -63,6 +71,17 @@ test('the IDEA screen has no WCAG A/AA violations and no duplicate ids, with a p
   expect(await violationsIn(container)).toEqual([])
   fireEvent.click(screen.getByRole('button', { name: /^7\.6 / }))
   fireEvent.click(screen.getByRole('button', { name: 'Forget all IDEA reviews' }))
+  expect(duplicateIds(container)).toEqual([])
+  expect(await violationsIn(container)).toEqual([])
+})
+
+test('the image search region and the placement dialog have no WCAG A/AA violations', async () => {
+  const { container } = render(<IdeaScreen chapters={[compiled]} {...props} image={{ ...props.image, providers: [commons] }} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Find an openly licensed photo' }))
+  fireEvent.change(screen.getByRole('textbox', { name: 'Search for' }), { target: { value: 'students' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+  fireEvent.click(await screen.findByRole('button', { name: /Use this image/ }))
+  expect(screen.getByRole('dialog', { name: 'Place this image' })).toBeInTheDocument()
   expect(duplicateIds(container)).toEqual([])
   expect(await violationsIn(container)).toEqual([])
 })

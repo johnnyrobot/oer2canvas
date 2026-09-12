@@ -29,10 +29,16 @@
  * is session-only and is dropped by `toPersisted`; an edit is the instructor's
  * decision about the published bytes and survives a reload for the same
  * reason a rating does.
+ *
+ * Assets (slice 5) ride along too, by chapter key: an image edit is only a
+ * reference to packaged bytes, and a reload that restored the reference
+ * without the bytes would restore a figure that cannot ship. `forgetAll`
+ * removes them with everything else.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { KeyValueStore } from '../../canvas/credentials'
 import type { Chapter } from '../../sources/types'
+import type { ImportedAsset } from '../../import/types'
 import {
   newHeader, newReview, reduceHeader, reduceReview,
   type IdeaHeader, type IdeaHeaderEvent, type IdeaReview, type IdeaReviewEvent,
@@ -55,9 +61,10 @@ interface State {
   header: IdeaHeader
   reviews: ReadonlyMap<string, IdeaReview>
   edits: ReadonlyMap<string, IdeaEdits>
+  assets: ReadonlyMap<string, readonly ImportedAsset[]>
 }
 
-const empty = (): State => ({ header: newHeader(), reviews: new Map(), edits: new Map() })
+const empty = (): State => ({ header: newHeader(), reviews: new Map(), edits: new Map(), assets: new Map() })
 
 export function useIdeaReviews(store?: KeyValueStore) {
   const [state, setState] = useState<State>(empty)
@@ -81,6 +88,7 @@ export function useIdeaReviews(store?: KeyValueStore) {
                 header: s.header,
                 reviews: new Map([...found.reviews, ...s.reviews]),
                 edits: new Map([...found.edits, ...s.edits]),
+                assets: new Map([...found.assets, ...s.assets]),
               }
             : found))
         }
@@ -94,7 +102,7 @@ export function useIdeaReviews(store?: KeyValueStore) {
     if (!store || !loaded || !dirty.current) return
     const timer = setTimeout(() => {
       dirty.current = false
-      void store.set(IDEA_STORAGE_KEY, toPersisted(state.header, state.reviews, state.edits)).catch(() => {})
+      void store.set(IDEA_STORAGE_KEY, toPersisted(state.header, state.reviews, state.edits, state.assets)).catch(() => {})
     }, SAVE_DELAY_MS)
     return () => clearTimeout(timer)
   }, [store, loaded, state])
@@ -121,6 +129,18 @@ export function useIdeaReviews(store?: KeyValueStore) {
     })
   }, [])
 
+  const assetsFor = useCallback((key: string) => state.assets.get(key) ?? [], [state.assets])
+
+  /** Same name means same content (`prepareAssets` names by hash), so a repeat replaces rather than duplicates. */
+  const addAsset = useCallback((key: string, asset: ImportedAsset) => {
+    dirty.current = true
+    setState((s) => {
+      const assets = new Map(s.assets)
+      assets.set(key, [...(s.assets.get(key) ?? []).filter((a) => a.name !== asset.name), asset])
+      return { ...s, assets }
+    })
+  }, [])
+
   const dispatchHeader = useCallback((event: IdeaHeaderEvent) => {
     dirty.current = true
     setState((s) => ({ ...s, header: reduceHeader(s.header, event) }))
@@ -135,5 +155,6 @@ export function useIdeaReviews(store?: KeyValueStore) {
   return {
     header: state.header, reviews: state.reviews, loaded, reviewFor, dispatch, dispatchHeader, forgetAll,
     edits: state.edits, editsFor, dispatchEdit,
+    assets: state.assets, assetsFor, addAsset,
   }
 }

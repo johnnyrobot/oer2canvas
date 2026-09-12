@@ -31,6 +31,9 @@ const compiled = (title: string): CompiledChapter => ({
   chapter: chapter(title), sections: [section(`${title}-s1`, 'Nutrients')], queue: [],
 })
 
+/** Slice 5's stub: adding never happens here; the hook has its own tests. */
+const imageStub = { add: vi.fn(async () => true), busy: false, error: '' }
+
 /** Slice 4's stub: no provider, nothing runs. Slice 5 reuses it. */
 const llmStub = {
   settings: undefined, onSave: () => {}, onForget: () => {}, runs: new Map(), rubricDrafts: new Map(),
@@ -49,7 +52,7 @@ function renderScreen({
   render(
     <IdeaScreen
       chapters={chapters} reviews={reviews} header={header} onEvent={onEvent} onHeaderEvent={onHeaderEvent} onForget={onForget} onExport={onExport}
-      edits={new Map()} pending={new Set()} onEditEvent={vi.fn()} llm={llmStub}
+      edits={new Map()} pending={new Set()} onEditEvent={vi.fn()} llm={llmStub} image={imageStub}
     />,
   )
   return { onEvent, onHeaderEvent, onForget, onExport }
@@ -172,6 +175,7 @@ const base = {
   reviews: new Map(), header: newHeader(), onEvent: vi.fn(), onHeaderEvent: vi.fn(), onForget: vi.fn(), onExport: () => 'x',
   edits: new Map<string, IdeaEdits>(), pending: new Set<string>(), onEditEvent: vi.fn(),
   llm: llmStub,
+  image: imageStub,
 }
 
 test('findings are computed from the prepared html and edits suppress them', () => {
@@ -284,4 +288,20 @@ test('a done run’s drafts show under the category, minus ones the edits map al
   rerender(<IdeaScreen {...base} chapters={[c]} llm={llm} edits={edits} />)
   expect(screen.queryByRole('button', { name: 'Replace' })).not.toBeInTheDocument()
   expect(screen.getByText('a gendered title')).toBeInTheDocument()
+})
+
+test('7.1 offers Find an openly licensed photo, which opens the search region; Close removes it', () => {
+  const c = withHtml('4: Nutrition', '<p id="b2c-blk-0">x</p>')
+  render(<IdeaScreen {...base} chapters={[c]} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Find an openly licensed photo' }))
+  expect(screen.getByRole('region', { name: 'Openly licensed images' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Close image search' }))
+  expect(screen.queryByRole('region', { name: 'Openly licensed images' })).not.toBeInTheDocument()
+})
+
+test('an image row offers Find an alternative, seeded with its description', () => {
+  const c = withHtml('4: Nutrition', '<p id="b2c-blk-0">x</p><div class="b2c-figure" id="f1"><img src="a.png" alt="A nurse at a desk"></div>')
+  render(<IdeaScreen {...base} chapters={[c]} />)
+  fireEvent.click(screen.getByRole('button', { name: /Find an alternative/ }))
+  expect(screen.getByRole('textbox', { name: 'Search for' })).toHaveValue('A nurse at a desk')
 })

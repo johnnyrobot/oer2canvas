@@ -24,7 +24,7 @@ import { isPublishable } from './contracts/index'
 import type { CompiledChapter, CompiledSection } from './contracts/index'
 import { mergeQueues } from './engine/compile/index'
 import { queueKeyOf, type QueueAnswer } from './engine/compile/answers'
-import type { IdeaEdit, IdeaEdits } from './engine/idea/edits'
+import type { IdeaEdit, IdeaEdits, ImageEdit } from './engine/idea/edits'
 // Not decoration: `App.css` is what carries the WCAG 2.2 SC 2.5.8 target sizes
 // that `App.a11y.browser.test.tsx` holds this UI to. See the file's own header.
 import './App.css'
@@ -40,7 +40,7 @@ import { runPush } from './shell/push-session'
 import type { PushReport } from './shell/screens'
 import type { Destination, PhaseId, ShellState } from './shell/phases'
 import { mergeSelection, regroup, toggle } from './shell/selection'
-import type { ImportResult } from './import/types'
+import type { ImportResult, ImportedAsset } from './import/types'
 import { toChapter } from './import/to-chapter'
 import { isAbortError, messageOf } from './errors'
 import { IdeaScreen } from './components/idea/IdeaScreen'
@@ -48,6 +48,7 @@ import { reviewKeyOf, useIdeaReviews } from './components/idea/useIdeaReviews'
 import { useIdeaRecompile } from './components/idea/useIdeaRecompile'
 import { useLlmSettings } from './components/idea/useLlmSettings'
 import { useModelRuns } from './components/idea/useModelRuns'
+import { useAddImage } from './components/idea/useAddImage'
 import { createLlmSettingsStore } from './engine/idea/llm/settings'
 import { ratedCount } from './engine/idea/review'
 import { IDEA_CATEGORY_IDS } from './engine/idea/framework'
@@ -374,6 +375,22 @@ export default function App() {
     onRebuilt,
   })
   /**
+   * An image added through IDEA (slice 5). The bytes go to BOTH the live
+   * chapter — for this session's preview and export — and the IDEA document,
+   * so they are there after a reload. The edit follows, and `useIdeaRecompile`
+   * rebuilds the section the way it does for a wording edit.
+   */
+  const { addAsset, dispatchEdit } = ideaReviews
+  const addImage = useAddImage({
+    onAsset: useCallback((chapterKey: string, asset: ImportedAsset) => {
+      addAsset(chapterKey, asset)
+      setPrepared((all) => all.map((c) => (reviewKeyOf(c.chapter) === chapterKey
+        ? { ...c, chapter: { ...c.chapter, assets: [...(c.chapter.assets ?? []).filter((a) => a.name !== asset.name), asset] } }
+        : c)))
+    }, [addAsset]),
+    onEdit: useCallback((chapterKey: string, key: string, edit: ImageEdit) => dispatchEdit(chapterKey, { type: 'image', key, edit }), [dispatchEdit]),
+  })
+  /**
    * The browser import being planned: the parse result plus every edit to its
    * proposed pages and metadata. Owned here rather than by the Content screen so
    * it survives a visit to Review or Plan, and so a changed plan can be
@@ -477,10 +494,19 @@ export default function App() {
     controller: AbortController,
     statusSuffix = '',
   ): Promise<CompiledChapter> {
-    setChapter(ch)
+    // The persisted image edits (below) reference bytes the IDEA document
+    // kept; a re-prepared chapter has to carry them before its first compile
+    // or the packaged reference would point at nothing. A chapter that never
+    // had an IDEA image is untouched: `assets` stays absent for catalog sources.
+    const persisted = ideaReviews.assetsFor(reviewKeyOf(ch))
+    const withAssets: Chapter = persisted.length === 0 ? ch : {
+      ...ch,
+      assets: [...(ch.assets ?? []).filter((a) => !persisted.some((p) => p.name === a.name)), ...persisted],
+    }
+    setChapter(withAssets)
     setCompiling({ section: 1, total: ch.sections.length })
     const { compileAndAuditChapter } = await import('./engine')
-    return compileAndAuditChapter(ch, {
+    return compileAndAuditChapter(withAssets, {
       profile,
       // A re-prepared chapter comes back with its saved IDEA wording already
       // applied and gated in one pass. The IndexedDB read is issued on mount
@@ -967,6 +993,7 @@ export default function App() {
           onEditEvent={ideaReviews.dispatchEdit}
           pending={ideaPending}
           llm={{ settings: llm.settings, onSave: llm.save, onForget: llm.forget, ...modelRuns }}
+          image={addImage}
         />
       )}
 

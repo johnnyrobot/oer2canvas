@@ -9,11 +9,12 @@
  * Slice 2 adds a "What a rule found" zone between the requirement and the
  * checklist; slice 3 puts an "Inventory" zone in the same place for the two
  * categories that list rather than suggest; slice 4 adds "Ask the model" after
- * it. All are zones inside this panel, which is why the panel and not the
- * screen owns the category.
+ * it; slice 5 gives 7.1's inventory two ways into the image search and the
+ * Applied list, since an added image is an edit. All are zones inside this
+ * panel, which is why the panel and not the screen owns the category.
  */
 import { useId } from 'react'
-import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink, ImagePlus } from 'lucide-react'
 import type { CategoryId, IdeaCategory, RubricRow } from '../../engine/idea/framework'
 import { RUBRIC_NA_TEXT } from '../../engine/idea/framework'
 import type { CategoryReview, IdeaReviewEvent, Rating } from '../../engine/idea/review'
@@ -31,6 +32,7 @@ import {
 } from './copy'
 
 const TARGET = 'min-h-9 min-w-9'
+const QUIET = `${TARGET} inline-flex items-center gap-2 rounded-md border border-neutral-300 px-3 text-sm dark:border-neutral-700`
 const PANEL =
   'rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900'
 const CHOICE =
@@ -44,6 +46,7 @@ const RULE_CATEGORIES = new Set<CategoryId>(['7.3', '7.6'])
 const INVENTORY_CATEGORIES = new Set<CategoryId>(['7.1', '7.7'])
 
 const isImageSummary = (f: IdeaFinding) => f.key.endsWith('::summary::7.1')
+const isImageRow = (f: IdeaFinding) => f.rule?.id === 'inventory-image'
 
 /** The header's trailing count: the 7.1 summary line, the 7.7 row count, or the rule categories' suggestion count. */
 function countLine(id: CategoryId, found: readonly IdeaFinding[]): string | undefined {
@@ -59,7 +62,7 @@ function countLine(id: CategoryId, found: readonly IdeaFinding[]): string | unde
 
 export function CategoryPanel({
   category, review, open, onToggle, onEvent, findings, applied, sectionTitleOf, onEditEvent, onFocusFinding, failures,
-  askModel, draftFindings, rubricDraft,
+  askModel, draftFindings, rubricDraft, onFindImage,
 }: {
   category: IdeaCategory
   review: CategoryReview
@@ -79,6 +82,8 @@ export function CategoryPanel({
   draftFindings?: readonly IdeaFinding[]
   /** The model's Rubric 1 draft for this category: per row, beside the human's rating, never copied into it. */
   rubricDraft?: { rows: readonly { id: string; rating: Rating | null }[]; notes: string }
+  /** Slice 5, 7.1 only: open the image search, seeded with a query. */
+  onFindImage?: (initialQuery: string) => void
 }) {
   const bodyId = useId()
   const rated = category.rows.filter((r) => review.ratings.has(r.id)).length
@@ -91,6 +96,7 @@ export function CategoryPanel({
     ? [...found.filter(isImageSummary), ...found.filter((f) => !isImageSummary(f))]
     : found
   const count = countLine(category.id, found)
+  const findImage = category.id === '7.1' ? onFindImage : undefined
   const zone = isInventory
     ? {
         heading: IDEA_COPY.inventory.heading,
@@ -156,11 +162,22 @@ export function CategoryPanel({
                         sectionTitle={sectionTitleOf?.(f.sectionId) ?? ''}
                         onEvent={(e) => onEditEvent?.(e)}
                         onFocus={(t) => onFocusFinding?.(t)}
+                        {...(findImage && isImageRow(f) && f.kind === 'observation'
+                          ? { action: { label: IDEA_COPY.imageSearch.findAlternative, onClick: () => findImage(alternativeQuery(f.columns)) } }
+                          : {})}
                       />
                     ))}
                   </ul>
                 )}
-              {hasRules && (
+              {findImage && (
+                <div className="mt-3">
+                  <button type="button" className={QUIET} onClick={() => findImage('')}>
+                    <ImagePlus className="size-4" aria-hidden="true" />
+                    {IDEA_COPY.imageSearch.find}
+                  </button>
+                </div>
+              )}
+              {(hasRules || category.id === '7.1') && (
                 <div className="mt-3">
                   <AppliedList applied={applied ?? []} onUndo={(key) => onEditEvent?.({ type: 'undo', key })} />
                 </div>
@@ -292,6 +309,12 @@ export function CategoryPanel({
       )}
     </section>
   )
+}
+
+/** The row's own words, when it has any: a placeholder description seeds nothing. */
+function alternativeQuery(columns: Readonly<Record<string, string>>): string {
+  const description = columns.description ?? ''
+  return description.startsWith('(') ? '' : description
 }
 
 /**

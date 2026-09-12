@@ -21,12 +21,14 @@ const MUTED = 'text-neutral-600 dark:text-neutral-400'
 type Mode = 'idle' | 'edit' | 'context'
 
 export function FindingRow({
-  finding, sectionTitle, onEvent, onFocus,
+  finding, sectionTitle, onEvent, onFocus, action,
 }: {
   finding: IdeaFinding
   sectionTitle: string
   onEvent: (event: IdeaEditsEvent) => void
   onFocus: (target: FindingTarget | undefined) => void
+  /** One button an inventory row can offer (slice 5: "Find an alternative" on an image row). */
+  action?: { label: string; onClick: () => void }
 }) {
   const id = useId()
   const [mode, setMode] = useState<Mode>('idle')
@@ -92,6 +94,13 @@ export function FindingRow({
           </div>
         ) : (
           !inventory && <div>{dismiss}</div>
+        )}
+        {inventory && action && (
+          <div>
+            <button type="button" className={BTN} onClick={action.onClick} {...focusProps}>
+              {action.label}<span className="sr-only">: {finding.columns.description ?? ''}</span>
+            </button>
+          </div>
         )}
       </li>
     )
