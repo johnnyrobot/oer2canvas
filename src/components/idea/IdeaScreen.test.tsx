@@ -187,3 +187,21 @@ test('the chapter render beside the panels shows the pending line for a section 
   const aside = screen.getByRole('complementary', { name: 'Chapter as it will be published' })
   expect(within(aside).getByText('Re-checking this section…')).toBeInTheDocument()
 })
+
+test('an edit decision is announced in the status line', () => {
+  const c = withHtml('4: Nutrition', '<p id="b2c-blk-0">He suffers from asthma.</p>')
+  render(<IdeaScreen {...base} chapters={[c]} />)
+  fireEvent.click(screen.getByRole('button', { name: /^7\.6 / }))
+  fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
+  expect(screen.getByRole('status')).toHaveTextContent('Applied.')
+})
+
+test('a dismissal and an undo are announced too', () => {
+  const c = withHtml('4: Nutrition', '<p id="b2c-blk-0">He suffers from asthma.</p>')
+  const key = ideaEditKey('4: Nutrition-s1', 'b2c-blk-0', 0, 'suffers from')
+  const edits = new Map<string, IdeaEdits>([[reviewKeyOf(chapter('4: Nutrition')), reduceEdits(newEdits(), { type: 'replace', key, replacement: 'has' })]])
+  render(<IdeaScreen {...base} chapters={[c]} edits={edits} />)
+  fireEvent.click(screen.getByRole('button', { name: /^7\.6 / }))
+  fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+  expect(screen.getByRole('status')).toHaveTextContent('Undone.')
+})

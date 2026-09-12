@@ -128,6 +128,21 @@ export function IdeaScreen({
     return { key: k, edit, stale: !present, sectionTitle: section?.title ?? '' }
   })
 
+  /**
+   * Spec §5.3: Applied / Undone announced through the live region. A dismissal
+   * too — the row disappears, and a screen-reader user should hear why.
+   */
+  const ANNOUNCE: Record<IdeaEditsEvent['type'], string> = {
+    replace: IDEA_COPY.applied.announceApplied,
+    keep: IDEA_COPY.applied.announceApplied,
+    undo: IDEA_COPY.applied.announceUndone,
+    dismiss: IDEA_COPY.applied.announceDismissed,
+  }
+  const editEvent = (event: IdeaEditsEvent) => {
+    onEditEvent(key, event)
+    setStatus(ANNOUNCE[event.type])
+  }
+
   const exportAs = (format: 'md' | 'json') => {
     const name = onExport(key, format)
     setStatus(IDEA_COPY.export.done(name))
@@ -261,7 +276,7 @@ export function IdeaScreen({
                 findings={byCategory.get(category.id) ?? []}
                 applied={applied}
                 sectionTitleOf={sectionTitleOf}
-                onEditEvent={(e) => onEditEvent(key, e)}
+                onEditEvent={editEvent}
                 onFocusFinding={setFocus}
               />
             ))}

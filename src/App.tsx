@@ -467,8 +467,12 @@ export default function App() {
     return compileAndAuditChapter(ch, {
       profile,
       // A re-prepared chapter comes back with its saved IDEA wording already
-      // applied and gated in one pass. If the IndexedDB read has not returned
-      // yet, the restore changes `edits` and `useIdeaRecompile` catches up.
+      // applied and gated in one pass. The IndexedDB read is issued on mount
+      // and takes milliseconds; a chapter prepared before it returns would
+      // compile without its edits, and `useIdeaRecompile` only catches up if
+      // the chapter is already in `prepared` when the restore lands. Preparing
+      // takes several clicks, so the window is not reachable in practice; it
+      // is named here so nobody reads "catches up" as unconditional.
       ideaEdits: ideaReviews.editsFor(reviewKeyOf(ch)).edits,
       signal: controller.signal,
       onProgress: (progress) => {
