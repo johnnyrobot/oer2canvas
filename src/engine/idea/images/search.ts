@@ -53,3 +53,27 @@ export function tasl(hit: ImageHit): { text: string; shareAlike: boolean } {
     shareAlike: hit.license.kind === 'by-sa',
   }
 }
+
+/**
+ * The fetch every adapter makes: one GET, the caller's signal, and the three
+ * ways it fails named the same way for every provider — unreachable, rate
+ * limited (the one the user can wait out), or an HTTP status. Returns the
+ * parsed body, or an empty object when the body is not JSON, so an adapter
+ * only has to read the shape it expects.
+ */
+export async function fetchProviderJson<T extends object>(
+  doFetch: typeof globalThis.fetch,
+  label: string,
+  url: string,
+  signal: AbortSignal | undefined,
+): Promise<Partial<T>> {
+  let response: Response
+  try {
+    response = await doFetch(url, { signal: signal ?? null })
+  } catch {
+    throw new Error(`${label} could not be reached from this browser.`)
+  }
+  if (response.status === 429) throw new Error(`${label} is rate-limiting this browser. Wait a moment and search again.`)
+  if (!response.ok) throw new Error(`${label} could not be reached (HTTP ${response.status}).`)
+  return (await response.json().catch(() => ({}))) as Partial<T>
+}

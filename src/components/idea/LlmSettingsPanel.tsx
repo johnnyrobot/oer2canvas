@@ -13,9 +13,8 @@ import { Eye, EyeOff, ExternalLink } from 'lucide-react'
 import { PROVIDERS, providerById, type ProviderId } from '../../engine/idea/llm/providers'
 import type { LlmSettings } from '../../engine/idea/llm/settings'
 import { IDEA_COPY } from './copy'
+import { FIELD, TARGET } from './styles'
 
-const TARGET = 'min-h-9 min-w-9'
-const FIELD = 'rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950'
 const REPO = 'https://github.com/johnnyrobot/oer2canvas/blob/main/'
 
 export function LlmSettingsPanel({

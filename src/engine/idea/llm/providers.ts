@@ -45,8 +45,9 @@ export const PROVIDERS: readonly LlmProvider[] = [
     label: 'OpenRouter',
     baseUrl: 'https://openrouter.ai/api/v1',
     defaultModel: 'google/gemini-2.5-flash',
-    // OpenRouter's attribution headers; the deployed origin from wrangler.jsonc.
-    extraHeaders: { 'HTTP-Referer': 'https://oer2canvas.johnnyrobot.dev', 'X-Title': 'oer2canvas' },
+    // OpenRouter's attribution headers. The origin is read at load so a
+    // self-host attributes its own traffic, not the public deployment's.
+    extraHeaders: { 'HTTP-Referer': globalThis.location?.origin ?? 'https://oer2canvas.johnnyrobot.dev', 'X-Title': 'oer2canvas' },
     dataUse: 'This section’s text and image descriptions go from your browser to OpenRouter on your key, and from OpenRouter to the model provider you chose. OpenRouter’s privacy policy and that provider’s terms govern how they use it.',
     termsUrl: 'https://openrouter.ai/privacy',
     offered: true,

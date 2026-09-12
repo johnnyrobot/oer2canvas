@@ -11,11 +11,20 @@
  * "Textbook/Publisher" and the instructor adds an edition by hand if OERI
  * wants one.
  *
+ * Spec §2.5's appendix: the edits applied and the images added, from the
+ * same Applied list the screen shows (`appliedEdits`), so the file says what
+ * the cartridge will carry. A stale edit — one whose text is no longer at
+ * its element — is listed and marked, not dropped: it was a decision.
+ *
  * DOWNLOAD ONLY. Nothing here is ever packaged into the cartridge: the rubric
  * is about the material, not for the students who will read it.
  */
 import { FRAMEWORK_ATTRIBUTION, IDEA_FRAMEWORK } from './framework'
-import { ratingCounts, type ChecklistAnswer, type IdeaHeader, type IdeaReview, type Rating } from './review'
+import type { AppliedEdit } from './applied'
+import { parseIdeaEditKey } from './edits'
+import { RATING_LABEL, ratingCounts, type ChecklistAnswer, type IdeaHeader, type IdeaReview, type Rating } from './review'
+
+export { RATING_LABEL }
 
 export interface Rubric1Context {
   bookTitle: string
@@ -23,16 +32,55 @@ export interface Rubric1Context {
   publisher?: string
   sourceUrl?: string
   exportedAt: Date
-}
-
-export const RATING_LABEL: Readonly<Record<Rating, string>> = {
-  na: 'Not Applicable',
-  exclusive: 'Exclusive',
-  emerging: 'Emerging Inclusive',
-  inclusive: 'Inclusive',
+  /** The chapter's Applied list; absent (slice 1 callers) exports no appendix. */
+  applied?: readonly AppliedEdit[]
 }
 
 const NOT_RATED = 'Not rated'
+
+/** One applied text edit, as the appendix lists it. */
+export interface AppliedEditJson {
+  category: string
+  section: string
+  original: string
+  /** The replacement, or for a keep the parenthetical added (empty if none). */
+  replacement: string
+  kind: 'replace' | 'keep'
+  /** No longer at its element in the current bytes. */
+  stale: boolean
+}
+
+/** One image added, as the appendix lists it. */
+export interface AddedImageJson {
+  section: string
+  alt: string
+  caption: string
+  /** Title · Author · Source · License, as the page credits it. */
+  credit: string
+  license: string
+  sourcePageUrl: string
+  stale: boolean
+}
+
+function appendixOf(applied: readonly AppliedEdit[]): { edits: AppliedEditJson[]; images: AddedImageJson[] } {
+  const edits: AppliedEditJson[] = []
+  const images: AddedImageJson[] = []
+  for (const a of applied) {
+    if (a.edit.kind === 'image') {
+      images.push({
+        section: a.sectionTitle, alt: a.edit.alt, caption: a.edit.caption, credit: a.edit.attribution.text,
+        license: a.edit.attribution.licenseName, sourcePageUrl: a.edit.attribution.sourcePageUrl, stale: a.stale,
+      })
+      continue
+    }
+    edits.push({
+      category: a.category, section: a.sectionTitle, original: parseIdeaEditKey(a.key).original,
+      replacement: a.edit.kind === 'replace' ? a.edit.replacement : (a.edit.context ?? ''),
+      kind: a.edit.kind, stale: a.stale,
+    })
+  }
+  return { edits, images }
+}
 
 export interface Rubric1Json {
   format: 'oer2canvas-idea-rubric1'
@@ -53,6 +101,8 @@ export interface Rubric1Json {
   counts: Readonly<Record<Rating | 'notRated', number>>
   summary: string
   suggestions: string
+  /** Present when the caller supplied the Applied list (spec §2.5). */
+  applied?: { edits: AppliedEditJson[]; images: AddedImageJson[] }
 }
 
 export function rubric1Json(review: IdeaReview, header: IdeaHeader, ctx: Rubric1Context): Rubric1Json {
@@ -91,6 +141,7 @@ export function rubric1Json(review: IdeaReview, header: IdeaHeader, ctx: Rubric1
     counts: ratingCounts(review),
     summary: review.summary,
     suggestions: review.suggestions,
+    ...(ctx.applied ? { applied: appendixOf(ctx.applied) } : {}),
   }
 }
 
@@ -142,6 +193,31 @@ export function rubric1Markdown(review: IdeaReview, header: IdeaHeader, ctx: Rub
   for (const area of j.areas) {
     if (area.checklist.length === 0) continue
     lines.push(`- ${area.id} ${cell(area.title)}: ${area.checklist.map((c) => `${c.id}: ${c.answer}`).join('; ')}`)
+  }
+  if (j.applied) {
+    lines.push('')
+    lines.push('## Appendix: edits applied')
+    lines.push('')
+    if (j.applied.edits.length === 0) lines.push('None.')
+    else {
+      lines.push('| Area | Section | Original | Replacement | Note |')
+      lines.push('| --- | --- | --- | --- | --- |')
+      for (const e of j.applied.edits) {
+        const note = [e.kind === 'keep' ? 'kept as written' : '', e.stale ? 'no longer matches; not applied' : ''].filter(Boolean).join('; ')
+        lines.push(`| ${e.category} | ${cell(e.section)} | ${cell(e.original)} | ${cell(e.replacement)} | ${note} |`)
+      }
+    }
+    lines.push('')
+    lines.push('## Appendix: images added')
+    lines.push('')
+    if (j.applied.images.length === 0) lines.push('None.')
+    else {
+      lines.push('| Section | Alt text | Credit | Note |')
+      lines.push('| --- | --- | --- | --- |')
+      for (const i of j.applied.images) {
+        lines.push(`| ${cell(i.section)} | ${cell(i.alt)} | ${cell(i.credit)} (${i.sourcePageUrl}) | ${i.stale ? 'no longer in the chapter' : ''} |`)
+      }
+    }
   }
   lines.push('')
   lines.push('---')

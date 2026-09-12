@@ -7,7 +7,7 @@
  * The panel says which device holds it and offers Forget key.
  */
 import type { KeyValueStore } from '../../../canvas/credentials'
-import type { ProviderId } from './providers'
+import { PROVIDERS, type ProviderId } from './providers'
 
 export interface LlmSettings {
   provider: ProviderId
@@ -23,11 +23,17 @@ export interface LlmSettingsStore {
 
 export const LLM_SETTINGS_KEY = 'idea.llm.settings'
 
-const PROVIDER_IDS: readonly string[] = ['gemini', 'openrouter', 'ollama']
+/**
+ * Only an offered provider is a valid setting. The panel's select disables
+ * the others, so the only way a stored setting names one is a table that
+ * changed after the save; loading it as undefined makes the panel ask again
+ * rather than letting a run send the key somewhere no longer offered.
+ */
+const OFFERED_IDS: readonly string[] = PROVIDERS.filter((p) => p.offered).map((p) => p.id)
 
 function isSettings(v: unknown): v is LlmSettings {
   return typeof v === 'object' && v !== null
-    && PROVIDER_IDS.includes((v as LlmSettings).provider)
+    && OFFERED_IDS.includes((v as LlmSettings).provider)
     && typeof (v as LlmSettings).key === 'string'
     && typeof (v as LlmSettings).model === 'string'
 }

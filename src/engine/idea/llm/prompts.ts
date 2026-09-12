@@ -22,7 +22,8 @@ export interface SectionInput {
   sectionId: string
   sectionTitle: string
   chapterTitle: string
-  discipline?: string
+  /** The source book's title; the model reads the discipline from it. */
+  bookTitle?: string
   text: string
   images: ImageRow[]
   metadata: MetadataRow[]
@@ -43,7 +44,7 @@ function lens(c: CategoryId): string {
     (cat.resources.length ? `\nResources you may name (do not fetch): ${cat.resources.map((r) => `${r.label} <${r.url}>`).join('; ')}` : '')
 }
 
-const CONTEXT = (i: SectionInput) => `Chapter: ${i.chapterTitle}\nSection: ${i.sectionTitle}${i.discipline ? `\nDiscipline: ${i.discipline}` : ''}`
+const CONTEXT = (i: SectionInput) => `Chapter: ${i.chapterTitle}\nSection: ${i.sectionTitle}${i.bookTitle ? `\nBook: ${i.bookTitle}` : ''}`
 
 const ITEM_SHAPE =
   'Respond with JSON only, no prose before or after: {"summary": string, "items": [{"evidence": string, "inference": string, "suggestion": string, "original"?: string, "replacement"?: string}]}. ' +

@@ -22,3 +22,9 @@ test('a damaged record loads as undefined rather than throwing', async () => {
   disk.data.set(LLM_SETTINGS_KEY, { provider: 'nope' })
   expect(await createLlmSettingsStore(disk).load()).toBeUndefined()
 })
+
+test('a stored setting for a provider that is no longer offered loads as undefined, so no run can send the key there', async () => {
+  const disk = memoryDisk()
+  disk.data.set(LLM_SETTINGS_KEY, { provider: 'ollama', key: 'k', model: 'gpt-oss:120b' })
+  expect(await createLlmSettingsStore(disk).load()).toBeUndefined()
+})

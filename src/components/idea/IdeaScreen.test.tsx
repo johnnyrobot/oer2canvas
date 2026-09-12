@@ -185,8 +185,8 @@ test('findings are computed from the prepared html and edits suppress them', () 
   fireEvent.click(screen.getByRole('button', { name: /^7\.6 / }))
   fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
   const key = ideaEditKey('4: Nutrition-s1', 'b2c-blk-0', 0, 'suffers from')
-  expect(onEditEvent).toHaveBeenCalledWith(reviewKeyOf(chapter('4: Nutrition')), { type: 'replace', key, replacement: 'has' })
-  const edits = new Map<string, IdeaEdits>([[reviewKeyOf(chapter('4: Nutrition')), reduceEdits(newEdits(), { type: 'replace', key, replacement: 'has' })]])
+  expect(onEditEvent).toHaveBeenCalledWith(reviewKeyOf(chapter('4: Nutrition')), { type: 'replace', key, replacement: 'has', category: '7.6' })
+  const edits = new Map<string, IdeaEdits>([[reviewKeyOf(chapter('4: Nutrition')), reduceEdits(newEdits(), { type: 'replace', key, replacement: 'has', category: '7.6' })]])
   rerender(<IdeaScreen {...base} chapters={[c]} edits={edits} onEditEvent={onEditEvent} />)
   expect(screen.queryByRole('button', { name: 'Replace' })).not.toBeInTheDocument()
   expect(screen.getByText('“suffers from” → “has”')).toBeInTheDocument()
@@ -210,7 +210,7 @@ test('an edit decision is announced in the status line', () => {
 test('a dismissal and an undo are announced too', () => {
   const c = withHtml('4: Nutrition', '<p id="b2c-blk-0">He suffers from asthma.</p>')
   const key = ideaEditKey('4: Nutrition-s1', 'b2c-blk-0', 0, 'suffers from')
-  const edits = new Map<string, IdeaEdits>([[reviewKeyOf(chapter('4: Nutrition')), reduceEdits(newEdits(), { type: 'replace', key, replacement: 'has' })]])
+  const edits = new Map<string, IdeaEdits>([[reviewKeyOf(chapter('4: Nutrition')), reduceEdits(newEdits(), { type: 'replace', key, replacement: 'has', category: '7.6' })]])
   render(<IdeaScreen {...base} chapters={[c]} edits={edits} />)
   fireEvent.click(screen.getByRole('button', { name: /^7\.6 / }))
   fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
@@ -304,4 +304,16 @@ test('an image row offers Find an alternative, seeded with its description', () 
   render(<IdeaScreen {...base} chapters={[c]} />)
   fireEvent.click(screen.getByRole('button', { name: /Find an alternative/ }))
   expect(screen.getByRole('textbox', { name: 'Search for' })).toHaveValue('A nurse at a desk')
+})
+
+test('a selection that goes from empty to prepared while the screen is mounted renders the chapter, not a hook-order error', () => {
+  const props = {
+    reviews: new Map<string, IdeaReview>(), header: newHeader(), onEvent: vi.fn(), onHeaderEvent: vi.fn(), onForget: vi.fn(),
+    onExport: vi.fn<(key: string, f: 'md' | 'json') => string>().mockReturnValue('x.md'),
+    edits: new Map(), pending: new Set<string>(), onEditEvent: vi.fn(), llm: llmStub, image: imageStub,
+  }
+  const view = render(<IdeaScreen {...props} chapters={[]} />)
+  expect(screen.getByText('Nothing to review yet. Prepare chapters first.')).toBeInTheDocument()
+  view.rerender(<IdeaScreen {...props} chapters={[compiled('4: Nutrition')]} />)
+  expect(screen.getByRole('heading', { name: '4: Nutrition' })).toBeInTheDocument()
 })

@@ -4,11 +4,9 @@ import { createIframeRunner } from './audit/iframe-runner'
 import { enforceGate } from './gate'
 import type { GateDeps, GateResult } from './gate'
 import { compileSection, sectionContext, mergeQueues } from './compile/index'
-import type { QueueAnswer } from './compile/answers'
-import type { IdeaEdit } from './idea/edits'
 import type { Step } from './compile/index'
 import { OPENSTAX } from './compile/context'
-import type { PublisherProfile } from './compile/context'
+import type { HumanDecisions, PublisherProfile } from './compile/context'
 import type { Chapter } from '../sources/types'
 import type { CompiledChapter, CompiledSection } from '../contracts/index'
 
@@ -87,7 +85,9 @@ export interface CompileProgress {
  */
 export async function compileAndAuditChapter(
   chapter: Chapter,
-  opts: {
+  // `HumanDecisions`: absent on a first compile; present when the queue asks
+  // for the chapter rebuilt and re-gated with every answer and edit applied.
+  opts: HumanDecisions & {
     profile?: PublisherProfile
     onProgress?: (progress: CompileProgress) => void
     /**
@@ -102,14 +102,6 @@ export async function compileAndAuditChapter(
      */
     onSection?: (section: CompiledSection, index: number) => void
     signal?: AbortSignal
-    /**
-     * What humans have decided, keyed by `queueKeyOf`. Absent on a first
-     * compile; present when the queue screen asks for the whole chapter to be
-     * rebuilt and re-gated with every answer applied.
-     */
-    answers?: ReadonlyMap<string, QueueAnswer>
-    /** The IDEA phase's edits, keyed by `ideaEditKey`, applied from source on this compile. */
-    ideaEdits?: ReadonlyMap<string, IdeaEdit>
     /** Test seams. Production passes neither. */
     deps?: GateDeps
     steps?: readonly Step[]
@@ -131,7 +123,7 @@ export async function compileAndAuditChapter(
       await new Promise<void>((resolve) => setTimeout(resolve, 0))
       const compiled = compileSection(
         section,
-        sectionContext(chapter, section, profile, opts.answers, opts.ideaEdits),
+        sectionContext(chapter, section, profile, opts),
         opts.steps,
       )
 

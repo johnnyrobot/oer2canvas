@@ -1,5 +1,7 @@
 import { newHeader, newReview, reduceHeader, reduceReview } from './review'
 import { RATING_LABEL, rubric1Filename, rubric1Json, rubric1Markdown, type Rubric1Context } from './rubric-export'
+import type { AppliedEdit } from './applied'
+import { ideaEditKey, imageEditKey, type ImageEdit } from './edits'
 
 const ctx: Rubric1Context = {
   bookTitle: 'Human Biology',
@@ -89,4 +91,40 @@ test('the filename is safe, dated, and carries the chapter', () => {
   const now = new Date('2026-09-11T17:30:00Z')
   expect(rubric1Filename('4: Nutrition / Vitamins', now, 'md')).toBe('idea-rubric1-4-nutrition-vitamins-2026-09-11.md')
   expect(rubric1Filename('', now, 'json')).toBe('idea-rubric1-chapter-2026-09-11.json')
+})
+
+test('spec §2.5: the appendix lists applied edits and added images in both formats, and a slice-1 caller gets none', () => {
+  const { review, header } = sample()
+  const image: ImageEdit = {
+    kind: 'image', placement: { kind: 'insert-after', elementId: 'b' }, assetName: 'idea-bench.jpg', width: 10, height: 10,
+    alt: 'Two students at a bench.', caption: 'Lab partners.',
+    attribution: { text: '“Students at a bench” by Jane, Wikimedia Commons, CC BY-SA 4.0', sourcePageUrl: 'https://commons.wikimedia.org/x', licenseName: 'CC BY-SA 4.0', shareAlike: true },
+  }
+  const applied: AppliedEdit[] = [
+    { key: ideaEditKey('s1', 'a', 0, 'suffers from'), edit: { kind: 'replace', replacement: 'has', category: '7.6' }, stale: false, sectionTitle: '4.1 Intro', category: '7.6' },
+    { key: ideaEditKey('s1', 'a', 1, 'the blind'), edit: { kind: 'keep', context: 'as quoted' }, stale: true, sectionTitle: '4.1 Intro', category: '7.6' },
+    { key: imageEditKey('s2', image.assetName), edit: image, stale: false, sectionTitle: '4.2 Nutrients', category: '7.1' },
+  ]
+  const j = rubric1Json(review, header, { ...ctx, applied })
+  expect(j.applied).toEqual({
+    edits: [
+      { category: '7.6', section: '4.1 Intro', original: 'suffers from', replacement: 'has', kind: 'replace', stale: false },
+      { category: '7.6', section: '4.1 Intro', original: 'the blind', replacement: 'as quoted', kind: 'keep', stale: true },
+    ],
+    images: [{
+      section: '4.2 Nutrients', alt: 'Two students at a bench.', caption: 'Lab partners.',
+      credit: '“Students at a bench” by Jane, Wikimedia Commons, CC BY-SA 4.0', license: 'CC BY-SA 4.0',
+      sourcePageUrl: 'https://commons.wikimedia.org/x', stale: false,
+    }],
+  })
+  const md = rubric1Markdown(review, header, { ...ctx, applied })
+  expect(md).toContain('## Appendix: edits applied')
+  expect(md).toContain('| 7.6 | 4.1 Intro | suffers from | has |  |')
+  expect(md).toContain('| 7.6 | 4.1 Intro | the blind | as quoted | kept as written; no longer matches; not applied |')
+  expect(md).toContain('## Appendix: images added')
+  expect(md).toContain('| 4.2 Nutrients | Two students at a bench. | “Students at a bench” by Jane, Wikimedia Commons, CC BY-SA 4.0 (https://commons.wikimedia.org/x) |  |')
+  // Both sections are present, and say so, when the list is empty.
+  expect(rubric1Markdown(review, header, { ...ctx, applied: [] })).toContain('## Appendix: edits applied\n\nNone.')
+  expect(rubric1Json(review, header, ctx).applied).toBeUndefined()
+  expect(rubric1Markdown(review, header, ctx)).not.toContain('Appendix')
 })

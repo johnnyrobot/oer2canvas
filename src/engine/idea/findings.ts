@@ -65,15 +65,22 @@ export type Finder = (sectionId: string, html: string) => IdeaFinding[]
  */
 export interface RuleFinder {
   categories: readonly CategoryId[]
+  /** What the panel shows: suggestions to act on, or an inventory to read. */
+  kind: 'rule' | 'inventory'
   find: Finder
 }
 
 export const RULE_FINDERS: readonly RuleFinder[] = [
-  { categories: ['7.3', '7.6'], find: findTerms },
-  { categories: ['7.6'], find: findIdioms },
-  { categories: ['7.1'], find: findImages },
-  { categories: ['7.7'], find: findMetadata },
+  { categories: ['7.3', '7.6'], kind: 'rule', find: findTerms },
+  { categories: ['7.6'], kind: 'rule', find: findIdioms },
+  { categories: ['7.1'], kind: 'inventory', find: findImages },
+  { categories: ['7.7'], kind: 'inventory', find: findMetadata },
 ]
+
+/** The categories a finder of this kind reports under — the one place the panel reads it from. */
+export function finderCategories(kind: RuleFinder['kind']): ReadonlySet<CategoryId> {
+  return new Set(RULE_FINDERS.filter((f) => f.kind === kind).flatMap((f) => f.categories))
+}
 
 /** A rule check that threw: which category, on which section, and what it said. */
 export interface CheckFailure {

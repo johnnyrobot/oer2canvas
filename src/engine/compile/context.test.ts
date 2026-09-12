@@ -18,7 +18,7 @@ describe('CompileContext', () => {
   it('passes an answers map straight through to the steps', () => {
     const chapter = chapterFixture()
     const answers = new Map([['k', { type: 'decorative' } as const]])
-    const ctx = sectionContext(chapter, chapter.sections[0]!, OPENSTAX, answers)
+    const ctx = sectionContext(chapter, chapter.sections[0]!, OPENSTAX, { answers })
     expect(ctx.answers).toBe(answers)
   })
 
@@ -26,7 +26,7 @@ describe('CompileContext', () => {
     const chapter = chapterFixture()
     expect(sectionContext(chapter, chapter.sections[0]!, OPENSTAX).ideaEdits).toBeUndefined()
     const edits = new Map([['k', { kind: 'keep' } as const]])
-    expect(sectionContext(chapter, chapter.sections[0]!, OPENSTAX, undefined, edits).ideaEdits).toBe(edits)
+    expect(sectionContext(chapter, chapter.sections[0]!, OPENSTAX, { ideaEdits: edits }).ideaEdits).toBe(edits)
   })
 
   it('compiles byte-identically when no answers are supplied', () => {

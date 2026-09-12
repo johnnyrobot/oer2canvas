@@ -8,8 +8,20 @@ import { ExternalLink } from 'lucide-react'
 import type { LlmProvider } from '../../engine/idea/llm/providers'
 import type { RunState } from './useModelRuns'
 import { IDEA_COPY } from './copy'
+import { PRIMARY, QUIET } from './styles'
 
-const TARGET = 'min-h-9 min-w-9'
+/**
+ * The sentence a failed run is reported with — the same one under a category
+ * button and under the Rubric 1 draft button. A rate limit carries the
+ * provider's own retry message; every other failure is the copy's sentence.
+ */
+export function RunFailure({ state }: { state: Extract<RunState, { status: 'failed' }> }) {
+  return (
+    <p role="alert" className="m-0 text-sm">
+      {IDEA_COPY.llm.error[state.failure]}{state.failure === 'rate-limited' ? ` ${state.message}` : ''}
+    </p>
+  )
+}
 
 export function AskModel({ provider, state, onSend, onCancel, firstRun }: {
   provider: LlmProvider | undefined
@@ -35,18 +47,14 @@ export function AskModel({ provider, state, onSend, onCancel, firstRun }: {
       {state.status === 'running' ? (
         <div className="flex items-center gap-2">
           <span role="status" className="text-sm">{c.sending(provider.label)}</span>
-          <button type="button" className={`${TARGET} rounded-md border border-neutral-300 px-3 text-sm dark:border-neutral-700`} onClick={onCancel}>{c.cancel}</button>
+          <button type="button" className={QUIET} onClick={onCancel}>{c.cancel}</button>
         </div>
       ) : (
         <div>
-          <button type="button" className={`${TARGET} rounded-md border border-brand-700 bg-brand-700 px-3 text-sm text-white`} onClick={onSend}>{c.send(provider.label)}</button>
+          <button type="button" className={PRIMARY} onClick={onSend}>{c.send(provider.label)}</button>
         </div>
       )}
-      {state.status === 'failed' && (
-        <p role="alert" className="m-0 text-sm">
-          {c.error[state.failure]}{state.failure === 'rate-limited' ? ` ${state.message}` : ''}
-        </p>
-      )}
+      {state.status === 'failed' && <RunFailure state={state} />}
     </div>
   )
 }

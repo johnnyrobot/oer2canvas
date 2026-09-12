@@ -20,7 +20,7 @@ import {
   PRESSBOOKS,
   type PublisherProfile,
 } from './engine/compile/context'
-import { isPublishable } from './contracts/index'
+import { auditedHtml, isPublishable } from './contracts/index'
 import type { CompiledChapter, CompiledSection } from './contracts/index'
 import { mergeQueues } from './engine/compile/index'
 import { queueKeyOf, type QueueAnswer } from './engine/compile/answers'
@@ -53,6 +53,7 @@ import { createLlmSettingsStore } from './engine/idea/llm/settings'
 import { ratedCount } from './engine/idea/review'
 import { IDEA_CATEGORY_IDS } from './engine/idea/framework'
 import { rubric1Filename, rubric1Json, rubric1Markdown } from './engine/idea/rubric-export'
+import { appliedEdits } from './engine/idea/applied'
 import { downloadTextFile } from './engine/idea/download'
 import { ideaSummary } from './shell/phases'
 
@@ -258,7 +259,6 @@ export function QueueScreen({
     if (groups) onSettled?.(groups)
     // `groups` is a fresh array each render; keying on `clear` and the session's
     // compiled identity is what makes this fire once per settle, not per render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clear, session.compiled, onSettled])
 
   if (clear && groups) {
@@ -764,6 +764,11 @@ export default function App() {
       ...(compiled?.chapter.attribution.publisher ? { publisher: compiled.chapter.attribution.publisher } : {}),
       ...(compiled?.chapter.attribution.url ? { sourceUrl: compiled.chapter.attribution.url } : {}),
       exportedAt: new Date(),
+      // Spec §2.5's appendix, from the same list the screen's Applied zone shows.
+      applied: appliedEdits(
+        (compiled?.sections ?? []).map((s) => ({ id: s.id, title: s.title, html: auditedHtml(s) })),
+        ideaReviews.editsFor(key),
+      ),
     }
     const name = rubric1Filename(chapterTitle, ctx.exportedAt, format)
     if (format === 'md') downloadTextFile(name, rubric1Markdown(review, ideaReviews.header, ctx), 'text/markdown')

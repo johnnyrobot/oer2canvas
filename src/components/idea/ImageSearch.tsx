@@ -12,11 +12,8 @@ import {
 } from '../../engine/idea/images/search'
 import { useImageSearch } from './useImageSearch'
 import { IDEA_COPY } from './copy'
+import { FIELD, PRIMARY, QUIET, TARGET } from './styles'
 
-const TARGET = 'min-h-9 min-w-9'
-const FIELD = 'rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950'
-const PRIMARY = `${TARGET} rounded-md border border-brand-700 bg-brand-700 px-3 text-sm text-white`
-const QUIET = `${TARGET} rounded-md border border-neutral-300 px-3 text-sm dark:border-neutral-700`
 
 export interface ImageSource { label: string; url: string }
 
@@ -99,7 +96,7 @@ export function ImageSearch({ initialQuery = '', onChoose, onClose, sources, pro
               {h.creator && <span>{c.by(h.creator)}</span>}
               <span className="self-start rounded border border-current px-1">{h.license.name}</span>
               <a href={h.sourcePageUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline">
-                source<ExternalLink className="size-3" aria-hidden="true" /><span className="sr-only">({IDEA_COPY.opensNewTab})</span>
+                {c.sourceLink}<ExternalLink className="size-3" aria-hidden="true" /><span className="sr-only">({IDEA_COPY.opensNewTab})</span>
               </a>
               <button type="button" className={`${PRIMARY} px-2`} onClick={() => onChoose(h)}>
                 {c.use}<span className="sr-only">: {h.title}</span>

@@ -38,6 +38,9 @@ test('a rule with edit:false is an observation, not an edit', () => {
   if (f[0]!.kind !== 'observation') return
   expect(f[0]!.columns.text).toBe('his or her')
   expect(f[0]!.elementId).toBe('a')
+  // Read, not applied: no `suggestion` column, so the row offers no Use button.
+  expect(f[0]!.columns.suggestion).toBeUndefined()
+  expect(f[0]!.columns.alternative).toBe('their')
 })
 
 test('a hit inside a quotation is flagged inQuotation', () => {

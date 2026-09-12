@@ -7,7 +7,7 @@ import type { CompileContext } from './context'
 import type { Section } from '../../sources/types'
 import { fixtureContext, type FixtureName } from './fixture-context'
 import { packagedAssetName, packagedReference } from '../../import/assets'
-import { ideaEditKey, type IdeaEdit } from '../idea/edits'
+import { ideaEditKey, imageEditKey, type IdeaEdit, type ImageEdit } from '../idea/edits'
 
 // `fileURLToPath(new URL(...))` rather than `import.meta.dirname`: this module
 // goes through Vite's transform, and only `import.meta.url` is guaranteed there.
@@ -151,5 +151,31 @@ describe('compile page-section with IDEA edits', () => {
     expect(out.html).toContain('REPLACED WORDS HERE')
     expect(out.html).toContain('b2c-idea-change')
     golden('page-section.idea-edits.compiled.html', `${out.html}\n`)
+  })
+
+  // Spec §7.3: the golden includes the change note AND a CC BY-SA figure —
+  // its packaged src, its caption with the TASL credit, the share-alike
+  // sentence in the Source-and-license block — plus a keep-with-context, so
+  // every shape an IDEA edit can take is pinned in one file.
+  const image: ImageEdit = {
+    kind: 'image', placement: { kind: 'insert-after', elementId: first.id }, assetName: 'lab-bench-0123abcd.jpg', width: 800, height: 600,
+    alt: 'Two students at a lab bench.', caption: 'Students in a chemistry lab.',
+    attribution: {
+      text: '“Lab” by A. Author, Wikimedia Commons, CC BY-SA 4.0', sourcePageUrl: 'https://commons.wikimedia.org/wiki/File:Lab.jpg',
+      licenseName: 'CC BY-SA 4.0', licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/', shareAlike: true,
+    },
+  }
+  const withImage = new Map<string, IdeaEdit>([
+    ...edits,
+    [ideaEditKey(section.id, first.id, 0, 'REPLACED'), { kind: 'keep', context: 'kept as written' }],
+    [imageEditKey(section.id, image.assetName), image],
+  ])
+  const outImage = compileSection(section, { ...ctx, ideaEdits: withImage })
+
+  it('places a CC BY-SA figure with its credit and share-alike sentence beside the change note', () => {
+    expect(outImage.html).toContain(packagedReference(image.assetName))
+    expect(outImage.html).toContain('CC BY-SA 4.0')
+    expect(outImage.html).toContain('b2c-idea-change')
+    golden('page-section.idea-edits-image.compiled.html', `${outImage.html}\n`)
   })
 })

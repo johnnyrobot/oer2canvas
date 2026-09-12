@@ -13,6 +13,7 @@ import type { ImportedAsset } from '../../import/types'
 import { fetchImageBytes } from '../../engine/idea/images/fetch-image'
 import { tasl, type ImageHit } from '../../engine/idea/images/search'
 import { imageEditKey, type ImageEdit, type ImagePlacement } from '../../engine/idea/edits'
+import { IDEA_COPY } from './copy'
 
 export interface AddImageRequest {
   chapterKey: string
@@ -21,12 +22,6 @@ export interface AddImageRequest {
   placement: ImagePlacement
   alt: string
   caption: string
-}
-
-const REFUSAL: Record<string, string> = {
-  'unsupported-type': 'That file is not an image this app can package (PNG, JPEG, GIF, WebP).',
-  'too-large': 'That image is larger than the cartridge budget allows.',
-  'too-many-pixels': 'That image would decode to more pixels than the cartridge budget allows.',
 }
 
 export function useAddImage({ onAsset, onEdit, deps = {} }: {
@@ -50,7 +45,7 @@ export function useAddImage({ onAsset, onEdit, deps = {} }: {
       const prepared = (await prepareAssets([{ id: 1, mediaType: r.hit.mediaType ?? 'application/octet-stream', originPart, data: bytes }])).get(1)
       if (!prepared || 'rejected' in prepared) {
         const why = prepared && 'rejected' in prepared ? prepared.rejected : 'unavailable'
-        throw new Error(REFUSAL[why] ?? 'That image could not be prepared.')
+        throw new Error(IDEA_COPY.placeImage.refused[why] ?? IDEA_COPY.placeImage.refused.other)
       }
       const asset: ImportedAsset = {
         id: `idea-${prepared.sha256.slice(0, 12)}`, mediaType: prepared.mediaType, extension: prepared.extension,

@@ -118,8 +118,8 @@ export function useIdeaRecompile({
     }
     // `prepared` is deliberately NOT a dependency: `onRebuilt` replaces
     // sections in it, and re-running on that replacement would loop. Nor are
-    // `profileOf` and `onRebuilt`: they are read when the run starts.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // `profileOf` and `onRebuilt`: they are read when the run starts. (The
+    // repo runs no lint rule over this list; the omission is the design.)
   }, [edits, answers])
 
   return { pending }

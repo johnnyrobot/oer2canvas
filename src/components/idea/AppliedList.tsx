@@ -8,8 +8,8 @@ import { useId } from 'react'
 import { parseIdeaEditKey } from '../../engine/idea/edits'
 import type { AppliedEdit } from '../../engine/idea/applied'
 import { IDEA_COPY } from './copy'
+import { TARGET } from './styles'
 
-const TARGET = 'min-h-9 min-w-9'
 
 export function AppliedList({
   applied, onUndo,

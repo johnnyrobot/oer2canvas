@@ -121,7 +121,7 @@ test('findings render in a "What a rule found" zone above the checklist, and the
   expect(screen.getByRole('button', { name: /7\.6 .*1 suggestion/ })).toBeInTheDocument()
   const zone = screen.getByRole('group', { name: 'What a rule found' })
   fireEvent.click(within(zone).getByRole('button', { name: 'Replace' }))
-  expect(onEditEvent).toHaveBeenCalledWith({ type: 'replace', key: finding.key, replacement: 'wild' })
+  expect(onEditEvent).toHaveBeenCalledWith({ type: 'replace', key: finding.key, replacement: 'wild', category: finding.category })
 })
 
 test('with no findings the zone says so without claiming a clean bill', () => {

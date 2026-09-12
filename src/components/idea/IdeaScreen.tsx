@@ -28,7 +28,7 @@
  */
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Download, Trash2 } from 'lucide-react'
-import type { CompiledChapter } from '../../contracts/index'
+import { auditedHtml, type CompiledChapter, type CompiledSection } from '../../contracts/index'
 import { checkSection, findingsByCategory, type FindingTarget } from '../../engine/idea/findings'
 import { newEdits, type IdeaEdits, type IdeaEditsEvent, type ImagePlacement } from '../../engine/idea/edits'
 import type { ImageHit, ImageSearch as ImageSearchPort } from '../../engine/idea/images/search'
@@ -49,6 +49,7 @@ import { DRAFTABLE, sectionText, type DraftableCategory, type SectionInput } fro
 import type { RubricDraft } from '../../engine/idea/llm/parse'
 import type { IdeaFinding } from '../../engine/idea/findings'
 import { CategoryPanel } from './CategoryPanel'
+import { RunFailure } from './AskModel'
 import { LlmSettingsPanel } from './LlmSettingsPanel'
 import { ImageSearch } from './ImageSearch'
 import { PlaceImageDialog, type PlacementOption } from './PlaceImageDialog'
@@ -57,10 +58,8 @@ import { rubricRunKey, runKey, type RunState } from './useModelRuns'
 import { IDEA_COPY } from './copy'
 import { categoryById } from '../../engine/idea/framework'
 import { reviewKeyOf } from './useIdeaReviews'
+import { FIELD, TARGET } from './styles'
 
-const TARGET = 'min-h-9 min-w-9'
-const FIELD =
-  'rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950'
 const AREA =
   'rounded-md border border-neutral-300 bg-white p-2 text-sm dark:border-neutral-700 dark:bg-neutral-950'
 const CARD =
@@ -72,6 +71,7 @@ const QUIET = `${BUTTON} border-neutral-300 text-neutral-800 hover:bg-stone-100 
 
 /** One shared empty, so a chapter with no edits keeps a stable identity across renders. */
 const NO_EDITS = newEdits()
+const NO_SECTIONS: readonly CompiledSection[] = []
 const IDLE: RunState = { status: 'idle' }
 
 /**
@@ -164,27 +164,30 @@ export function IdeaScreen({
     if (index >= chapters.length) setIndex(0)
   }, [chapters.length, index])
 
-  if (chapters.length === 0) {
-    return <p className="text-sm text-neutral-700 dark:text-neutral-300">{IDEA_COPY.empty}</p>
-  }
-
-  // In range by construction: the list is non-empty here and the index is clamped.
-  const current = chapters[Math.min(index, chapters.length - 1)]!
-  const key = reviewKeyOf(current.chapter)
+  // Undefined only when the selection is empty. Every hook below runs before
+  // that case returns, so a chapter list that goes 0 → n while this screen is
+  // mounted does not change the hook order (Rules of Hooks).
+  const current: CompiledChapter | undefined = chapters[Math.min(index, chapters.length - 1)]
+  const key = current ? reviewKeyOf(current.chapter) : ''
+  const sections = current?.sections ?? NO_SECTIONS
   const review = reviews.get(key) ?? newReview()
   const dispatch = (event: IdeaReviewEvent) => onEvent(key, event)
 
   const chapterEdits = edits.get(key) ?? NO_EDITS
+  // `auditedHtml`: the gated bytes, or the compiled bytes while a recompile's
+  // gate is still absent. Block ids are minted at compile and `id` is a
+  // global allowlist attribute, so a finding keyed before the gate returns
+  // names the same element after it.
   const checked = useMemo(() => {
-    const results = current.sections.map((s) => checkSection({ id: s.id, html: s.gate?.html ?? s.html }, chapterEdits))
+    const results = sections.map((s) => checkSection({ id: s.id, html: auditedHtml(s) }, chapterEdits))
     return { findings: results.flatMap((r) => r.findings), failures: results.flatMap((r) => r.failures) }
-  }, [current, chapterEdits])
+  }, [sections, chapterEdits])
   const byCategory = findingsByCategory(checked.findings)
-  const sectionTitleOf = (id: string) => current.sections.find((s) => s.id === id)?.title ?? ''
+  const sectionTitleOf = (id: string) => sections.find((s) => s.id === id)?.title ?? ''
   // Against the same html the render shows, so "stale" means what the reader sees.
   const applied = useMemo(
-    () => appliedEdits(current.sections.map((s) => ({ id: s.id, title: s.title, html: s.gate?.html ?? s.html })), chapterEdits),
-    [current, chapterEdits],
+    () => appliedEdits(sections.map((s) => ({ id: s.id, title: s.title, html: auditedHtml(s) })), chapterEdits),
+    [sections, chapterEdits],
   )
 
   /**
@@ -193,16 +196,20 @@ export function IdeaScreen({
    * only when a button below is pressed.
    */
   const inputs = useMemo<SectionInput[]>(
-    () => current.sections.map((s) => {
-      const html = s.gate?.html ?? s.html
+    () => sections.map((s) => {
+      const html = auditedHtml(s)
       return {
-        sectionId: s.id, sectionTitle: s.title, chapterTitle: current.chapter.title,
-        discipline: current.chapter.attribution.bookTitle,
+        sectionId: s.id, sectionTitle: s.title, chapterTitle: current?.chapter.title ?? '',
+        bookTitle: current?.chapter.attribution.bookTitle ?? '',
         text: sectionText(html), images: imageInventory(s.id, html), metadata: metadataInventory(s.id, html),
       }
     }),
-    [current],
+    [sections, current],
   )
+
+  if (!current) {
+    return <p className="text-sm text-neutral-700 dark:text-neutral-300">{IDEA_COPY.empty}</p>
+  }
   const provider = llm.settings ? providerById(llm.settings.provider) : undefined
   const firstRun = ![...llm.runs.values()].some((r) => r.status === 'done' || r.status === 'failed')
   const rubricRun = llm.runs.get(rubricRunKey(key)) ?? IDLE
@@ -217,7 +224,7 @@ export function IdeaScreen({
       askModel: {
         provider, state, firstRun,
         // One request per section, each behind its own in-flight guard.
-        onSend: () => current.sections.forEach((s, i) => llm.runCategory(key, category, inputs[i]!, s.gate?.html ?? s.html)),
+        onSend: () => current.sections.forEach((s, i) => llm.runCategory(key, category, inputs[i]!, auditedHtml(s))),
         onCancel: () => keys.forEach((k) => llm.cancel(k)),
       },
       draftFindings,
@@ -249,7 +256,7 @@ export function IdeaScreen({
   const placementOptions = (sectionId: string): PlacementOption[] => {
     const section = current.sections.find((s) => s.id === sectionId) ?? current.sections[0]
     if (!section) return []
-    const html = section.gate?.html ?? section.html
+    const html = auditedHtml(section)
     const replace = imageInventory(section.id, html).map((row): PlacementOption => ({
       placement: { kind: 'replace', elementId: row.elementId },
       label: IDEA_COPY.placeImage.replace(row.caption || row.alt || row.src.split('/').pop() || row.elementId),
@@ -417,11 +424,7 @@ export function IdeaScreen({
                     {IDEA_COPY.llm.rubricDraft.button(provider.label)}
                   </button>
                 )}
-                {rubricRun.status === 'failed' && (
-                  <p role="alert" className="m-0 text-sm">
-                    {IDEA_COPY.llm.error[rubricRun.failure]}{rubricRun.failure === 'rate-limited' ? ` ${rubricRun.message}` : ''}
-                  </p>
-                )}
+                {rubricRun.status === 'failed' && <RunFailure state={rubricRun} />}
               </div>
             )}
           </div>
@@ -446,7 +449,7 @@ export function IdeaScreen({
                 {...(isDraftable(category.id) ? askModelFor(category.id) : {})}
                 {...(rubricDraft?.areas.find((a) => a.id === category.id) ? { rubricDraft: rubricDraft.areas.find((a) => a.id === category.id)! } : {})}
                 {...(category.id === '7.1'
-                  ? { onFindImage: (query: string) => openImageSearch(query, byCategory.get('7.1')?.find((f) => f.kind === 'observation' && f.columns.description === query)?.sectionId) }
+                  ? { onFindImage: openImageSearch }
                   : {})}
               />
             ))}

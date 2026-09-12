@@ -18,7 +18,8 @@ import { ChevronDown, ChevronRight, ExternalLink, ImagePlus } from 'lucide-react
 import type { CategoryId, IdeaCategory, RubricRow } from '../../engine/idea/framework'
 import { RUBRIC_NA_TEXT } from '../../engine/idea/framework'
 import type { CategoryReview, IdeaReviewEvent, Rating } from '../../engine/idea/review'
-import type { FindingTarget, IdeaFinding } from '../../engine/idea/findings'
+import { finderCategories, type FindingTarget, type IdeaFinding } from '../../engine/idea/findings'
+import { IMAGE_ROW_RULE, IMAGE_SUMMARY_RULE } from '../../engine/idea/images'
 import type { IdeaEditsEvent } from '../../engine/idea/edits'
 import type { AppliedEdit } from '../../engine/idea/applied'
 import type { LlmProvider } from '../../engine/idea/llm/providers'
@@ -30,8 +31,8 @@ import type { RunState } from './useModelRuns'
 import {
   CHECKLIST_COPY, CHECKLIST_ORDER, IDEA_COPY, RATING_COPY, RATING_ORDER,
 } from './copy'
+import { TARGET } from './styles'
 
-const TARGET = 'min-h-9 min-w-9'
 const QUIET = `${TARGET} inline-flex items-center gap-2 rounded-md border border-neutral-300 px-3 text-sm dark:border-neutral-700`
 const PANEL =
   'rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900'
@@ -41,12 +42,12 @@ const CHOICE =
   'dark:border-neutral-700 dark:has-[:checked]:bg-neutral-800'
 
 /** The categories a rule finder exists for. Only these show a findings zone. */
-const RULE_CATEGORIES = new Set<CategoryId>(['7.3', '7.6'])
+const RULE_CATEGORIES = finderCategories('rule')
 /** The categories whose findings are an inventory to read, not suggestions to act on. */
-const INVENTORY_CATEGORIES = new Set<CategoryId>(['7.1', '7.7'])
+const INVENTORY_CATEGORIES = finderCategories('inventory')
 
-const isImageSummary = (f: IdeaFinding) => f.key.endsWith('::summary::7.1')
-const isImageRow = (f: IdeaFinding) => f.rule?.id === 'inventory-image'
+const isImageSummary = (f: IdeaFinding) => f.rule?.id === IMAGE_SUMMARY_RULE
+const isImageRow = (f: IdeaFinding) => f.rule?.id === IMAGE_ROW_RULE
 
 /** The header's trailing count: the 7.1 summary line, the 7.7 row count, or the rule categories' suggestion count. */
 function countLine(id: CategoryId, found: readonly IdeaFinding[]): string | undefined {
@@ -83,7 +84,8 @@ export function CategoryPanel({
   /** The model's Rubric 1 draft for this category: per row, beside the human's rating, never copied into it. */
   rubricDraft?: { rows: readonly { id: string; rating: Rating | null }[]; notes: string }
   /** Slice 5, 7.1 only: open the image search, seeded with a query. */
-  onFindImage?: (initialQuery: string) => void
+  /** 7.1 only: open the image search, seeded from a row's description and its section. */
+  onFindImage?: (initialQuery: string, sectionId?: string) => void
 }) {
   const bodyId = useId()
   const rated = category.rows.filter((r) => review.ratings.has(r.id)).length
@@ -163,7 +165,7 @@ export function CategoryPanel({
                         onEvent={(e) => onEditEvent?.(e)}
                         onFocus={(t) => onFocusFinding?.(t)}
                         {...(findImage && isImageRow(f) && f.kind === 'observation'
-                          ? { action: { label: IDEA_COPY.imageSearch.findAlternative, onClick: () => findImage(alternativeQuery(f.columns)) } }
+                          ? { action: { label: IDEA_COPY.imageSearch.findAlternative, onClick: () => findImage(alternativeQuery(f.columns), f.sectionId) } }
                           : {})}
                       />
                     ))}
@@ -339,7 +341,7 @@ function RubricRowChoice({
     emerging: row.emerging,
     inclusive: row.inclusive,
   }
-  const label = rowsInCategory > 1 ? `Row ${row.id.slice(-1)}` : 'Rating'
+  const label = rowsInCategory > 1 ? IDEA_COPY.ratingRow(row.id.slice(-1)) : IDEA_COPY.rating
   return (
     <div role="radiogroup" aria-labelledby={`${id}-l`} className="flex flex-col gap-2">
       <p id={`${id}-l`} className="m-0 text-xs font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-400">

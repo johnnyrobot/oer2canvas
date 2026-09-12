@@ -7,7 +7,7 @@
  * off, not proxied. Re-run `npm run verify:idea-image-api` and flip `offered`
  * when the table says otherwise.
  */
-import { ALLOWED_LICENSES, type ImageHit, type ImageSearch, type License } from './search'
+import { ALLOWED_LICENSES, fetchProviderJson, type ImageHit, type ImageSearch, type License } from './search'
 
 const ENDPOINT = 'https://api.openverse.org/v1/images/'
 
@@ -35,15 +35,7 @@ export function createOpenverseSearch(deps: { fetch?: typeof globalThis.fetch } 
       const wanted = opts.licenses.filter((l) => ALLOWED_LICENSES.includes(l))
       const apiLicenses = wanted.map((l) => (l === 'pd' ? 'pdm' : l)).join(',')
       const params = new URLSearchParams({ q: query, license: apiLicenses, page_size: '20', page: String(opts.page ?? 1) })
-      let response: Response
-      try {
-        response = await doFetch(`${ENDPOINT}?${params}`, { signal: opts.signal ?? null })
-      } catch {
-        throw new Error('Openverse could not be reached from this browser.')
-      }
-      if (response.status === 429) throw new Error('Openverse is rate-limiting this browser. Wait a moment and search again.')
-      if (!response.ok) throw new Error(`Openverse could not be reached (HTTP ${response.status}).`)
-      const json = (await response.json().catch(() => ({}))) as { results?: Result[] }
+      const json = await fetchProviderJson<{ results?: Result[] }>(doFetch, 'Openverse', `${ENDPOINT}?${params}`, opts.signal)
       const hits: ImageHit[] = []
       for (const r of json.results ?? []) {
         const kind = r.license ? KIND[r.license] : undefined

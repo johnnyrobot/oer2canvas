@@ -23,7 +23,7 @@ test('Replace dispatches a replace event with the finding’s replacement', () =
   const onEvent = vi.fn()
   render(<FindingRow finding={edit} sectionTitle="s" onEvent={onEvent} onFocus={vi.fn()} />)
   fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
-  expect(onEvent).toHaveBeenCalledWith({ type: 'replace', key: edit.key, replacement: 'has' })
+  expect(onEvent).toHaveBeenCalledWith({ type: 'replace', key: edit.key, replacement: 'has', category: '7.6' })
 })
 
 test('Edit… opens a field prefilled with the replacement and Save dispatches what was typed', () => {
@@ -34,7 +34,7 @@ test('Edit… opens a field prefilled with the replacement and Save dispatches w
   expect(field).toHaveValue('has')
   fireEvent.change(field, { target: { value: 'is living with' } })
   fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-  expect(onEvent).toHaveBeenCalledWith({ type: 'replace', key: edit.key, replacement: 'is living with' })
+  expect(onEvent).toHaveBeenCalledWith({ type: 'replace', key: edit.key, replacement: 'is living with', category: '7.6' })
 })
 
 test('a quotation finding leads with Keep, add context… and Save dispatches a keep with context', () => {
@@ -46,14 +46,14 @@ test('a quotation finding leads with Keep, add context… and Save dispatches a 
   fireEvent.click(screen.getByRole('button', { name: 'Keep, add context…' }))
   fireEvent.change(screen.getByRole('textbox', { name: 'Context to add after the term' }), { target: { value: 'a term used at the time' } })
   fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-  expect(onEvent).toHaveBeenCalledWith({ type: 'keep', key: edit.key, context: 'a term used at the time' })
+  expect(onEvent).toHaveBeenCalledWith({ type: 'keep', key: edit.key, context: 'a term used at the time', category: '7.6' })
 })
 
 test('Keep as is dispatches a keep without context; Dismiss dispatches dismiss', () => {
   const onEvent = vi.fn()
   render(<FindingRow finding={edit} sectionTitle="s" onEvent={onEvent} onFocus={vi.fn()} />)
   fireEvent.click(screen.getByRole('button', { name: 'Keep as is' }))
-  expect(onEvent).toHaveBeenCalledWith({ type: 'keep', key: edit.key })
+  expect(onEvent).toHaveBeenCalledWith({ type: 'keep', key: edit.key, category: '7.6' })
   fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
   expect(onEvent).toHaveBeenCalledWith({ type: 'dismiss', key: edit.key })
 })
@@ -77,7 +77,7 @@ test('an observation renders its columns and a Use-this-wording button when a su
   render(<FindingRow finding={obs} sectionTitle="s" onEvent={onEvent} onFocus={vi.fn()} />)
   expect(screen.getByText('study hard')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Use this wording' }))
-  expect(onEvent).toHaveBeenCalledWith({ type: 'replace', key: obs.key, replacement: 'hit the books (study hard)' })
+  expect(onEvent).toHaveBeenCalledWith({ type: 'replace', key: obs.key, replacement: 'hit the books (study hard)', category: '7.6' })
 })
 
 test('a draft finding is labelled draft', () => {

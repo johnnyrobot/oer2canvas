@@ -5,7 +5,7 @@
  * conventions are community-maintained, which is exactly why anything that
  * does not parse is dropped rather than shown.
  */
-import { ALLOWED_LICENSES, type ImageHit, type ImageSearch, type License } from './search'
+import { ALLOWED_LICENSES, fetchProviderJson, type ImageHit, type ImageSearch, type License } from './search'
 
 const ENDPOINT = 'https://commons.wikimedia.org/w/api.php'
 const PAGE_SIZE = 20
@@ -53,15 +53,7 @@ export function createCommonsSearch(deps: { fetch?: typeof globalThis.fetch } = 
         gsrlimit: String(PAGE_SIZE), gsroffset: String(((opts.page ?? 1) - 1) * PAGE_SIZE), prop: 'imageinfo|categories',
         iiprop: 'url|extmetadata|size|mime', iiurlwidth: '320', cllimit: '50',
       })
-      let response: Response
-      try {
-        response = await doFetch(`${ENDPOINT}?${params}`, { signal: opts.signal ?? null })
-      } catch {
-        throw new Error('Wikimedia Commons could not be reached from this browser.')
-      }
-      if (response.status === 429) throw new Error('Wikimedia Commons is rate-limiting this browser. Wait a moment and search again.')
-      if (!response.ok) throw new Error(`Wikimedia Commons could not be reached (HTTP ${response.status}).`)
-      const json = (await response.json().catch(() => ({}))) as { query?: { pages?: Record<string, Page> } }
+      const json = await fetchProviderJson<{ query?: { pages?: Record<string, Page> } }>(doFetch, 'Wikimedia Commons', `${ENDPOINT}?${params}`, opts.signal)
       const hits: ImageHit[] = []
       for (const p of Object.values(json.query?.pages ?? {})) {
         const info = p.imageinfo?.[0]

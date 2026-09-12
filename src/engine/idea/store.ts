@@ -27,7 +27,7 @@
  * is replayed for it; but nothing is trusted either: every field is checked
  * and the entry is rebuilt from the checked fields.
  */
-import { IDEA_CATEGORY_IDS } from './framework'
+import { IDEA_CATEGORY_IDS, isCategoryId } from './framework'
 import { isIdeaEditKey, newEdits, reduceEdits, type IdeaEdits, type ImageEdit } from './edits'
 import type { ImportedAsset } from '../../import/types'
 import {
@@ -118,10 +118,11 @@ function restoreEdits(value: unknown, assets: ReadonlyMap<string, readonly Impor
     let e = newEdits()
     for (const [editKey, edit] of entries(raw.edits)) {
       if (!isIdeaEditKey(editKey) || !isRecord(edit)) continue
+      const category = isCategoryId(edit.category) ? { category: edit.category } : {}
       if (edit.kind === 'replace' && typeof edit.replacement === 'string') {
-        e = reduceEdits(e, { type: 'replace', key: editKey, replacement: edit.replacement })
+        e = reduceEdits(e, { type: 'replace', key: editKey, replacement: edit.replacement, ...category })
       } else if (edit.kind === 'keep' && (edit.context === undefined || typeof edit.context === 'string')) {
-        e = reduceEdits(e, edit.context === undefined ? { type: 'keep', key: editKey } : { type: 'keep', key: editKey, context: edit.context })
+        e = reduceEdits(e, { type: 'keep', key: editKey, ...(edit.context === undefined ? {} : { context: edit.context }), ...category })
       } else if (edit.kind === 'image') {
         const image = restoreImageEdit(edit)
         if (image && assetNames.has(image.assetName)) e = reduceEdits(e, { type: 'image', key: editKey, edit: image })

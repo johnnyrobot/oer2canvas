@@ -74,11 +74,14 @@ test('edits round-trip with the document; dismissals do not', () => {
   const { review, header } = sample()
   const k = ideaEditKey('s1', 'b2c-blk-0', 0, 'crazy')
   let e = reduceEdits(newEdits(), { type: 'replace', key: k, replacement: 'wild' })
-  e = reduceEdits(e, { type: 'keep', key: ideaEditKey('s1', 'b2c-blk-1', 0, 'the blind'), context: 'as quoted' })
+  const kept = ideaEditKey('s1', 'b2c-blk-1', 0, 'the blind')
+  e = reduceEdits(e, { type: 'keep', key: kept, context: 'as quoted', category: '7.6' })
   e = reduceEdits(e, { type: 'dismiss', key: ideaEditKey('s1', 'b2c-blk-2', 0, 'hit the books') })
   const doc = toPersisted(header, new Map([['k', review]]), new Map([['k', e]]))
   const back = restore(doc)!
   expect(back.edits.get('k')?.edits.get(k)).toEqual({ kind: 'replace', replacement: 'wild' })
+  // The category survives the round trip; an edit saved without one (slices 2–3) still restores.
+  expect(back.edits.get('k')?.edits.get(kept)).toEqual({ kind: 'keep', context: 'as quoted', category: '7.6' })
   expect([...back.edits.get('k')!.edits.values()]).toHaveLength(2)
   // Session-only by spec §2.3: a dismissal hides a finding for THIS session.
   expect(back.edits.get('k')?.dismissed.size).toBe(0)

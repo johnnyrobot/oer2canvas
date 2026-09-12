@@ -27,6 +27,14 @@
 import { IDEA_CATEGORY_IDS, IDEA_FRAMEWORK, categoryById, type CategoryId } from './framework'
 
 export type Rating = 'na' | 'exclusive' | 'emerging' | 'inclusive'
+
+/** Rubric 1's own names for the four ratings — the panel and the export share this one map. */
+export const RATING_LABEL: Readonly<Record<Rating, string>> = {
+  na: 'Not Applicable',
+  exclusive: 'Exclusive',
+  emerging: 'Emerging Inclusive',
+  inclusive: 'Inclusive',
+}
 export type ChecklistAnswer = 'yes' | 'no' | 'unsure' | 'skip'
 
 export interface Assessor {

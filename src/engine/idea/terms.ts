@@ -60,9 +60,12 @@ export const findTerms: Finder = (sectionId, html) =>
         replacement: c.replacement, inQuotation: isQuotation(element), rule, origin: 'rule',
       }
     }
+    // `edit: false` (the pronoun rules): the considerate form is shown as a
+    // column to read, not as `suggestion`, which the row would offer with a
+    // one-click Use — and spec §3.1 leaves a pronoun rewrite to the author.
     return {
       kind: 'observation', key, category, sectionId, elementId,
-      columns: { text: original, suggestion: c.replacement, context: (element.textContent ?? '').slice(0, 160) },
+      columns: { text: original, alternative: c.replacement, context: (element.textContent ?? '').slice(0, 160) },
       rule, origin: 'rule',
     }
   })

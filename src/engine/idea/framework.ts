@@ -270,6 +270,9 @@ export const IDEA_FRAMEWORK: readonly IdeaCategory[] = [
 
 export const IDEA_CATEGORY_IDS: readonly CategoryId[] = IDEA_FRAMEWORK.map((c) => c.id)
 
+export const isCategoryId = (v: unknown): v is CategoryId =>
+  typeof v === 'string' && (IDEA_CATEGORY_IDS as readonly string[]).includes(v)
+
 const BY_ID: ReadonlyMap<CategoryId, IdeaCategory> = new Map(IDEA_FRAMEWORK.map((c) => [c.id, c]))
 
 export function categoryById(id: CategoryId): IdeaCategory {

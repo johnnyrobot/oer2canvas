@@ -5,17 +5,20 @@
  * had a new image "enter the accessibility queue", but that session is
  * closed by the time IDEA runs, so the check is made here, earlier, with the
  * same function. The rebuilt section is re-audited by the gate regardless.
+ *
+ * A non-modal dialog, in the flow under the search region — not `aria-modal`,
+ * because nothing else on the page is made inert and claiming so would strand
+ * a screen-reader user. Focus moves to the alt field on open, Escape cancels,
+ * and focus returns to the control that opened it on close (`SelectionTray`'s
+ * contract; without the return a keyboard user lands at the top of the page).
  */
 import { useEffect, useId, useRef, useState } from 'react'
 import { tasl, type ImageHit } from '../../engine/idea/images/search'
 import type { ImagePlacement } from '../../engine/idea/edits'
 import { validateAnswer } from '../../engine/compile/answers'
 import { IDEA_COPY } from './copy'
+import { FIELD, PRIMARY, QUIET, TARGET } from './styles'
 
-const TARGET = 'min-h-9 min-w-9'
-const FIELD = 'rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950'
-const PRIMARY = `${TARGET} rounded-md border border-brand-700 bg-brand-700 px-3 text-sm text-white`
-const QUIET = `${TARGET} rounded-md border border-neutral-300 px-3 text-sm dark:border-neutral-700`
 
 export interface PlacementOption { placement: ImagePlacement; label: string }
 
@@ -36,7 +39,11 @@ export function PlaceImageDialog({ hit, options, onUse, onCancel, busy, error }:
   const [index, setIndex] = useState(0)
   const [refusal, setRefusal] = useState('')
   const first = useRef<HTMLTextAreaElement>(null)
-  useEffect(() => { first.current?.focus() }, [])
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
+    first.current?.focus()
+    return () => { if (opener?.isConnected) opener.focus() }
+  }, [])
   const credit = tasl(hit)
 
   const submit = () => {
@@ -52,11 +59,11 @@ export function PlaceImageDialog({ hit, options, onUse, onCancel, busy, error }:
   return (
     <div
       role="dialog"
-      aria-modal="true"
       aria-labelledby={`${id}-t`}
+      onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onCancel() } }}
       className="flex flex-col gap-3 rounded-md border border-neutral-300 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900"
     >
-      <h5 id={`${id}-t`} className="m-0 text-base font-semibold">{c.title}</h5>
+      <h3 id={`${id}-t`} className="m-0 text-base font-semibold">{c.title}</h3>
       <div className="flex gap-3">
         <img src={hit.thumbUrl} alt="" width={120} height={Math.round((120 * hit.height) / Math.max(1, hit.width))} className="h-auto w-30 shrink-0" />
         <div className="text-sm">

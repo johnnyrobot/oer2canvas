@@ -3,11 +3,21 @@
  * queue's `answers` and shaped the same way: `applyIdeaEdits` reads it on every
  * recompile, so reversing a decision is a map delete plus a recompile.
  */
+import type { CategoryId } from './framework'
+
 export type IdeaEdit =
-  | { kind: 'replace'; replacement: string }
+  | { kind: 'replace'; replacement: string; category?: CategoryId }
   /** Kept as written (a quotation, a proper name); optionally followed by a parenthetical. */
-  | { kind: 'keep'; context?: string }
+  | { kind: 'keep'; context?: string; category?: CategoryId }
   | ImageEdit
+
+/*
+ * `category` is the finding's, recorded at the click: an edit's key names
+ * text, not a rule, and once the replacement is in the bytes no finder
+ * produces that key again, so the Applied list cannot recover which panel
+ * the decision was made in. Optional because edits saved before slice 4
+ * carry none; `appliedEdits` falls back to the term list for those.
+ */
 
 export interface ImagePlacement {
   kind: 'replace' | 'insert-after'
@@ -83,8 +93,8 @@ export function ideaFigureId(edit: ImageEdit): string {
 }
 
 export type IdeaEditsEvent =
-  | { type: 'replace'; key: string; replacement: string }
-  | { type: 'keep'; key: string; context?: string }
+  | { type: 'replace'; key: string; replacement: string; category?: CategoryId }
+  | { type: 'keep'; key: string; context?: string; category?: CategoryId }
   | { type: 'image'; key: string; edit: ImageEdit }
   | { type: 'dismiss'; key: string }
   | { type: 'undo'; key: string }
@@ -98,11 +108,15 @@ export function reduceEdits(e: IdeaEdits, event: IdeaEditsEvent): IdeaEdits {
   const dismissed = new Set(e.dismissed)
   switch (event.type) {
     case 'replace':
-      edits.set(event.key, { kind: 'replace', replacement: event.replacement })
+      edits.set(event.key, { kind: 'replace', replacement: event.replacement, ...(event.category ? { category: event.category } : {}) })
       dismissed.delete(event.key)
       break
     case 'keep':
-      edits.set(event.key, event.context === undefined ? { kind: 'keep' } : { kind: 'keep', context: event.context })
+      edits.set(event.key, {
+        kind: 'keep',
+        ...(event.context === undefined ? {} : { context: event.context }),
+        ...(event.category ? { category: event.category } : {}),
+      })
       dismissed.delete(event.key)
       break
     case 'image':

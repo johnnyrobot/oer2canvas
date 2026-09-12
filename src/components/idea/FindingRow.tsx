@@ -10,11 +10,8 @@ import { ExternalLink } from 'lucide-react'
 import type { FindingTarget, IdeaFinding } from '../../engine/idea/findings'
 import type { IdeaEditsEvent } from '../../engine/idea/edits'
 import { IDEA_COPY } from './copy'
+import { FIELD, PRIMARY, QUIET as BTN, TARGET } from './styles'
 
-const TARGET = 'min-h-9 min-w-9'
-const BTN = `${TARGET} rounded-md border border-neutral-300 px-3 text-sm dark:border-neutral-700`
-const PRIMARY = `${TARGET} rounded-md border border-brand-700 bg-brand-700 px-3 text-sm text-white`
-const FIELD = 'rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950'
 const ROW = 'flex flex-col gap-2 rounded-md border border-neutral-300 p-3 dark:border-neutral-700'
 const MUTED = 'text-neutral-600 dark:text-neutral-400'
 
@@ -86,7 +83,7 @@ export function FindingRow({
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm">{c.suggestionLabel}: <span className="font-semibold">{suggestion}</span></span>
             {finding.elementId && (
-              <button type="button" className={PRIMARY} onClick={() => onEvent({ type: 'replace', key: finding.key, replacement: suggestion })} {...focusProps}>
+              <button type="button" className={PRIMARY} onClick={() => onEvent({ type: 'replace', key: finding.key, replacement: suggestion, category: finding.category })} {...focusProps}>
                 {c.useSuggestion}
               </button>
             )}
@@ -107,7 +104,7 @@ export function FindingRow({
   }
 
   const replace = (
-    <button type="button" className={finding.inQuotation ? BTN : PRIMARY} onClick={() => onEvent({ type: 'replace', key: finding.key, replacement: finding.replacement })} {...focusProps}>
+    <button type="button" className={finding.inQuotation ? BTN : PRIMARY} onClick={() => onEvent({ type: 'replace', key: finding.key, replacement: finding.replacement, category: finding.category })} {...focusProps}>
       {c.replace}
     </button>
   )
@@ -122,7 +119,7 @@ export function FindingRow({
     </button>
   )
   const keepAsIs = (
-    <button type="button" className={BTN} onClick={() => onEvent({ type: 'keep', key: finding.key })} {...focusProps}>
+    <button type="button" className={BTN} onClick={() => onEvent({ type: 'keep', key: finding.key, category: finding.category })} {...focusProps}>
       {c.keepAsIs}
     </button>
   )
@@ -151,7 +148,7 @@ export function FindingRow({
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1 text-sm" htmlFor={`${id}-r`}>{c.replacementLabel}</label>
           <input id={`${id}-r`} className={`${FIELD} ${TARGET}`} value={text} onChange={(e) => setText(e.target.value)} {...focusProps} />
-          <button type="button" className={PRIMARY} onClick={() => { onEvent({ type: 'replace', key: finding.key, replacement: text }); setMode('idle') }}>{c.save}</button>
+          <button type="button" className={PRIMARY} onClick={() => { onEvent({ type: 'replace', key: finding.key, replacement: text, category: finding.category }); setMode('idle') }}>{c.save}</button>
           <button type="button" className={BTN} onClick={() => setMode('idle')}>{c.cancel}</button>
         </div>
       )}
@@ -171,7 +168,7 @@ export function FindingRow({
             className={PRIMARY}
             onClick={() => {
               const context = text === finding.replacement ? '' : text.trim()
-              onEvent(context ? { type: 'keep', key: finding.key, context } : { type: 'keep', key: finding.key })
+              onEvent(context ? { type: 'keep', key: finding.key, context, category: finding.category } : { type: 'keep', key: finding.key, category: finding.category })
               setMode('idle')
             }}
           >

@@ -1,9 +1,7 @@
 import type { CompiledSection, QueueItem } from '../../contracts/index'
 import type { Chapter, Section } from '../../sources/types'
 import { OPENSTAX } from './context'
-import type { CompileContext, PublisherProfile } from './context'
-import type { QueueAnswer } from './answers'
-import type { IdeaEdit } from '../idea/edits'
+import type { CompileContext, HumanDecisions, PublisherProfile } from './context'
 import { createSink } from './sink'
 import { STEPS, type Step } from './steps/index'
 
@@ -67,8 +65,7 @@ export function sectionContext(
   chapter: Chapter,
   section: Section,
   profile: PublisherProfile,
-  answers?: ReadonlyMap<string, QueueAnswer>,
-  ideaEdits?: ReadonlyMap<string, IdeaEdit>,
+  { answers, ideaEdits }: HumanDecisions = {},
 ): CompileContext {
   return {
     profile,
@@ -95,14 +92,10 @@ export function sectionContext(
 export function compileChapter(
   chapter: Chapter,
   profile: PublisherProfile,
-  opts: {
-    steps?: readonly Step[]
-    answers?: ReadonlyMap<string, QueueAnswer>
-    ideaEdits?: ReadonlyMap<string, IdeaEdit>
-  } = {},
+  opts: HumanDecisions & { steps?: readonly Step[] } = {},
 ): { sections: CompiledSection[]; queue: QueueItem[] } {
   const sections = chapter.sections.map((s) =>
-    compileSection(s, sectionContext(chapter, s, profile, opts.answers, opts.ideaEdits), opts.steps ?? STEPS),
+    compileSection(s, sectionContext(chapter, s, profile, opts), opts.steps ?? STEPS),
   )
   return { sections, queue: mergeQueues(sections) }
 }
@@ -127,18 +120,13 @@ export function compileChapter(
 export function recompileSections(
   chapter: Chapter,
   sectionIds: readonly string[],
-  opts: {
-    profile?: PublisherProfile
-    answers?: ReadonlyMap<string, QueueAnswer>
-    ideaEdits?: ReadonlyMap<string, IdeaEdit>
-    steps?: readonly Step[]
-  },
+  opts: HumanDecisions & { profile?: PublisherProfile; steps?: readonly Step[] },
 ): CompiledSection[] {
   const profile = opts.profile ?? OPENSTAX
   const wanted = new Set(sectionIds)
   return chapter.sections
     .filter((s) => wanted.has(s.id))
-    .map((s) => compileSection(s, sectionContext(chapter, s, profile, opts.answers, opts.ideaEdits), opts.steps ?? STEPS))
+    .map((s) => compileSection(s, sectionContext(chapter, s, profile, opts), opts.steps ?? STEPS))
 }
 
 /** The chapter-level queue: every section's items, deduped by content hash. */

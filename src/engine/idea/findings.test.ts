@@ -22,7 +22,7 @@ test('a finding whose key is in edits or dismissed is suppressed', () => {
 })
 
 test('a finder that throws fails only its own categories; every other finder still runs', () => {
-  const broken = { categories: ['7.6', '7.3'] as const, find: () => { throw new Error('regex blew up') } }
+  const broken = { categories: ['7.6', '7.3'] as const, kind: 'rule' as const, find: () => { throw new Error('regex blew up') } }
   const { findings, failures } = checkSection(section, newEdits(), [...RULE_FINDERS.filter((f) => !f.categories.includes('7.3')), broken])
   // The idiom finder (7.6 only) still ran; the terms finder was replaced by the broken one.
   expect(findings.map((f) => f.category)).toContain('7.6')

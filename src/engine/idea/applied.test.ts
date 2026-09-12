@@ -22,6 +22,15 @@ test('a gendered noun edit is filed under 7.3; an idiom gloss under 7.6', () => 
   expect(appliedEdits(sections, e).map((a) => a.category)).toEqual(['7.3', '7.6'])
 })
 
+test('an edit that carries its category files there, whatever the original text; one that does not falls back to the term list', () => {
+  // A 7.2 draft accepted: the key's original is text no rule knows, and it
+  // must not land under 7.6 just because that is where the rules file.
+  let e = reduceEdits(newEdits(), { type: 'replace', key: ideaEditKey('s1', 'a', 0, 'He has asthma'), replacement: 'A patient has asthma', category: '7.2' })
+  e = reduceEdits(e, { type: 'keep', key: ideaEditKey('s1', 'a', 0, 'chairman'), context: 'the title in 1950', category: '7.3' })
+  e = reduceEdits(e, { type: 'replace', key: ideaEditKey('s1', 'a', 0, 'Chairman'), replacement: 'chair' })
+  expect(appliedEdits(sections, e).map((a) => a.category)).toEqual(['7.2', '7.3', '7.3'])
+})
+
 test('a keep with context is present while the original is still at the element', () => {
   const k = ideaEditKey('s1', 'a', 0, 'chairman')
   const e = reduceEdits(newEdits(), { type: 'keep', key: k, context: 'as titled' })

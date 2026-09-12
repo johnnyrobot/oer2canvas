@@ -94,6 +94,10 @@ export function imageSummary(rows: readonly ImageRow[]): ImageSummary {
   }
 }
 
+/** The rule ids the 7.1 finder stamps, so a panel can tell a row from the summary without reading keys. */
+export const IMAGE_ROW_RULE = 'inventory-image'
+export const IMAGE_SUMMARY_RULE = 'inventory-image-summary'
+
 /** One observation per image, then the section summary. Always at least the summary. */
 export const findImages: Finder = (sectionId, html) => {
   const rows = imageInventory(sectionId, html)
@@ -111,7 +115,7 @@ export const findImages: Finder = (sectionId, html) => {
       reference: r.reference ?? '—',
       'mentions people': r.mentionsPeople ? 'yes' : 'no',
     },
-    rule: { id: 'inventory-image', source: 'inventory' },
+    rule: { id: IMAGE_ROW_RULE, source: 'inventory' },
     origin: 'rule',
   }))
   out.push({
@@ -125,7 +129,7 @@ export const findImages: Finder = (sectionId, html) => {
       decorative: String(s.decorative),
       'no alt text': String(s.noAlt),
     },
-    rule: { id: 'inventory-image-summary', source: 'inventory' },
+    rule: { id: IMAGE_SUMMARY_RULE, source: 'inventory' },
     origin: 'rule',
   })
   return out

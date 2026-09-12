@@ -2,7 +2,7 @@ import { categoryPrompt, rubricPrompt, sectionText, type SectionInput } from './
 import { categoryById } from '../framework'
 
 const input: SectionInput = {
-  sectionId: 's1', sectionTitle: '4.2 Nutrients', chapterTitle: '4: Nutrition', discipline: 'Biology',
+  sectionId: 's1', sectionTitle: '4.2 Nutrients', chapterTitle: '4: Nutrition', bookTitle: 'Biology',
   text: 'Indian spices are used as an example of phytochemicals.',
   images: [{ sectionId: 's1', elementId: 'i1', src: 'a.png', alt: 'A nurse', caption: 'Figure 1', mentionsPeople: true, presentational: false }],
   metadata: [{ sectionId: 's1', kind: 'heading', text: 'Key terms' }],

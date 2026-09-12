@@ -5,6 +5,7 @@ import { buildPlan, commitLabel, reRunBehaviour, type PageStatus } from './plan'
 import type { Destination } from './phases'
 import type { ImportFinding } from '../import/types'
 import { PARSER_PROBE_LIMITS } from '../import/parser-limit-values'
+import { IDEA_COPY } from '../components/idea/copy'
 
 /*
  * The budget shown is read from the same constant the importer ENFORCES, never
@@ -190,7 +191,7 @@ export function PlanScreen({
 
       {ideaSummary && (
         <p className="text-sm text-neutral-700 dark:text-neutral-300">
-          {`IDEA review — ${ideaSummary}`}
+          {IDEA_COPY.planLine(ideaSummary)}
         </p>
       )}
 

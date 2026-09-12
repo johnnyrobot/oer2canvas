@@ -20,6 +20,11 @@ export const IDEA_COPY = {
   rubricArgument:
     'Rate what you observed, not what the tool counted. The counts and drafts are evidence; the judgment is yours.',
   notesLabel: 'Notes',
+  /** The radiogroup's name: the row letter when a category has several rows, else just "Rating". */
+  ratingRow: (rowLetter: string) => `Row ${rowLetter}`,
+  rating: 'Rating',
+  /** Plan's one line about this phase, from `ideaSummary`'s "optional" / "n of m rated". */
+  planLine: (summary: string) => `IDEA review — ${summary}`,
   notesHint: 'Page references, examples, and anything the rating needs explaining.',
   resourcesHeading: 'Additional resources',
   opensNewTab: 'opens in a new tab',
@@ -94,6 +99,7 @@ export const IDEA_COPY = {
     columns: {
       text: 'Text',
       context: 'Context',
+      alternative: 'One alternative',
       idiom: 'Idiom',
       gloss: 'Meaning',
       image: 'Image',
@@ -118,6 +124,8 @@ export const IDEA_COPY = {
     announceDismissed: 'Dismissed.',
   },
   imageSearch: {
+    /** The link under each result to the page the image came from. */
+    sourceLink: 'source',
     find: 'Find an openly licensed photo',
     findAlternative: 'Find an alternative',
     heading: 'Openly licensed images',
@@ -151,6 +159,13 @@ export const IDEA_COPY = {
     fetching: 'Fetching the image…',
     cancel: 'Cancel',
     announceAdded: 'Image added.',
+    /** Why `prepareAssets` refused the bytes, by its rejection reason. */
+    refused: {
+      'unsupported-type': 'That file is not an image this app can package (PNG, JPEG, GIF, WebP).',
+      'too-large': 'That image is larger than the cartridge budget allows.',
+      'too-many-pixels': 'That image would decode to more pixels than the cartridge budget allows.',
+      other: 'That image could not be prepared.',
+    } as Readonly<Record<string, string>>,
   },
   inventory: {
     heading: 'Inventory',
@@ -205,12 +220,7 @@ export const IDEA_COPY = {
   },
 } as const
 
-export const RATING_COPY: Readonly<Record<Rating, string>> = {
-  na: 'Not Applicable',
-  exclusive: 'Exclusive',
-  emerging: 'Emerging Inclusive',
-  inclusive: 'Inclusive',
-}
+export { RATING_LABEL as RATING_COPY } from '../../engine/idea/review'
 
 export const RATING_ORDER: readonly Rating[] = ['na', 'exclusive', 'emerging', 'inclusive']
 

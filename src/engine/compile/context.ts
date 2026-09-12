@@ -187,3 +187,11 @@ export interface CompileContext {
    */
   ideaEdits?: ReadonlyMap<string, IdeaEdit>
 }
+
+/**
+ * What humans have decided about a chapter, and what every compile path
+ * carries together: the queue's answers and the IDEA phase's edits. One
+ * type, so a third kind of decision is one field added here rather than
+ * a parameter threaded through six signatures.
+ */
+export type HumanDecisions = Pick<CompileContext, 'answers' | 'ideaEdits'>
