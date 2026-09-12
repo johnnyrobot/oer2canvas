@@ -60,6 +60,8 @@ test('every obligation in criterion 5 is stated in a file a user reads', () => {
      */
     ['idea model key on device', /(model|provider) (API )?key[^.\n]*(this|your) (browser|device)[^.\n]*(never|not)[^.\n]*server/i],
     ['idea model send on click', /(nothing|no text)[^.\n]*sent[^.\n]*(until|unless)[^.\n]*(press|click)/i],
+    // Slice 5: both image services named in one sentence a user reads.
+    ['idea image search disclosure', /(commons\.wikimedia\.org|Wikimedia Commons)[^.\n]*(Openverse)/i],
   ]
   const all = Object.values(USER_FACING).join('\n')
   for (const [name, pattern] of obligations) {

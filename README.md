@@ -397,6 +397,13 @@ fallback.) The model key is stored in your browser on this device and never on t
 nothing is sent until you press the button; every model output is labelled a draft, becomes an
 edit only if it quotes the text verbatim, and never sets a rating. See [PRIVACY.md](PRIVACY.md).
 
+Where a section would benefit from a photo, the illustrations category can search Wikimedia
+Commons and Openverse for CC0, CC BY, CC BY-SA, and public-domain images only (anything else is
+never shown), fetch the chosen image in the browser, and place it in the page with the same alt
+rules the review queue enforces. The caption and the page's Source-and-license block carry
+Title · Author · Source · License, and a CC BY-SA image adds the share-alike sentence. Only the
+search words leave the browser; no key or account is involved.
+
 ## Project documents
 
 - [Production operations runbook](docs/OPERATIONS.md)

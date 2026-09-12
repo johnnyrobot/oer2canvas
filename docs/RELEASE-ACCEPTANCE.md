@@ -282,3 +282,26 @@ silent, even if nothing was broken outright.
    IDEA reviews*: reviews go, and a saved key would stay.
 7. Network tab throughout: no request to `/relay`. Ollama Cloud is listed as "(not available)"
    and cannot be chosen; the "measured" link opens the evidence file.
+
+## 8. IDEA review — slice 5
+
+1. Prepare an OpenStax chapter. IDEA → 7.1 → Find an openly licensed photo. Search "students
+   laboratory" on Wikimedia Commons with all four licences on. Results show titles, creators,
+   and licence badges; none says NC or ND.
+2. Use one. The dialog names the credit; leave alt empty and press Use: "Not saved: the
+   description is empty." Type a real description; choose "After …" a paragraph; Use.
+3. The chapter render beside the panels shows the image within a few seconds with the caption
+   ending in "(source)". The Source-and-license block ends with "Additional image: …" and, for a
+   BY-SA image, the share-alike sentence. The 7.1 Applied list shows "Image added: …" with Undo.
+4. **Reload the tab** and prepare the same chapter: the image is in the render and in Applied
+   without pressing anything. DevTools → Application → IndexedDB → oer2canvas → kv →
+   `idea.reviews` carries the bytes.
+5. Export the cartridge; unzip: `web_resources/oer2canvas/<name>` exists and the page's `<img>`
+   references it with the alt text typed.
+6. The Source select lists Openverse as disabled with "could not be reached from a browser when
+   last measured" beneath. (If a later probe offers it: choose a Flickr-hosted result; if the host
+   refuses the fetch, the dialog says which host and points to Document import; nothing is added.)
+7. Network tab: requests only to commons.wikimedia.org, upload.wikimedia.org, and thumb.wikimedia.org.
+   None to `/relay`.
+8. *Forget all IDEA reviews* → confirm; the image leaves the render after the recompile, and the
+   next export carries neither the figure nor the credit.

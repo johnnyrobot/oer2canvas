@@ -42,3 +42,8 @@ licensed CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). The text is v
 `src/engine/idea/framework.ts`, where the one editorial choice (an unbulleted example paragraph
 kept with its bullet) is recorded; element and row ids there are ours, stable, and never
 renumbered.
+
+Images added through the IDEA review are fetched from Wikimedia Commons or from sources indexed
+by Openverse under the licence each result declares (CC0, CC BY, CC BY-SA, or public domain).
+Each such image carries its own attribution in the page; this project reproduces the licence
+metadata those services publish and does not relicense the images.

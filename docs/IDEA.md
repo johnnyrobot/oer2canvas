@@ -3,7 +3,7 @@
 This file states, in one place, what the IDEA phase does with data. It is kept current slice by
 slice; the design is in `IDEA_REVIEW_SPEC.md`.
 
-## Slices 1–4 (this release)
+## Slices 1–5 (this release)
 
 - **Network:** none. The Framework text is vendored; the Rubric 1 export is built in the browser
   and handed to the browser's download.
@@ -49,6 +49,23 @@ slice; the design is in `IDEA_REVIEW_SPEC.md`.
   Rubric 1 draft is per row, rendered beside the human's radios, and cannot be copied into them;
   only its notes have a one-click "Use this note". Runs and drafts are React state and are never
   stored. *Forget key* removes the key; *Forget all IDEA reviews* does not touch it.
+- **Image search (slice 5):** goes browser → Wikimedia Commons / Openverse, query text only, no
+  key, on Search only. Only CC0, CC BY, CC BY-SA, and public-domain results are shown; a result
+  whose licence metadata does not parse is dropped, not shown with a warning, and Commons
+  categories that mark a file as not for reuse drop it too. Providers offered are those a browser
+  origin was measured to reach (`docs/evidence/idea-image-api-<date>.md`); Openverse is listed
+  but not offered while its anonymous tier times out from page script, and there is no relay.
+  Unsplash and Pexels are not integrated (non-CC licences; Unsplash's hotlink rule conflicts with
+  packaging). The chosen image's bytes are fetched by the browser from the result's host, put
+  through the same sniff/hash/name path as every imported image, and packaged into the cartridge;
+  a host that refuses the fetch is named, with Document import as the way out. Placement requires
+  alt text and checks it with the same rules the queue's Save uses. The caption and the
+  Source-and-license block carry Title · Author · Source · License; CC BY-SA adds the
+  share-alike sentence. No ranking or filtering by anything the Framework would call identity.
+- **Storage, extended (slice 5):** an image added through IDEA is stored with its bytes in the
+  same document as the reviews and edits, so it survives a reload; an image edit whose bytes are
+  missing is dropped on restore rather than exported as a broken reference. *Forget all IDEA
+  reviews* removes the bytes too.
 
 ## Licensing of what ships
 
@@ -56,7 +73,10 @@ slice; the design is in `IDEA_REVIEW_SPEC.md`.
   THIRD-PARTY-NOTICES.md.
 - The ASCCC-hosted Culturally Responsive Curriculum Assessment Tool is CC BY-NC-SA and is
   linked, never embedded.
+- Images added through the IDEA review carry the licence each result declares; the page credits
+  each one, and the project does not relicense them.
 
-## Later slices (not yet shipped)
+## Deferred (not shipped; spec §9)
 
-- Image search goes browser → Wikimedia Commons / Openverse, query text only.
+- Image generation, for the case where no suitable open-licensed photo exists — deferred by
+  decision. Rubric 2 (new-OER guide) mode. No further network path is planned.

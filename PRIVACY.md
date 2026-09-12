@@ -61,15 +61,25 @@ them. "Forget key" removes the key from this device; "Forget all IDEA reviews" d
 and the panel says so. Drafts the model returns are shown as drafts; none is applied to a page
 unless you accept it, and no rating is ever taken from a model.
 
+The IDEA review's image search sends **only the words you type** from your browser to Wikimedia
+Commons (`commons.wikimedia.org`) and to Openverse (`api.openverse.org`), without any account or
+key, and only when you press Search. (Openverse is listed but not offered while its anonymous
+tier cannot be reached from a browser; there is no relay fallback.) When you choose an image,
+your browser fetches that image's bytes from the host the result points at (for Commons,
+`upload.wikimedia.org`; for Openverse, the original site) so it can be packaged into your
+cartridge; a host that refuses that fetch is reported, and the image is not added. Nothing about
+your chapter is sent to either service.
+
 Small workflow values remain browser-local. A one-time migration removes Canvas token keys
 saved by earlier releases from both the current and legacy IndexedDB databases. Clearing site
 data removes other browser-local state.
 
 The optional IDEA review keeps its ratings, checklist answers, notes, assessor name and title, and
 BIPOC benchmark in this browser's IndexedDB database on this device, so that a reload does not
-lose them. They are never sent to the relay, to a publisher, or to any other host, and are removed
-by **Forget all IDEA reviews** on the IDEA screen or by clearing site data. On a shared computer,
-forget them when you are done.
+lose them. An image added through the IDEA review is stored there too, with its bytes, so it
+survives a reload. They are never sent to the relay, to a publisher, or to any other host, and are
+removed by **Forget all IDEA reviews** on the IDEA screen or by clearing site data. On a shared
+computer, forget them when you are done.
 
 The repository contains an optional direct-push mode only for an operator who self-hosts and
 administers both the PWA/relay and the paired Canvas instance. In that mode, the Canvas origin
