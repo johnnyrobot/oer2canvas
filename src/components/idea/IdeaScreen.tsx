@@ -6,8 +6,12 @@
  *
  * THE CHAPTER IS ON THIS SCREEN. An instructor rating "Appropriate
  * Terminology" has to be reading the terminology; sending them back to Review
- * to look is how a review gets done from memory. `ChapterView` with `audit`
- * off renders exactly the bytes Review approved, no verdicts.
+ * to look is how a review gets done from memory. `IdeaChapterRender` renders
+ * exactly the bytes Review approved, no verdicts, and outlines the element a
+ * focused finding is about.
+ *
+ * Findings are computed here, from the gated html, on every render of a new
+ * chapter or edits map; they are never stored. The edits map is the record.
  *
  * One panel open at a time by default. Eight open panels of checklist radios
  * is a wall; one open panel with the other seven headers visible is a table of
@@ -16,10 +20,13 @@
  * Export is two plain buttons, not a menu: a `role="menu"` owes arrow-key and
  * Escape handling it would not get here, and two buttons need neither.
  */
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Download, Trash2 } from 'lucide-react'
 import type { CompiledChapter } from '../../contracts/index'
-import { ChapterView } from '../ChapterView'
+import { findingsByCategory, findingsFor } from '../../engine/idea/findings'
+import { newEdits, parseIdeaEditKey, type IdeaEdits, type IdeaEditsEvent } from '../../engine/idea/edits'
+import { findOccurrence } from '../../engine/idea/text'
+import { IdeaChapterRender } from './IdeaChapterRender'
 import {
   FRAMEWORK_ATTRIBUTION, IDEA_FRAMEWORK, RUBRIC_SUGGESTIONS_HINT, RUBRIC_SUMMARY_HINT, type CategoryId,
 } from '../../engine/idea/framework'
@@ -42,8 +49,11 @@ const BUTTON =
 const PRIMARY = `${BUTTON} border-brand-700 bg-brand-700 text-white`
 const QUIET = `${BUTTON} border-neutral-300 text-neutral-800 hover:bg-stone-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800`
 
+/** One shared empty, so a chapter with no edits keeps a stable identity across renders. */
+const NO_EDITS = newEdits()
+
 export function IdeaScreen({
-  chapters, reviews, header, onEvent, onHeaderEvent, onForget, onExport,
+  chapters, reviews, header, onEvent, onHeaderEvent, onForget, onExport, edits, onEditEvent, pending,
 }: {
   chapters: readonly CompiledChapter[]
   reviews: ReadonlyMap<string, IdeaReview>
@@ -53,12 +63,19 @@ export function IdeaScreen({
   onForget: () => void
   /** Produces the download and returns its filename, which the status line announces. */
   onExport: (key: string, format: 'md' | 'json') => string
+  /** The IDEA edits per chapter key, beside the reviews. */
+  edits: ReadonlyMap<string, IdeaEdits>
+  onEditEvent: (key: string, event: IdeaEditsEvent) => void
+  /** Section ids whose recompile is in flight; the render says so for them. */
+  pending: ReadonlySet<string>
 }) {
   const ids = useId()
   const [index, setIndex] = useState(0)
   const [open, setOpen] = useState<CategoryId>('7.1')
   const [status, setStatus] = useState('')
   const [confirmForget, setConfirmForget] = useState(false)
+  /** The element a focused finding is about, outlined in the render. */
+  const [focus, setFocus] = useState<{ sectionId: string; elementId: string } | undefined>()
   // The benchmark field holds its own text so it can be emptied to retype;
   // only a finite number is dispatched, and blur restores the stored value.
   const [benchText, setBenchText] = useState(String(header.benchmark.bipocPercent))
@@ -83,6 +100,33 @@ export function IdeaScreen({
   const key = reviewKeyOf(current.chapter)
   const review = reviews.get(key) ?? newReview()
   const dispatch = (event: IdeaReviewEvent) => onEvent(key, event)
+
+  const chapterEdits = edits.get(key) ?? NO_EDITS
+  const findings = useMemo(
+    () => current.sections.flatMap((s) => findingsFor({ id: s.id, html: s.gate?.html ?? s.html }, chapterEdits)),
+    [current, chapterEdits],
+  )
+  const byCategory = findingsByCategory(findings)
+  const sectionTitleOf = (id: string) => current.sections.find((s) => s.id === id)?.title ?? ''
+  /**
+   * Stale = the edit's original is no longer at its key in the CURRENT bytes.
+   * Computed here, against the same html the render shows, rather than
+   * carried in the map: the map records a decision, not whether it landed.
+   */
+  const applied = [...chapterEdits.edits.entries()].map(([k, edit]) => {
+    const { sectionId, elementId, occurrence, original } = parseIdeaEditKey(k)
+    const section = current.sections.find((s) => s.id === sectionId)
+    const html = section?.gate?.html ?? section?.html ?? ''
+    const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html')
+    const el = doc.getElementById(elementId)
+    // After a replace the original is GONE by design; a stale replace is one
+    // where neither the original nor the replacement is at that element.
+    const present = el !== null && (
+      (edit.kind === 'replace' && (el.textContent ?? '').includes(edit.replacement)) ||
+      (edit.kind === 'keep' && findOccurrence(el, original, occurrence) !== undefined)
+    )
+    return { key: k, edit, stale: !present, sectionTitle: section?.title ?? '' }
+  })
 
   const exportAs = (format: 'md' | 'json') => {
     const name = onExport(key, format)
@@ -214,6 +258,11 @@ export function IdeaScreen({
                 open={open === category.id}
                 onToggle={() => setOpen((o) => (o === category.id ? o : category.id))}
                 onEvent={dispatch}
+                findings={byCategory.get(category.id) ?? []}
+                applied={applied}
+                sectionTitleOf={sectionTitleOf}
+                onEditEvent={(e) => onEditEvent(key, e)}
+                onFocusFinding={setFocus}
               />
             ))}
           </div>
@@ -257,7 +306,7 @@ export function IdeaScreen({
           aria-label={IDEA_COPY.renderLabel}
           className={`${CARD} min-w-0 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto`}
         >
-          <ChapterView compiled={current} audit={false} />
+          <IdeaChapterRender compiled={current} target={focus} pending={pending} />
         </aside>
       </div>
 

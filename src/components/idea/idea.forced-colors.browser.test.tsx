@@ -23,7 +23,10 @@ const chapter: Chapter = {
   attribution: { bookTitle: 'B', publisher: 'P', authors: [] }, xrefs: new Map(),
 }
 const compiled: CompiledChapter = { chapter, sections: [], queue: [] }
-const props = { reviews: new Map(), header: newHeader(), onEvent: () => {}, onHeaderEvent: () => {}, onForget: () => {}, onExport: () => 'x.md' }
+const props = {
+  reviews: new Map(), header: newHeader(), onEvent: () => {}, onHeaderEvent: () => {}, onForget: () => {}, onExport: () => 'x.md',
+  edits: new Map(), pending: new Set<string>(), onEditEvent: () => {},
+}
 
 test('forced colours is active for this project', () => {
   expect(window.matchMedia('(forced-colors: active)').matches).toBe(true)

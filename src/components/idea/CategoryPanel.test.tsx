@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { CategoryPanel } from './CategoryPanel'
 import { categoryById } from '../../engine/idea/framework'
 import { newReview, reduceReview, type IdeaReviewEvent } from '../../engine/idea/review'
+import type { EditFinding } from '../../engine/idea/findings'
 
 function renderPanel(id: '7.1' | '7.2' | '7.6' = '7.6', open = true) {
   const onEvent = vi.fn<(e: IdeaReviewEvent) => void>()
@@ -84,7 +85,8 @@ test('the header summary reads "rated" for a one-row category and counts rows ot
   const { unmount } = render(
     <CategoryPanel category={categoryById('7.6')} review={review.categories['7.6']} open={false} onToggle={vi.fn()} onEvent={vi.fn()} />,
   )
-  expect(screen.getByRole('button', { name: /7\.6 .*rated$/ })).toBeInTheDocument()
+  // 7.6 has a rule finder, so its header also carries the suggestion count.
+  expect(screen.getByRole('button', { name: /7\.6 .*rated· 0 suggestions$/ })).toBeInTheDocument()
   expect(screen.queryByText(/1 of 1/)).not.toBeInTheDocument()
   unmount()
   render(
@@ -103,4 +105,34 @@ test('resources are links that open in a new tab and say so', () => {
   const link = screen.getByRole('link', { name: /Disability Language Style Guide \(NCDJ\)/ })
   expect(link).toHaveAttribute('href', 'https://ncdj.org/style-guide/')
   expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'))
+})
+
+const finding: EditFinding = {
+  kind: 'edit', key: 's1::a::0::crazy', category: '7.6', sectionId: 's1', elementId: 'a', original: 'crazy',
+  occurrence: 0, replacement: 'wild', inQuotation: false, rule: { id: 'ablist-crazy', source: 'terms' }, origin: 'rule',
+}
+
+test('findings render in a "What a rule found" zone above the checklist, and the header counts them', () => {
+  const onEditEvent = vi.fn()
+  render(
+    <CategoryPanel category={categoryById('7.6')} review={newReview().categories['7.6']} open onToggle={vi.fn()} onEvent={vi.fn()}
+      findings={[finding]} applied={[]} sectionTitleOf={() => 'S1'} onEditEvent={onEditEvent} onFocusFinding={vi.fn()} />,
+  )
+  expect(screen.getByRole('button', { name: /7\.6 .*1 suggestion/ })).toBeInTheDocument()
+  const zone = screen.getByRole('group', { name: 'What a rule found' })
+  fireEvent.click(within(zone).getByRole('button', { name: 'Replace' }))
+  expect(onEditEvent).toHaveBeenCalledWith({ type: 'replace', key: finding.key, replacement: 'wild' })
+})
+
+test('with no findings the zone says so without claiming a clean bill', () => {
+  render(
+    <CategoryPanel category={categoryById('7.6')} review={newReview().categories['7.6']} open onToggle={vi.fn()} onEvent={vi.fn()}
+      findings={[]} applied={[]} sectionTitleOf={() => 'S1'} onEditEvent={vi.fn()} onFocusFinding={vi.fn()} />,
+  )
+  expect(screen.getByText(/That is not a clean bill/)).toBeInTheDocument()
+})
+
+test('categories with no rule finder show no findings zone at all', () => {
+  render(<CategoryPanel category={categoryById('7.4')} review={newReview().categories['7.4']} open onToggle={vi.fn()} onEvent={vi.fn()} findings={[]} applied={[]} sectionTitleOf={() => ''} />)
+  expect(screen.queryByRole('group', { name: 'What a rule found' })).not.toBeInTheDocument()
 })

@@ -12,9 +12,13 @@
  */
 import { useId } from 'react'
 import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
-import type { IdeaCategory, RubricRow } from '../../engine/idea/framework'
+import type { CategoryId, IdeaCategory, RubricRow } from '../../engine/idea/framework'
 import { RUBRIC_NA_TEXT } from '../../engine/idea/framework'
 import type { CategoryReview, IdeaReviewEvent, Rating } from '../../engine/idea/review'
+import type { IdeaFinding } from '../../engine/idea/findings'
+import type { IdeaEdit, IdeaEditsEvent } from '../../engine/idea/edits'
+import { FindingRow } from './FindingRow'
+import { AppliedList } from './AppliedList'
 import {
   CHECKLIST_COPY, CHECKLIST_ORDER, IDEA_COPY, RATING_COPY, RATING_ORDER,
 } from './copy'
@@ -27,17 +31,27 @@ const CHOICE =
   'has-[:checked]:border-brand-700 has-[:checked]:bg-brand-50 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 ' +
   'dark:border-neutral-700 dark:has-[:checked]:bg-neutral-800'
 
+/** The categories a rule finder exists for. Only these show a findings zone. */
+const RULE_CATEGORIES = new Set<CategoryId>(['7.3', '7.6'])
+
 export function CategoryPanel({
-  category, review, open, onToggle, onEvent,
+  category, review, open, onToggle, onEvent, findings, applied, sectionTitleOf, onEditEvent, onFocusFinding,
 }: {
   category: IdeaCategory
   review: CategoryReview
   open: boolean
   onToggle: () => void
   onEvent: (event: IdeaReviewEvent) => void
+  findings?: readonly IdeaFinding[]
+  applied?: readonly { key: string; edit: IdeaEdit; stale: boolean; sectionTitle: string }[]
+  sectionTitleOf?: (sectionId: string) => string
+  onEditEvent?: (event: IdeaEditsEvent) => void
+  onFocusFinding?: (target: { sectionId: string; elementId: string } | undefined) => void
 }) {
   const bodyId = useId()
   const rated = category.rows.filter((r) => review.ratings.has(r.id)).length
+  const hasRules = RULE_CATEGORIES.has(category.id)
+  const found = findings ?? []
   return (
     <section className={PANEL} aria-labelledby={`${bodyId}-h`}>
       <h3 id={`${bodyId}-h`} className="m-0">
@@ -55,6 +69,11 @@ export function CategoryPanel({
           <span className="text-xs font-normal text-neutral-600 dark:text-neutral-400">
             {IDEA_COPY.ratedSummary(rated, category.rows.length)}
           </span>
+          {hasRules && (
+            <span className="ml-1 text-xs font-normal text-neutral-600 dark:text-neutral-400">
+              {`· ${found.length} suggestion${found.length === 1 ? '' : 's'}`}
+            </span>
+          )}
         </button>
       </h3>
 
@@ -64,6 +83,30 @@ export function CategoryPanel({
             <h4 className="mb-1 text-sm font-semibold">{IDEA_COPY.restorativeHeading}</h4>
             <p className="text-sm text-neutral-800 dark:text-neutral-200">{category.restorative}</p>
           </div>
+
+          {hasRules && (
+            <fieldset className="m-0 border-0 p-0">
+              <legend className="mb-2 text-sm font-semibold">{IDEA_COPY.findings.heading}</legend>
+              {found.length === 0
+                ? <p className="m-0 text-sm text-neutral-700 dark:text-neutral-300">{IDEA_COPY.findings.none}</p>
+                : (
+                  <ul className="m-0 flex list-none flex-col gap-2 p-0">
+                    {found.map((f) => (
+                      <FindingRow
+                        key={f.key}
+                        finding={f}
+                        sectionTitle={sectionTitleOf?.(f.sectionId) ?? ''}
+                        onEvent={(e) => onEditEvent?.(e)}
+                        onFocus={(t) => onFocusFinding?.(t)}
+                      />
+                    ))}
+                  </ul>
+                )}
+              <div className="mt-3">
+                <AppliedList applied={applied ?? []} onUndo={(key) => onEditEvent?.({ type: 'undo', key })} />
+              </div>
+            </fieldset>
+          )}
 
           <fieldset className="m-0 border-0 p-0">
             <legend className="mb-2 text-sm font-semibold">{IDEA_COPY.checklistHeading}</legend>

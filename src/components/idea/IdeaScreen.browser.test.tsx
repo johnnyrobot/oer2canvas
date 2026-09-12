@@ -38,7 +38,10 @@ const compiled: CompiledChapter = {
   sections: [{ id: 's1', title: 'Nutrients', html: '<p>x</p>', notes: [], queue: [], gate: GATE }],
   queue: [],
 }
-const props = { reviews: new Map(), header: newHeader(), onEvent: () => {}, onHeaderEvent: () => {}, onForget: () => {}, onExport: () => 'x.md' }
+const props = {
+  reviews: new Map(), header: newHeader(), onEvent: () => {}, onHeaderEvent: () => {}, onForget: () => {}, onExport: () => 'x.md',
+  edits: new Map(), pending: new Set<string>(), onEditEvent: () => {},
+}
 
 async function violationsIn(container: Element): Promise<string[]> {
   const results = await axe.run(container, { runOnly: { type: 'tag', values: WCAG_AA } })

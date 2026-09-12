@@ -3,14 +3,7 @@ import { AuditPanel } from './AuditPanel'
 import { CanvasShellStyles } from './CanvasShellStyles'
 import { usePackagedAssetUrls } from './usePackagedAssetUrls'
 
-/**
- * `audit` (default true) shows the per-section accessibility verdict and the
- * "items need review" line. The IDEA screen turns it off: it shows the chapter
- * so the instructor can READ what they are rating, and the verdicts belong to
- * Review. What it does not turn off is the body's source — `s.gate.html`,
- * always, for the reason the comment below gives.
- */
-export function ChapterView({ compiled, audit = true }: { compiled: CompiledChapter; audit?: boolean }) {
+export function ChapterView({ compiled }: { compiled: CompiledChapter }) {
   const { chapter } = compiled
   // Display-only resolution of `$IMS-CC-FILEBASE$/oer2canvas/…` tokens to
   // `blob:` urls. Canvas resolves that token itself at cartridge import time;
@@ -34,7 +27,7 @@ export function ChapterView({ compiled, audit = true }: { compiled: CompiledChap
         {chapter.attribution.publisher}
         {chapter.attribution.license ? ` — ${chapter.attribution.license.name}` : ''}
       </p>
-      {audit && compiled.queue.length > 0 && (
+      {compiled.queue.length > 0 && (
         <p>
           {compiled.queue.length} item(s) need review before this chapter can be published.
         </p>
@@ -57,7 +50,7 @@ export function ChapterView({ compiled, audit = true }: { compiled: CompiledChap
       */}
       {compiled.sections.map((s) => (
         <article key={s.id} id={s.id} aria-label={s.title}>
-          {audit && s.gate && <AuditPanel result={s.gate} />}
+          {s.gate && <AuditPanel result={s.gate} />}
           {/* Never a hole: with no gate there is no body to name the section,
               so the article would otherwise render completely empty. */}
           {!s.gate && <p>This section has not been checked yet.</p>}

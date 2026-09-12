@@ -44,6 +44,7 @@ import { toChapter } from './import/to-chapter'
 import { isAbortError, messageOf } from './errors'
 import { IdeaScreen } from './components/idea/IdeaScreen'
 import { reviewKeyOf, useIdeaReviews } from './components/idea/useIdeaReviews'
+import { useIdeaRecompile } from './components/idea/useIdeaRecompile'
 import { ratedCount } from './engine/idea/review'
 import { IDEA_CATEGORY_IDS } from './engine/idea/framework'
 import { rubric1Filename, rubric1Json, rubric1Markdown } from './engine/idea/rubric-export'
@@ -323,6 +324,25 @@ export default function App() {
    */
   const ideaReviews = useIdeaReviews(disk)
   /**
+   * An IDEA edit reaches the export the way a queue answer does: the section
+   * is recompiled from source with both maps applied, re-audited, and swapped
+   * into `prepared`. The queue's regrouping is preserved by replacing sections
+   * in place rather than rebuilding the chapter.
+   */
+  const onRebuilt = useCallback((chapterKey: string, sections: readonly CompiledSection[]) => {
+    setPrepared((all) => all.map((c) => {
+      if (reviewKeyOf(c.chapter) !== chapterKey) return c
+      const byId = new Map(sections.map((s) => [s.id, s]))
+      const next = c.sections.map((s) => byId.get(s.id) ?? s)
+      return { ...c, sections: next, queue: mergeQueues(next) }
+    }))
+  }, [])
+  const { pending: ideaPending } = useIdeaRecompile({
+    prepared, answers, edits: ideaReviews.edits,
+    profileOf: (ch) => publisherProfiles[ch.source],
+    onRebuilt,
+  })
+  /**
    * The browser import being planned: the parse result plus every edit to its
    * proposed pages and metadata. Owned here rather than by the Content screen so
    * it survives a visit to Review or Plan, and so a changed plan can be
@@ -426,6 +446,10 @@ export default function App() {
     const { compileAndAuditChapter } = await import('./engine')
     return compileAndAuditChapter(ch, {
       profile,
+      // A re-prepared chapter comes back with its saved IDEA wording already
+      // applied and gated in one pass. If the IndexedDB read has not returned
+      // yet, the restore changes `edits` and `useIdeaRecompile` catches up.
+      ideaEdits: ideaReviews.editsFor(reviewKeyOf(ch)).edits,
       signal: controller.signal,
       onProgress: (progress) => {
         setCompiling(
@@ -886,6 +910,9 @@ export default function App() {
           onHeaderEvent={ideaReviews.dispatchHeader}
           onForget={ideaReviews.forgetAll}
           onExport={exportRubric}
+          edits={ideaReviews.edits}
+          onEditEvent={ideaReviews.dispatchEdit}
+          pending={ideaPending}
         />
       )}
 

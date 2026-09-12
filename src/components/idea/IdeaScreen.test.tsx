@@ -4,6 +4,8 @@ import { reviewKeyOf } from './useIdeaReviews'
 import { newHeader, newReview, reduceHeader, reduceReview, type IdeaHeader, type IdeaHeaderEvent, type IdeaReview, type IdeaReviewEvent } from '../../engine/idea/review'
 import type { CompiledChapter, CompiledSection } from '../../contracts/index'
 import type { Chapter } from '../../sources/types'
+import { newEdits, reduceEdits, ideaEditKey, type IdeaEdits } from '../../engine/idea/edits'
+import type { GateResult } from '../../engine/gate'
 
 const chapter = (title: string): Chapter => ({
   source: 'openstax',
@@ -39,7 +41,10 @@ function renderScreen({
   const onForget = vi.fn()
   const onExport = vi.fn<(key: string, f: 'md' | 'json') => string>().mockReturnValue('idea-rubric1-x.md')
   render(
-    <IdeaScreen chapters={chapters} reviews={reviews} header={header} onEvent={onEvent} onHeaderEvent={onHeaderEvent} onForget={onForget} onExport={onExport} />,
+    <IdeaScreen
+      chapters={chapters} reviews={reviews} header={header} onEvent={onEvent} onHeaderEvent={onHeaderEvent} onForget={onForget} onExport={onExport}
+      edits={new Map()} pending={new Set()} onEditEvent={vi.fn()}
+    />,
   )
   return { onEvent, onHeaderEvent, onForget, onExport }
 }
@@ -147,4 +152,38 @@ test('the storage rule and the Framework attribution are on screen', () => {
   expect(screen.getByText(/saved in this browser on this device/)).toBeInTheDocument()
   expect(screen.getByText(/Framework text from "ASCCC OERI Inclusion, Diversity, Equity, and Anti-Racism \(IDEA\) Framework/)).toBeInTheDocument()
   expect(screen.getByText(/licensed CC BY 4\.0/)).toBeInTheDocument()
+})
+
+const gate = (html: string): GateResult => ({ html, conformance: { blockers: [], issues: [] }, badgeWithheld: false }) as unknown as GateResult
+const withHtml = (title: string, html: string): CompiledChapter => ({
+  chapter: chapter(title),
+  sections: [{ id: `${title}-s1`, title: 'S1', html, notes: [], queue: [], gate: gate(html) }],
+  queue: [],
+})
+
+/** Slice 1's props plus this slice's, so each test names only what it varies. */
+const base = {
+  reviews: new Map(), header: newHeader(), onEvent: vi.fn(), onHeaderEvent: vi.fn(), onForget: vi.fn(), onExport: () => 'x',
+  edits: new Map<string, IdeaEdits>(), pending: new Set<string>(), onEditEvent: vi.fn(),
+}
+
+test('findings are computed from the prepared html and edits suppress them', () => {
+  const c = withHtml('4: Nutrition', '<p id="b2c-blk-0">He suffers from asthma.</p>')
+  const onEditEvent = vi.fn()
+  const { rerender } = render(<IdeaScreen {...base} chapters={[c]} onEditEvent={onEditEvent} />)
+  fireEvent.click(screen.getByRole('button', { name: /^7\.6 / }))
+  fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
+  const key = ideaEditKey('4: Nutrition-s1', 'b2c-blk-0', 0, 'suffers from')
+  expect(onEditEvent).toHaveBeenCalledWith(reviewKeyOf(chapter('4: Nutrition')), { type: 'replace', key, replacement: 'has' })
+  const edits = new Map<string, IdeaEdits>([[reviewKeyOf(chapter('4: Nutrition')), reduceEdits(newEdits(), { type: 'replace', key, replacement: 'has' })]])
+  rerender(<IdeaScreen {...base} chapters={[c]} edits={edits} onEditEvent={onEditEvent} />)
+  expect(screen.queryByRole('button', { name: 'Replace' })).not.toBeInTheDocument()
+  expect(screen.getByText('“suffers from” → “has”')).toBeInTheDocument()
+})
+
+test('the chapter render beside the panels shows the pending line for a section being re-checked', () => {
+  const c = withHtml('4: Nutrition', '<p id="b2c-blk-0">x</p>')
+  render(<IdeaScreen {...base} chapters={[c]} pending={new Set(['4: Nutrition-s1'])} />)
+  const aside = screen.getByRole('complementary', { name: 'Chapter as it will be published' })
+  expect(within(aside).getByText('Re-checking this section…')).toBeInTheDocument()
 })
