@@ -19,8 +19,12 @@ import { RUBRIC_NA_TEXT } from '../../engine/idea/framework'
 import type { CategoryReview, IdeaReviewEvent, Rating } from '../../engine/idea/review'
 import type { IdeaFinding } from '../../engine/idea/findings'
 import type { IdeaEdit, IdeaEditsEvent } from '../../engine/idea/edits'
+import type { LlmProvider } from '../../engine/idea/llm/providers'
+import { DRAFTABLE, type DraftableCategory } from '../../engine/idea/llm/prompts'
 import { FindingRow } from './FindingRow'
 import { AppliedList } from './AppliedList'
+import { AskModel } from './AskModel'
+import type { RunState } from './useModelRuns'
 import {
   CHECKLIST_COPY, CHECKLIST_ORDER, IDEA_COPY, RATING_COPY, RATING_ORDER,
 } from './copy'
@@ -54,6 +58,7 @@ function countLine(id: CategoryId, found: readonly IdeaFinding[]): string | unde
 
 export function CategoryPanel({
   category, review, open, onToggle, onEvent, findings, applied, sectionTitleOf, onEditEvent, onFocusFinding, failures,
+  askModel, draftFindings, rubricDraft,
 }: {
   category: IdeaCategory
   review: CategoryReview
@@ -67,11 +72,18 @@ export function CategoryPanel({
   onFocusFinding?: (target: { sectionId: string; elementId: string } | undefined) => void
   /** Sections this category's rule check threw on (spec §7.1). */
   failures?: readonly { sectionTitle: string; message: string }[]
+  /** Slice 4: the Ask-the-model zone, rendered only for the draftable categories. */
+  askModel?: { provider: LlmProvider | undefined; state: RunState; onSend: () => void; onCancel: () => void; firstRun: boolean }
+  /** What the model drafted for this category, already filtered by the edits map. */
+  draftFindings?: readonly IdeaFinding[]
+  /** The model's Rubric 1 draft for this category: per row, beside the human's rating, never copied into it. */
+  rubricDraft?: { rows: readonly { id: string; rating: Rating | null }[]; notes: string }
 }) {
   const bodyId = useId()
   const rated = category.rows.filter((r) => review.ratings.has(r.id)).length
   const hasRules = RULE_CATEGORIES.has(category.id)
   const isInventory = INVENTORY_CATEGORIES.has(category.id)
+  const isDraftable = askModel !== undefined && (DRAFTABLE as readonly string[]).includes(category.id)
   const found = findings ?? []
   // 7.1 reads summary first, then the rows; the finder appends the summary last.
   const listed = category.id === '7.1'
@@ -155,6 +167,26 @@ export function CategoryPanel({
             </fieldset>
           )}
 
+          {isDraftable && (
+            <fieldset className="m-0 border-0 p-0">
+              <legend className="mb-2 text-sm font-semibold">{IDEA_COPY.llm.heading}</legend>
+              <AskModel {...askModel} />
+              {(draftFindings ?? []).length > 0 && (
+                <ul className="m-0 mt-3 flex list-none flex-col gap-2 p-0" aria-label={IDEA_COPY.llm.draftLabel}>
+                  {(draftFindings ?? []).map((f) => (
+                    <FindingRow
+                      key={f.key}
+                      finding={f}
+                      sectionTitle={sectionTitleOf?.(f.sectionId) ?? ''}
+                      onEvent={(e) => onEditEvent?.(e)}
+                      onFocus={(t) => onFocusFinding?.(t)}
+                    />
+                  ))}
+                </ul>
+              )}
+            </fieldset>
+          )}
+
           <fieldset className="m-0 border-0 p-0">
             <legend className="mb-2 text-sm font-semibold">{IDEA_COPY.checklistHeading}</legend>
             <ol className="m-0 flex list-none flex-col gap-3 p-0">
@@ -193,9 +225,33 @@ export function CategoryPanel({
                   rowsInCategory={category.rows.length}
                   value={review.ratings.get(row.id)}
                   onChoose={(rating) => onEvent({ type: 'rate', categoryId: category.id, rowId: row.id, rating })}
+                  draft={rubricDraft ? (rubricDraft.rows.find((r) => r.id === row.id)?.rating ?? null) : undefined}
                 />
               ))}
             </div>
+            {/*
+              The model's notes for this area. "Use this note" fills Notes;
+              there is deliberately no handler here or in the row that
+              dispatches `rate` — a draft rating is read, never clicked in.
+            */}
+            {rubricDraft && (
+              <div className="b2c-idea-draft-notes mt-3 flex flex-col gap-1 rounded-md border border-dashed border-neutral-300 p-3 text-sm dark:border-neutral-700">
+                <p className="m-0 font-semibold">{IDEA_COPY.llm.rubricDraft.column}</p>
+                <p className="m-0 text-xs text-neutral-600 dark:text-neutral-400">{IDEA_COPY.llm.rubricDraft.cannotCopy}</p>
+                <p className="m-0 whitespace-pre-wrap">{rubricDraft.notes}</p>
+                {rubricDraft.notes && (
+                  <div>
+                    <button
+                      type="button"
+                      className={`${TARGET} rounded-md border border-neutral-300 px-2 text-sm dark:border-neutral-700`}
+                      onClick={() => onEvent({ type: 'note', categoryId: category.id, notes: rubricDraft.notes })}
+                    >
+                      {IDEA_COPY.llm.rubricDraft.useNote}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </fieldset>
 
           <div className="flex flex-col gap-1">
@@ -243,12 +299,14 @@ export function CategoryPanel({
  * hears the question with the answer.
  */
 function RubricRowChoice({
-  row, rowsInCategory, value, onChoose,
+  row, rowsInCategory, value, onChoose, draft,
 }: {
   row: RubricRow
   rowsInCategory: number
   value: Rating | undefined
   onChoose: (rating: Rating) => void
+  /** `undefined` = no draft run yet; `null` = the model gave nothing for this row. */
+  draft?: Rating | null
 }) {
   const id = useId()
   const text: Record<Rating, string> = {
@@ -263,6 +321,12 @@ function RubricRowChoice({
       <p id={`${id}-l`} className="m-0 text-xs font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
         {label}
       </p>
+      {draft !== undefined && (
+        <p className="b2c-idea-draft m-0 self-start rounded-md border border-dashed border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700">
+          <span className="font-semibold">{IDEA_COPY.llm.rubricDraft.column}: </span>
+          <span>{draft ? RATING_COPY[draft] : IDEA_COPY.llm.rubricDraft.noDraft}</span>
+        </p>
+      )}
       <div className="grid gap-2 sm:grid-cols-2">
         {RATING_ORDER.map((rating) => (
           <label key={rating} className={`${CHOICE} ${TARGET}`}>

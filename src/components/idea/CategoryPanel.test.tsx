@@ -167,3 +167,51 @@ test('a category a rule could not check on a section says so, with the error in 
   const detail = screen.getByText('regex blew up').closest('details')!
   expect(detail).not.toHaveAttribute('open')
 })
+
+test('the rubric draft renders beside the row’s rating with no control that sets the rating', () => {
+  render(
+    <CategoryPanel category={categoryById('7.2')} review={newReview().categories['7.2']} open onToggle={vi.fn()} onEvent={vi.fn()}
+      rubricDraft={{ rows: [{ id: '7.2.a', rating: 'emerging' }], notes: 'Names are mostly Anglo.' }} />,
+  )
+  expect(screen.getAllByText('Model draft').length).toBeGreaterThan(0)
+  expect(screen.getByText('Emerging Inclusive', { selector: '.b2c-idea-draft *' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Use this note' })).toBeInTheDocument()
+  const rubric = screen.getByRole('group', { name: /Rubric 1/ })
+  expect(within(rubric).getByRole('radio', { name: /^Emerging Inclusive/ })).not.toBeChecked()
+  expect(screen.queryByRole('button', { name: /use this rating/i })).not.toBeInTheDocument()
+})
+
+// 7.1 has three rows and the draft is per row; each row's draft sits beside
+// THAT row, and a row the model left null says so rather than borrowing a
+// neighbour's word.
+test('a three-row area shows one draft per row', () => {
+  render(
+    <CategoryPanel category={categoryById('7.1')} review={newReview().categories['7.1']} open onToggle={vi.fn()} onEvent={vi.fn()}
+      rubricDraft={{ rows: [{ id: '7.1.a', rating: 'exclusive' }, { id: '7.1.b', rating: null }, { id: '7.1.c', rating: 'inclusive' }], notes: 'n' }} />,
+  )
+  const drafts = screen.getAllByText(/^Model draft/, { selector: '.b2c-idea-draft *' })
+  expect(drafts).toHaveLength(3)
+  const groups = within(screen.getByRole('group', { name: /Rubric 1/ })).getAllByRole('radiogroup')
+  expect(groups[0]!.parentElement).toHaveTextContent('Exclusive')
+  expect(groups[1]!.parentElement).toHaveTextContent('no draft')
+  expect(groups[2]!.parentElement).toHaveTextContent('Inclusive')
+})
+
+test('Use this note dispatches a note event with the draft text', () => {
+  const onEvent = vi.fn()
+  render(<CategoryPanel category={categoryById('7.2')} review={newReview().categories['7.2']} open onToggle={vi.fn()} onEvent={onEvent} rubricDraft={{ rows: [{ id: '7.2.a', rating: null }], notes: 'draft note' }} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Use this note' }))
+  expect(onEvent).toHaveBeenCalledWith({ type: 'note', categoryId: '7.2', notes: 'draft note' })
+})
+
+test('a draftable category shows the Ask-the-model zone with its drafts; a rule-only one does not', () => {
+  const draft: ObservationFinding = { kind: 'observation', key: 's1::llm::7.2::0', category: '7.2', sectionId: 's1', columns: { evidence: 'Bob', inference: 'Anglo' }, rule: { id: 'llm-7.2', source: 'llm' }, origin: 'draft' }
+  const askModel = { provider: undefined, state: { status: 'idle' as const }, onSend: vi.fn(), onCancel: vi.fn(), firstRun: true }
+  render(<CategoryPanel category={categoryById('7.2')} review={newReview().categories['7.2']} open onToggle={vi.fn()} onEvent={vi.fn()} askModel={askModel} draftFindings={[draft]} />)
+  expect(screen.getByRole('group', { name: 'Ask the model' })).toBeInTheDocument()
+  expect(screen.getByText(/No provider set/)).toBeInTheDocument()
+  expect(screen.getByText('Anglo')).toBeInTheDocument()
+  // 7.6 is rule-only by spec: the same props add no zone to it.
+  render(<CategoryPanel category={categoryById('7.6')} review={newReview().categories['7.6']} open onToggle={vi.fn()} onEvent={vi.fn()} askModel={askModel} />)
+  expect(screen.getAllByRole('group', { name: 'Ask the model' })).toHaveLength(1)
+})
