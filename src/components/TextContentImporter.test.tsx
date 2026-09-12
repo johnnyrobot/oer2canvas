@@ -111,7 +111,8 @@ test('an import blocker receives focus and keeps the form recoverable', async ()
   fireEvent.click(screen.getByRole('button', { name: 'Create page plan' }))
 
   const alert = await screen.findByRole('alert')
-  expect(alert).toHaveFocus()
+  // Focus lands in an effect after the alert commits; the sibling importers' tests wait the same way.
+  await waitFor(() => expect(alert).toHaveFocus())
   expect(alert).toHaveTextContent('text, Markdown, or HTML file')
   expect(screen.getByRole('button', { name: 'Create page plan' })).toBeEnabled()
   expect(onImported).not.toHaveBeenCalled()
