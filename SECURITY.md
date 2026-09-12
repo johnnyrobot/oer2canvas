@@ -24,6 +24,18 @@ credential, revoke it in Canvas immediately and mention only that it was revoked
   `Authorization` header, never placed in a URL or a request body, and held in memory for the
   current tab only. It is never written to browser storage and needs no migration, because no
   release ever wrote one. `Forget key` clears the held key and the live field.
+- The IDEA review's model key is entered by the user, sent only to the provider the user chose
+  (Gemini or OpenRouter) in an `Authorization` header, never placed in a URL or a request body,
+  and never sent to the relay — there is no relay route for a model call and no fallback to one.
+  Unlike the Firecrawl key it IS written to browser storage (IndexedDB key `idea.llm.settings`,
+  this device only), because the IDEA review spans sessions; `Forget key` removes it. A stored
+  setting naming a provider the app no longer offers is loaded as no setting at all. The
+  provider list is fixed at build time from a measured CORS probe; the app cannot be pointed at
+  an arbitrary model host.
+- The IDEA review's image search sends only the query text, without credentials, to
+  `commons.wikimedia.org` and `api.openverse.org` on a click, and fetches a chosen image's bytes
+  from the host the result names. Fetched bytes go through the same sniff, hash, and naming path
+  as every imported image before they are packaged; a non-raster stream is refused.
 - Web extraction has a second, default-off deployment mode in which the operator runs the
   extraction service themselves and no key is required. It is compiled out of the public build:
   the artifact check requires the public bundle to name the Firecrawl endpoint and no other, and

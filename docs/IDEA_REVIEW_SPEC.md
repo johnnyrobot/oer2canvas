@@ -275,8 +275,11 @@ compile worker path, results cached per `(sectionId, htmlHash)`.
 - For each `<img>`: final alt (post-queue), caption, figure reference, `src`, and a boolean
   `mentionsPeople` from a fixed noun list (`person|people|woman|man|student|worker|patient|
   child|family|nurse|doctor|teacher|…`) matched against alt + caption.
-- Output: one observation per image with OERI's 7.1 columns (`imageRef`, `description`,
-  `suggestedRevision: ''`), plus a section summary observation ("6 images · 2 mention people").
+- Output *(revised in slice 3)*: one observation per image with columns `image`, `description`,
+  `caption`, `reference`, and `mentions people` — OERI's `imageRef`/`description` under the names
+  the panel shows, the caption and reference kept as separate columns so the assessor can tally
+  from them, and no empty `suggestedRevision` (a blank column read aloud on every row) — plus a
+  section summary observation ("6 images · 2 mention people").
 - **No demographic inference of any kind.** This inventory is the input OERI's 7.1 prompt asks
   for and the worksheet the human fills in.
 
@@ -309,7 +312,9 @@ interface LlmProvider {
   label: string
   baseUrl: string                     // preset; not user-editable in v1
   defaultModel: string
-  auth: (key: string) => HeadersInit  // Bearer for OpenRouter/Ollama Cloud; x-goog-api-key for Gemini
+  // (revised) no `auth` hook: all three presets are called through their OpenAI-compatible
+  // chat-completions endpoint, which takes `Authorization: Bearer` — Gemini's included
+  // (`/v1beta/openai`, measured 2026-09-12). One client, one header, one containment test.
   extraHeaders?: HeadersInit          // OpenRouter: HTTP-Referer, X-Title
   dataUse: string                     // one sentence shown beside the key field, with a link
   offered: boolean                    // set by the CORS spike: false if it cannot be called browser-direct

@@ -64,7 +64,9 @@ unless you accept it, and no rating is ever taken from a model.
 The IDEA review's image search sends **only the words you type** from your browser to Wikimedia
 Commons (`commons.wikimedia.org`) and to Openverse (`api.openverse.org`), without any account or
 key, and only when you press Search. (Openverse is listed but not offered while its anonymous
-tier cannot be reached from a browser; there is no relay fallback.) When you choose an image,
+tier cannot be reached from a browser; there is no relay fallback.) The results show thumbnails,
+which your browser loads from the image host (for Commons, `upload.wikimedia.org`) as it does for
+any web page — that host sees a request for each thumbnail shown. When you choose an image,
 your browser fetches that image's bytes from the host the result points at (for Commons,
 `upload.wikimedia.org`; for Openverse, the original site) so it can be packaged into your
 cartridge; a host that refuses that fetch is reported, and the image is not added. Nothing about

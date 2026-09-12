@@ -5,8 +5,10 @@ slice; the design is in `IDEA_REVIEW_SPEC.md`.
 
 ## Slices 1–5 (this release)
 
-- **Network:** none. The Framework text is vendored; the Rubric 1 export is built in the browser
-  and handed to the browser's download.
+- **Network:** two paths, each on a click and each described below — a model call (slice 4) and an
+  image search (slice 5). Nothing else: the Framework text is vendored, the rule checks and
+  inventories run in the browser, and the Rubric 1 export is built in the browser and handed to
+  the browser's download.
 - **Storage:** the review (ratings, checklist answers, notes, summary, suggestions, per chapter),
   the assessor, and the benchmark are written to the app's IndexedDB database
   (`oer2canvas`, key `idea.reviews`) on this device, debounced after each change. They are read

@@ -6,8 +6,9 @@ requirements: the General Content Page template, Canvas HTML allowlist, descript
 accessible tables, contrast-safe colors, semantic emphasis, and the 120-character Canvas alt
 limit are enforced during compilation. The publication gate withholds output while definite
 blockers or unanswered human-review items remain. The app interface is exercised with axe-core
-in headless Chromium, including the destination, chapter picker, review, and rendered chapter
-states. The browser-only import forms and the page plan editor they hand off to are exercised
+in headless Chromium, including the destination, chapter picker, review, rendered chapter, and
+IDEA review states (the category panels, the image search region, and the placement dialog),
+in normal and forced-colours modes. The browser-only import forms and the page plan editor they hand off to are exercised
 against the same WCAG rules, including keyboard-operable source, metadata, rights, and
 confirmation controls. Page plan editing never depends on drag and drop: rename, include or
 exclude, split, merge, and move up or down are labelled buttons and fields that name the page they
