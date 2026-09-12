@@ -55,7 +55,7 @@ instrument, and this app already runs a WCAG audit with its own gate. Accessibil
 All per chapter, all plain data, living **beside** `QueueSession` — nothing here is read by
 `isPublishable` or by `phaseAvailability` for `plan`.
 
-### 2.1 `IdeaReview` — the human's judgment
+### 2.1 `IdeaReview` and `IdeaHeader` — the human's judgment *(revised)*
 
 ```ts
 type CategoryId = '7.1' | '7.2' | '7.3' | '7.4' | '7.5' | '7.6' | '7.7' | '7.8'
@@ -63,25 +63,38 @@ type Rating = 'na' | 'exclusive' | 'emerging' | 'inclusive'
 type ChecklistAnswer = 'yes' | 'no' | 'unsure' | 'skip'
 
 interface CategoryReview {
-  rating?: Rating                                   // human-set only; no code path writes it
+  ratings: ReadonlyMap<string, Rating>              // by Rubric 1 row id ('7.1.a', '7.1.b', '7.1.c', '7.2.a', …); human-set only
   notes: string
   checklist: ReadonlyMap<string, ChecklistAnswer>   // keyed by stable bullet id, e.g. '7.6.3'
 }
 
-interface IdeaReview {
+interface IdeaReview {                              // one per chapter
   categories: Readonly<Record<CategoryId, CategoryReview>>
+  summary: string                                   // Rubric 1's chapter-level "Summary"
+  suggestions: string                               // Rubric 1's chapter-level "Suggestions"
+}
+
+interface IdeaHeader {                              // one per session, stamped into every chapter's export
+  assessor: { name: string; title: string; college: string }   // Rubric 1 header fields
   benchmark: { bipocPercent: number }               // default 77 (CCCCO Data Mart Fall 2022); editable
-  assessor?: { name: string; title: string; college: string }   // Rubric 1 header fields
 }
 ```
 
-The checklist bullets are the Framework's "Elements for Consideration", vendored as
-`data/idea-framework.json` with stable ids, text, and the category's "Restorative Requirements"
-paragraph. That file is CC BY 4.0 and is attributed in the panel footer and in
-`THIRD-PARTY-NOTICES.md`.
+Rubric 1 gives category 7.1 three rows, each with its own "not applicable" box, and every other
+category one; a category is *rated* when every one of its rows is. The assessor and benchmark are
+Rubric 1's header, which OERI's form repeats on every chapter's sheet — but the person filling it
+in does not change between chapters, so the app asks once and stamps it into each export.
 
-A pure reducer `(review, event) => review` in `src/engine/idea/review.ts`, hook shell over it in
-the component layer, same split as `session.ts` / `useQueueSession.ts`.
+The checklist bullets are the Framework's "Elements for Consideration", vendored **in full** in
+`src/engine/idea/framework.ts` with stable ids, the category's "Restorative Requirements"
+paragraph, both the §7 title and the Rubric 1 title, and the §8.0 resource links. That text is CC
+BY 4.0 and is attributed in the panel footer and in `THIRD-PARTY-NOTICES.md`; any editorial
+departure from the source (there is one: an unbulleted example paragraph kept with its bullet) is
+recorded in the module.
+
+Two pure reducers in `src/engine/idea/review.ts` — `(review, event) => review` and
+`(header, event) => header` — hook shell over them in the component layer, same split as
+`session.ts` / `useQueueSession.ts`.
 
 ### 2.2 `IdeaFinding` — what a check or the model surfaced
 
@@ -148,8 +161,10 @@ a decision lives.
 
 ### 2.4 `applyIdeaEdits` — a compile step
 
-Added to `STEPS` after `text-semantics` and before `attribution`. For each edit whose `sectionId`
-matches:
+Two steps. `insertIdeaImages` runs after `ensureBlockIds` and before `resolveAlt` (so an added
+image is judged by the same alt rules as every other image and block ids never shift);
+`applyIdeaEdits` runs after `appendAttribution` (so the change sentence lands inside the
+attribution block). For each edit whose `sectionId` matches:
 
 - `replace`: locate the element by `elementId`, find the `occurrence`-th instance of `original`
   in its text nodes, replace it preserving the leading capital and surrounding punctuation. If
@@ -164,16 +179,21 @@ appends one sentence to the Source-and-license block: *"Modified from the origin
 updated for inclusive language."* (and, for images, the additional-image lines in §6.4). This is
 the CC BY "indicate changes" obligation; it is idempotent like the rest of that step.
 
-### 2.5 Export
+### 2.5 Export *(revised)*
 
-`rubric1Export(review, findings, edits, chapter)` → `{ markdown, json }`:
+`rubric1Export(review, header, findings, edits, chapter)` → `{ markdown, json }`, in the order
+Appendix A lays the form out:
 
-- Header: textbook / chapter / assessor, benchmark used.
-- One table: area · rating · notes, in Framework order, with the checklist answers under each
-  row.
-- Appendix: applied edits (original → replacement, section, rule source) and added images
-  (title, creator, license).
-- JSON mirrors the table so a future OERI submission form can consume it.
+- Header: textbook / publisher / chapter / assessor, benchmark used. (Edition is not exported; the
+  app does not know it.)
+- One table: area · row · rating · notes, in Framework order under **Rubric 1's own area titles**
+  ("Illustrations and Photos of People", "Incorporating Diverse Perspectives", …), one line per
+  rubric row, unrated rows stated as such.
+- Rubric 1's **Category Count** block (rows per column), then its **Summary** and **Suggestions**.
+- The checklist answers, grouped by area.
+- Appendix (slice 2+): applied edits (original → replacement, section, rule source) and added
+  images (title, creator, license).
+- JSON mirrors all of it so a future OERI submission form can consume it.
 
 Download only. **Never packaged into the cartridge** — the rubric is about the material, not for
 students. `.docx` export is a stretch goal for slice 1 if the existing document tooling makes it
@@ -192,6 +212,26 @@ key* erases it; the settings panel says which device it is stored on and warns a
 computers. This is a deliberate step past the Firecrawl key's tab-memory contract, and the README
 paragraph that describes that key gets a sibling explaining the difference.
 
+### 2.7 Review storage *(revised — new)*
+
+A review is hours of a person's judgment, and the app re-prepares chapters freely. So `IdeaReview`s
+and the `IdeaHeader` are **persisted in the browser**, in the app's existing IndexedDB database
+(`createIdbStore`, key `idea.reviews`), written debounced after each change and read once on load.
+
+- **Keyed by chapter identity** (`source::bookId::title`), not by the compiled object, so a
+  re-prepared chapter finds its review and a different book starts blank. `clearDerivedOutput`
+  does not touch it.
+- **Read through a validating restore** that replays the stored values through the reducers. An
+  id the current Framework does not know, or a value that is not a `Rating`, is dropped exactly as
+  a live event naming it would be. This is what keeps "the rating is never machine-written" true
+  across a reload: what comes back is only what went in through a `rate` event.
+- **Forgettable.** *Forget all IDEA reviews* on the screen, with an inline confirmation, removes
+  the document; clearing site data does too. The screen says where reviews live and PRIVACY.md
+  says it again.
+- **Nothing about a review leaves the device.** Not to the relay, not to a provider, not in an
+  export the app makes on its own. Findings (§2.2) remain ephemeral; edits (§2.3) join this
+  document in slice 2.
+
 ## 3. Deterministic checks and inventories (no model, no network)
 
 Module `src/engine/idea/`, one pure function per category: `(sectionId, html) => IdeaFinding[]`.
@@ -200,10 +240,13 @@ compile worker path, results cached per `(sectionId, htmlHash)`.
 
 ### 3.1 `terms.ts` — 7.6 Appropriate Terminology and 7.3 Gender-Inclusive Language
 
-- Engine: `retext-equality` via `unified` + `retext-english`, run on the **text nodes** of each
-  block element so a hit maps to an `elementId` and an occurrence index.
-- **Curated rule set**, vendored as `data/idea-terms.json`, generated by
-  `scripts/idea-build-terms.ts` from the library's YAML with these edits, recorded in the script:
+- Engine: word-boundary phrase matching over the **text nodes** of each block element (one text
+  node at a time), so a hit maps to an `elementId` and an occurrence index. Every outermost block
+  element receives a deterministic id at compile time (`ensureBlockIds`, `b2c-blk-<n>`) so
+  findings and edits key on elements that exist in the published bytes.
+- **Curated rule set**, hand-vendored as `src/engine/idea/data/idea-terms.json` (CC BY 4.0, ours;
+  retext-equality consulted as the reference list and credited in the file — no runtime `unified`/
+  `retext` dependency and no YAML build step). Its edits from the reference list:
   - drop software-context rules (`disabled → turned off`, git-sense `master/slave`,
     `whitelist/blacklist`, `dummy value`, and the like);
   - keep every `ablist`, `race`, `lgbtq`, `suicide`, `condescending` rule;
@@ -219,7 +262,7 @@ compile worker path, results cached per `(sectionId, htmlHash)`.
 
 ### 3.2 `idioms.ts` — 7.6 idioms and colloquialisms
 
-- A vendored list `data/idea-idioms.json` (~150 entries, ours, CC BY) of English idioms with a
+- A vendored list `src/engine/idea/data/idea-idioms.json` (50 entries at v1, open to growth; ours, CC BY) of English idioms with a
   plain-language gloss each.
 - Emits **observations only**; each carries an optional parenthetical edit ("hit the books
   (study intensively)") the instructor may accept. The Framework says *clarify*, not remove.
@@ -349,39 +392,46 @@ panel, not a disabled button.
 - `phaseAvailability` for `plan` does not read `ideaRated`. Plan shows the same *"IDEA — …"*
   line above the commit button so skipping is a visible choice.
 
-### 5.2 Screen
+### 5.2 Screen *(revised)*
 
-Per chapter, with the chapter switcher Review already has:
+Per chapter, with the chapter switcher Review already has. Two columns on a wide screen — rubric
+left, chapter right, the chapter sticky and scrolling on its own — stacked on a narrow one:
 
 ```
-┌ IDEA review · Chapter 4: Nutrition            [Provider: Gemini ▾] [key ••••] [Forget]
-│ Assessor: name / title / college       BIPOC benchmark: [77]%    [Export Rubric 1 ▾]
-├───────────────────────────────────────────────────────────────────────────────────
-│ ▸ 7.1 Illustrations & Photos      rated: —      6 images · 2 mention people
-│ ▾ 7.6 Appropriate Terminology     rated: —      4 suggestions · 1 in a quotation
-│   ┌ What a rule found ──────────────────────────────────────────────────────
-│   │ "suffers from diabetes"  →  "has diabetes"        NCDJ style guide ↗
-│   │   in §4.2 Nutrients, paragraph 7            [Replace] [Edit…] [Dismiss]
-│   │ "the schizophrenics"  →  "people with schizophrenia"   (in a 1911 quotation)
-│   │                                          [Keep, add context…] [Replace] [Dismiss]
-│   ├ Ask the model ─────────────────────────────────────────────────────────
-│   │ ⓘ Sends this section's text to Gemini. Gemini's data-use terms ↗
-│   │                                            [Send this section to Gemini]
-│   ├ Elements for consideration ──────────────────────────────────────────
-│   │ ○ Outmoded or incorrect terminology identified and replaced/reframed   yes/no/unsure/skip
-│   ├ Rubric 1 ───────────────────────────────────────────────────────────
-│   │ ( ) N/A  ( ) Exclusive  ( ) Emerging inclusive  ( ) Inclusive
-│   │ Notes: [                                                    ]
-│   └───────────────────────────────────────────────────────────────────────
-│ ▸ 7.7 …
-├───────────────────────────────────────────────────────────────────────────────────
-│ Section render (read-only, repaired HTML) — the focused finding is highlighted here
+┌ IDEA review · Chapter under review: [4: Nutrition ▾]         [Download Markdown] [Download JSON]
+│ Assessor (once): name / title / college          BIPOC benchmark: [77]%
+│ Reviews are saved in this browser on this device…             [Forget all IDEA reviews]
+├──────────────────────────────────────────────┬────────────────────────────────────────
+│ ▸ 7.1 Illustrations & Photos   1 of 3 rows   │ Chapter as it will be published
+│ ▾ 7.6 Appropriate Terminology  rated         │ (read-only, the gated HTML Review approved,
+│   ┌ What a rule found ─────────────────────  │  no accessibility verdicts — the focused
+│   │ "suffers from diabetes" → "has diabetes" │  finding is highlighted here in slice 2)
+│   │   in §4.2, para 7  [Replace][Edit…][Dismiss]
+│   ├ Ask the model ───────────────────────── │  4.2 Nutrients
+│   │ ⓘ Sends this section's text to Gemini ↗ │  The body needs six major nutrients…
+│   │                [Send this section to Gemini]
+│   ├ Elements for consideration ──────────── │
+│   │ ○ Identify any outmoded…   yes/no/unsure/skip
+│   ├ Rubric 1 ─────────────────────────────  │
+│   │ ( ) N/A ( ) Exclusive ( ) Emerging ( ) Inclusive
+│   │ Notes: [                              ] │
+│   └───────────────────────────────────────  │
+│ ▸ 7.7 …                                      │
+│ Chapter summary: Summary [    ] Suggestions [    ]
+│ Framework text from … CC BY 4.0              │
+└──────────────────────────────────────────────┴────────────────────────────────────────
 ```
+
+The provider controls of §4.6 join the header in slice 4.
 
 ### 5.3 Interaction rules
 
+- **The chapter is always on the screen** *(revised)*: `ChapterView` with the accessibility
+  verdicts off, rendering exactly `gate.html` — the bytes Review approved — so the instructor
+  reads what they rate instead of rating from memory. Never the raw or un-audited compile.
 - Eight collapsible panels, all present, Framework order, one open at a time by default. Each
   header line is its summary (finding count, rating).
+- Export is two plain buttons, not a menu. *Forget all IDEA reviews* asks inline before it acts.
 - Focusing a finding highlights its element in the section render — the queue's existing D5.7
   highlight mechanism, reused. Edit findings highlight the sentence's block; image observations
   highlight the image.
@@ -450,11 +500,15 @@ interface ImageHit {
 ### 6.3 What "Use this image" does
 
 Writes an `image` edit. `applyIdeaEdits` emits
-`<figure><img src alt=""><figcaption>…attributionHtml</figcaption></figure>` at the placement,
-and the packaged-asset pipeline that already ships PDF-recovered figures fetches `fullUrl` into
-the cartridge. **The new image enters the accessibility queue** — it has no alt yet — so Plan
-re-gates until the instructor writes one (VLM draft available as today). IDEA can add work to
-Review; it can never bypass it.
+`<div class="b2c-figure"><img src="$IMS-CC-FILEBASE$/…" alt="…" width height aria-describedby><p class="b2c-caption">…TASL (source)</p></div>`
+at the placement, mirroring what `restructureFigures` emits. The image bytes are fetched in the
+browser, prepared through `prepareAssets`, and appended to the chapter's `assets` before the edit
+is dispatched, so the preview and the exporter can resolve the reference. **Alt text is required
+in the placement dialog and checked with `validateAnswer` — the same layer-1 rules the review
+queue's Save uses** — refusing an empty, filename, or placeholder description. (The queue session
+is closed by the time IDEA runs, so the check happens at placement rather than by routing the
+image through the queue.) The rebuilt section is re-audited through the gate before it can be
+published. IDEA can add work; it can never bypass the alt rules.
 
 ### 6.4 Attribution
 
@@ -520,9 +574,11 @@ Each a shippable PR with its own tests; order fixed by dependency.
 1. **Phase + review model + checklists + Rubric 1 export.** Shell change, `data/idea-framework.json`,
    `IdeaReview` reducer, the screen with all eight panels showing checklist + rubric only,
    Markdown/JSON export (docx if cheap).
-2. **Term and idiom findings + edits.** `terms.ts`, `idioms.ts`, the vendored rule set and its
-   build script, `applyIdeaEdits`, attribution change note, highlight-on-focus, Applied/Undo,
-   golden.
+2. **Term and idiom findings + edits.** First, lift the queue's answers and settled chapters out
+   of `QueueScreen` into `App` (today they never leave it, so Plan's count and the export describe
+   the first compile) — the one path that both answers and IDEA edits then share. Then `terms.ts`,
+   `idioms.ts`, the vendored lists, `ensureBlockIds`, `applyIdeaEdits`, attribution change note,
+   highlight-on-focus, Applied/Undo, golden.
 3. **Inventories.** `images.ts`, `metadata.ts`, observation tables.
 4. **Model drafting.** CORS spike → provider adapter, settings panel, prompts, parsers,
    per-category run, rubric draft column, disclosure copy.
