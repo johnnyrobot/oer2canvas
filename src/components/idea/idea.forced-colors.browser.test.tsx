@@ -26,6 +26,7 @@ const compiled: CompiledChapter = { chapter, sections: [], queue: [] }
 const props = {
   reviews: new Map(), header: newHeader(), onEvent: () => {}, onHeaderEvent: () => {}, onForget: () => {}, onExport: () => 'x.md',
   edits: new Map(), pending: new Set<string>(), onEditEvent: () => {},
+  llm: { settings: undefined, onSave: () => {}, onForget: () => {}, runs: new Map(), rubricDrafts: new Map(), runCategory: () => {}, runRubric: () => {}, cancel: () => {} },
 }
 
 test('forced colours is active for this project', () => {

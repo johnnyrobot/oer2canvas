@@ -32,3 +32,14 @@ test('a provider that is not offered is listed as unavailable with the evidence 
   expect(screen.getByRole('option', { name: new RegExp(notOffered.label) })).toBeDisabled()
   expect(screen.getByText(new RegExp(`${notOffered.label} cannot be called from a browser directly`))).toBeInTheDocument()
 })
+
+test('a record that loads after mount fills the fields; forgetting empties them', () => {
+  const { rerender } = render(<LlmSettingsPanel settings={undefined} onSave={vi.fn()} onForget={vi.fn()} />)
+  expect(screen.getByLabelText('API key')).toHaveValue('')
+  rerender(<LlmSettingsPanel settings={{ provider: 'openrouter', key: 'k1', model: 'm1' }} onSave={vi.fn()} onForget={vi.fn()} />)
+  expect(screen.getByRole('combobox', { name: 'Provider' })).toHaveValue('openrouter')
+  expect(screen.getByLabelText('API key')).toHaveValue('k1')
+  expect(screen.getByRole('textbox', { name: 'Model' })).toHaveValue('m1')
+  rerender(<LlmSettingsPanel settings={undefined} onSave={vi.fn()} onForget={vi.fn()} />)
+  expect(screen.getByLabelText('API key')).toHaveValue('')
+})

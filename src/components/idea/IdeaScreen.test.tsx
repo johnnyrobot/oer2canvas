@@ -31,6 +31,12 @@ const compiled = (title: string): CompiledChapter => ({
   chapter: chapter(title), sections: [section(`${title}-s1`, 'Nutrients')], queue: [],
 })
 
+/** Slice 4's stub: no provider, nothing runs. Slice 5 reuses it. */
+const llmStub = {
+  settings: undefined, onSave: () => {}, onForget: () => {}, runs: new Map(), rubricDrafts: new Map(),
+  runCategory: () => {}, runRubric: () => {}, cancel: () => {},
+}
+
 function renderScreen({
   chapters = [compiled('4: Nutrition'), compiled('5: Digestion')],
   reviews = new Map<string, IdeaReview>(),
@@ -43,7 +49,7 @@ function renderScreen({
   render(
     <IdeaScreen
       chapters={chapters} reviews={reviews} header={header} onEvent={onEvent} onHeaderEvent={onHeaderEvent} onForget={onForget} onExport={onExport}
-      edits={new Map()} pending={new Set()} onEditEvent={vi.fn()}
+      edits={new Map()} pending={new Set()} onEditEvent={vi.fn()} llm={llmStub}
     />,
   )
   return { onEvent, onHeaderEvent, onForget, onExport }
@@ -165,6 +171,7 @@ const withHtml = (title: string, html: string): CompiledChapter => ({
 const base = {
   reviews: new Map(), header: newHeader(), onEvent: vi.fn(), onHeaderEvent: vi.fn(), onForget: vi.fn(), onExport: () => 'x',
   edits: new Map<string, IdeaEdits>(), pending: new Set<string>(), onEditEvent: vi.fn(),
+  llm: llmStub,
 }
 
 test('findings are computed from the prepared html and edits suppress them', () => {
@@ -218,4 +225,63 @@ test('an applied edit is listed under its own category only', () => {
   fireEvent.click(screen.getByRole('button', { name: /^7\.6 / }))
   expect(screen.getByText('“suffers from” → “has”')).toBeInTheDocument()
   expect(screen.queryByText('“chairman” → “chair”')).not.toBeInTheDocument()
+})
+
+test('the model settings panel sits in the header; with no provider no rubric-draft button is offered', () => {
+  const c = withHtml('4: Nutrition', '<p id="b2c-blk-0">x</p>')
+  render(<IdeaScreen {...base} chapters={[c]} />)
+  expect(screen.getByRole('group', { name: 'Model provider (optional)' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Draft a Rubric 1 review/ })).not.toBeInTheDocument()
+})
+
+test('with a provider, the rubric-draft button sends the chapter once per click, and a category send runs once per section', () => {
+  const c: CompiledChapter = {
+    chapter: chapter('4: Nutrition'),
+    sections: [
+      { id: 's1', title: 'S1', html: '<p id="b2c-blk-0">Bob spoke.</p>', notes: [], queue: [], gate: gate('<p id="b2c-blk-0">Bob spoke.</p>') },
+      { id: 's2', title: 'S2', html: '<p id="b2c-blk-1">Ann spoke.</p>', notes: [], queue: [], gate: gate('<p id="b2c-blk-1">Ann spoke.</p>') },
+    ],
+    queue: [],
+  }
+  const runRubric = vi.fn()
+  const runCategory = vi.fn()
+  const llm = { ...base.llm, settings: { provider: 'gemini' as const, key: 'k', model: 'm' }, runRubric, runCategory }
+  render(<IdeaScreen {...base} chapters={[c]} llm={llm} />)
+  expect(runRubric).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Draft a Rubric 1 review with Gemini' }))
+  expect(runRubric).toHaveBeenCalledTimes(1)
+  const [key, title, inputs] = runRubric.mock.calls[0]!
+  expect(key).toBe(reviewKeyOf(chapter('4: Nutrition')))
+  expect(title).toBe('4: Nutrition')
+  expect(inputs.map((i: { text: string }) => i.text)).toEqual(['Bob spoke.', 'Ann spoke.'])
+
+  fireEvent.click(screen.getByRole('button', { name: /^7\.2 / }))
+  fireEvent.click(screen.getByRole('button', { name: 'Send this section to Gemini' }))
+  expect(runCategory).toHaveBeenCalledTimes(2)
+  expect(runCategory.mock.calls.map((call) => call[2].sectionId)).toEqual(['s1', 's2'])
+})
+
+test('a done run’s drafts show under the category, minus ones the edits map already decided; the rubric draft reaches its row', () => {
+  const html = '<p id="b2c-blk-0">The chairman spoke.</p>'
+  const c = withHtml('4: Nutrition', html)
+  const key = reviewKeyOf(chapter('4: Nutrition'))
+  const editKey = ideaEditKey('4: Nutrition-s1', 'b2c-blk-0', 0, 'chairman')
+  const findings = [
+    { kind: 'edit' as const, key: editKey, category: '7.2' as const, sectionId: '4: Nutrition-s1', elementId: 'b2c-blk-0', original: 'chairman', occurrence: 0, replacement: 'chair', inQuotation: false, rule: { id: 'llm-7.2', source: 'llm' as const }, origin: 'draft' as const },
+    { kind: 'observation' as const, key: '4: Nutrition-s1::llm::7.2::1', category: '7.2' as const, sectionId: '4: Nutrition-s1', columns: { evidence: 'chairman', inference: 'a gendered title' }, rule: { id: 'llm-7.2', source: 'llm' as const }, origin: 'draft' as const },
+  ]
+  const runs = new Map([[`${key}::4: Nutrition-s1::7.2`, { status: 'done' as const, findings, at: 1 }]])
+  const rubricDrafts = new Map([[key, { areas: [{ id: '7.2' as const, rows: [{ id: '7.2.a', rating: 'emerging' as const }], notes: 'mostly Anglo' }] }]])
+  const llm = { ...base.llm, settings: { provider: 'gemini' as const, key: 'k', model: 'm' }, runs, rubricDrafts }
+  const { rerender } = render(<IdeaScreen {...base} chapters={[c]} llm={llm} />)
+  fireEvent.click(screen.getByRole('button', { name: /^7\.2 / }))
+  expect(screen.getByRole('button', { name: 'Replace' })).toBeInTheDocument()
+  expect(screen.getByText('a gendered title')).toBeInTheDocument()
+  expect(screen.getByText('Emerging Inclusive', { selector: '.b2c-idea-draft *' })).toBeInTheDocument()
+  expect(screen.getByText('mostly Anglo')).toBeInTheDocument()
+  // Accepting the draft edit goes through the edits map like a rule finding, and the draft row is gone.
+  const edits = new Map<string, IdeaEdits>([[key, reduceEdits(newEdits(), { type: 'replace', key: editKey, replacement: 'chair' })]])
+  rerender(<IdeaScreen {...base} chapters={[c]} llm={llm} edits={edits} />)
+  expect(screen.queryByRole('button', { name: 'Replace' })).not.toBeInTheDocument()
+  expect(screen.getByText('a gendered title')).toBeInTheDocument()
 })

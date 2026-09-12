@@ -8,7 +8,7 @@
  * that says why and a link to the measurement. Hiding it would leave the
  * user wondering why it is not there.
  */
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Eye, EyeOff, ExternalLink } from 'lucide-react'
 import { PROVIDERS, providerById, type ProviderId } from '../../engine/idea/llm/providers'
 import type { LlmSettings } from '../../engine/idea/llm/settings'
@@ -33,6 +33,14 @@ export function LlmSettingsPanel({
   const [model, setModel] = useState(settings?.model ?? providerById(provider).defaultModel)
   const [shown, setShown] = useState(false)
   const current = providerById(provider)
+
+  // The store loads after mount; a saved record arriving later fills the
+  // fields, and Forget key empties them.
+  useEffect(() => {
+    setProvider(settings?.provider ?? firstOffered)
+    setKey(settings?.key ?? '')
+    setModel(settings?.model ?? providerById(settings?.provider ?? firstOffered).defaultModel)
+  }, [settings, firstOffered])
 
   return (
     <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">

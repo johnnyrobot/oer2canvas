@@ -46,6 +46,9 @@ import { isAbortError, messageOf } from './errors'
 import { IdeaScreen } from './components/idea/IdeaScreen'
 import { reviewKeyOf, useIdeaReviews } from './components/idea/useIdeaReviews'
 import { useIdeaRecompile } from './components/idea/useIdeaRecompile'
+import { useLlmSettings } from './components/idea/useLlmSettings'
+import { useModelRuns } from './components/idea/useModelRuns'
+import { createLlmSettingsStore } from './engine/idea/llm/settings'
 import { ratedCount } from './engine/idea/review'
 import { IDEA_CATEGORY_IDS } from './engine/idea/framework'
 import { rubric1Filename, rubric1Json, rubric1Markdown } from './engine/idea/rubric-export'
@@ -338,6 +341,19 @@ export default function App() {
    * starts blank on its own.
    */
   const ideaReviews = useIdeaReviews(disk)
+  /**
+   * The model key, under its own IndexedDB key on the same disk. A different
+   * secret from the review with a different owner: *Forget all IDEA reviews*
+   * leaves it alone and the settings panel has its own Forget key. Runs and
+   * drafts are React state only; leaving the IDEA phase aborts them.
+   */
+  const llmStore = useMemo(() => createLlmSettingsStore(disk), [])
+  const llm = useLlmSettings(llmStore)
+  const modelRuns = useModelRuns({ settings: llm.settings })
+  const cancelModelRuns = modelRuns.cancelAll
+  useEffect(() => {
+    if (phase !== 'idea') cancelModelRuns()
+  }, [phase, cancelModelRuns])
   /**
    * An IDEA edit reaches the export the way a queue answer does: the section
    * is recompiled from source with both maps applied, re-audited, and swapped
@@ -950,6 +966,7 @@ export default function App() {
           edits={ideaReviews.edits}
           onEditEvent={ideaReviews.dispatchEdit}
           pending={ideaPending}
+          llm={{ settings: llm.settings, onSave: llm.save, onForget: llm.forget, ...modelRuns }}
         />
       )}
 

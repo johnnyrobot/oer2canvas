@@ -33,7 +33,16 @@ import {
 import {
   newReview, type IdeaHeader, type IdeaHeaderEvent, type IdeaReview, type IdeaReviewEvent,
 } from '../../engine/idea/review'
+import { imageInventory } from '../../engine/idea/images'
+import { metadataInventory } from '../../engine/idea/metadata'
+import { providerById } from '../../engine/idea/llm/providers'
+import type { LlmSettings } from '../../engine/idea/llm/settings'
+import { DRAFTABLE, sectionText, type DraftableCategory, type SectionInput } from '../../engine/idea/llm/prompts'
+import type { RubricDraft } from '../../engine/idea/llm/parse'
+import type { IdeaFinding } from '../../engine/idea/findings'
 import { CategoryPanel } from './CategoryPanel'
+import { LlmSettingsPanel } from './LlmSettingsPanel'
+import { rubricRunKey, runKey, type RunState } from './useModelRuns'
 import { IDEA_COPY } from './copy'
 import { reviewKeyOf } from './useIdeaReviews'
 
@@ -51,9 +60,42 @@ const QUIET = `${BUTTON} border-neutral-300 text-neutral-800 hover:bg-stone-100 
 
 /** One shared empty, so a chapter with no edits keeps a stable identity across renders. */
 const NO_EDITS = newEdits()
+const IDLE: RunState = { status: 'idle' }
+
+/**
+ * Slice 4: the model settings and runs, owned by App (`useLlmSettings`,
+ * `useModelRuns`) and handed down whole. The screen never calls the model on
+ * its own; every run starts in a click handler below.
+ */
+export interface IdeaLlmProps {
+  settings: LlmSettings | undefined
+  onSave: (s: LlmSettings) => void
+  onForget: () => void
+  runs: ReadonlyMap<string, RunState>
+  rubricDrafts: ReadonlyMap<string, RubricDraft>
+  runCategory: (chapterKey: string, category: DraftableCategory, input: SectionInput, html: string) => void
+  runRubric: (chapterKey: string, chapterTitle: string, sections: SectionInput[]) => void
+  cancel: (key: string) => void
+}
+
+/**
+ * One category's state across the chapter's sections. Running if any section
+ * is; failed if any failed and none is running; done once every section that
+ * ran is done. The button and the status line describe the category, not
+ * the first section.
+ */
+function categoryRunState(states: readonly RunState[]): RunState {
+  const running = states.find((r): r is Extract<RunState, { status: 'running' }> => r.status === 'running')
+  if (running) return running
+  const failed = states.find((r): r is Extract<RunState, { status: 'failed' }> => r.status === 'failed')
+  if (failed) return failed
+  const done = states.filter((r): r is Extract<RunState, { status: 'done' }> => r.status === 'done')
+  if (done.length > 0) return { status: 'done', findings: done.flatMap((d) => d.findings), at: Math.max(...done.map((d) => d.at)) }
+  return IDLE
+}
 
 export function IdeaScreen({
-  chapters, reviews, header, onEvent, onHeaderEvent, onForget, onExport, edits, onEditEvent, pending,
+  chapters, reviews, header, onEvent, onHeaderEvent, onForget, onExport, edits, onEditEvent, pending, llm,
 }: {
   chapters: readonly CompiledChapter[]
   reviews: ReadonlyMap<string, IdeaReview>
@@ -68,6 +110,7 @@ export function IdeaScreen({
   onEditEvent: (key: string, event: IdeaEditsEvent) => void
   /** Section ids whose recompile is in flight; the render says so for them. */
   pending: ReadonlySet<string>
+  llm: IdeaLlmProps
 }) {
   const ids = useId()
   const [index, setIndex] = useState(0)
@@ -113,6 +156,44 @@ export function IdeaScreen({
     () => appliedEdits(current.sections.map((s) => ({ id: s.id, title: s.title, html: s.gate?.html ?? s.html })), chapterEdits),
     [current, chapterEdits],
   )
+
+  /**
+   * What a model run is given: block text, the image inventory, the metadata
+   * inventory — from the same gated html the render shows. Built here, sent
+   * only when a button below is pressed.
+   */
+  const inputs = useMemo<SectionInput[]>(
+    () => current.sections.map((s) => {
+      const html = s.gate?.html ?? s.html
+      return {
+        sectionId: s.id, sectionTitle: s.title, chapterTitle: current.chapter.title,
+        discipline: current.chapter.attribution.bookTitle,
+        text: sectionText(html), images: imageInventory(s.id, html), metadata: metadataInventory(s.id, html),
+      }
+    }),
+    [current],
+  )
+  const provider = llm.settings ? providerById(llm.settings.provider) : undefined
+  const firstRun = ![...llm.runs.values()].some((r) => r.status === 'done' || r.status === 'failed')
+  const rubricRun = llm.runs.get(rubricRunKey(key)) ?? IDLE
+  const rubricDraft = llm.rubricDrafts.get(key)
+  const askModelFor = (category: DraftableCategory) => {
+    const keys = current.sections.map((s) => runKey(key, s.id, category))
+    const state = categoryRunState(keys.map((k) => llm.runs.get(k) ?? IDLE))
+    const draftFindings: IdeaFinding[] = state.status === 'done'
+      ? state.findings.filter((f) => !chapterEdits.edits.has(f.key) && !chapterEdits.dismissed.has(f.key))
+      : []
+    return {
+      askModel: {
+        provider, state, firstRun,
+        // One request per section, each behind its own in-flight guard.
+        onSend: () => current.sections.forEach((s, i) => llm.runCategory(key, category, inputs[i]!, s.gate?.html ?? s.html)),
+        onCancel: () => keys.forEach((k) => llm.cancel(k)),
+      },
+      draftFindings,
+    }
+  }
+  const isDraftable = (id: CategoryId): id is DraftableCategory => (DRAFTABLE as readonly string[]).includes(id)
 
   /**
    * Spec §5.3: Applied / Undone announced through the live region. A dismissal
@@ -248,6 +329,34 @@ export function IdeaScreen({
                 </div>
               </div>
             )}
+
+            {/*
+              The model key is a different secret from the review, with its
+              own Forget key: the review forget above does not touch it, and
+              the panel's copy says so.
+            */}
+            <div className="border-t border-neutral-200 pt-3 dark:border-neutral-800">
+              <LlmSettingsPanel settings={llm.settings} onSave={llm.onSave} onForget={llm.onForget} />
+            </div>
+            {provider && (
+              <div className="flex flex-wrap items-center gap-2">
+                {rubricRun.status === 'running' ? (
+                  <>
+                    <span role="status" className="text-sm">{IDEA_COPY.llm.sending(provider.label)}</span>
+                    <button type="button" onClick={() => llm.cancel(rubricRunKey(key))} className={QUIET}>{IDEA_COPY.llm.cancel}</button>
+                  </>
+                ) : (
+                  <button type="button" onClick={() => llm.runRubric(key, current.chapter.title, inputs)} className={QUIET}>
+                    {IDEA_COPY.llm.rubricDraft.button(provider.label)}
+                  </button>
+                )}
+                {rubricRun.status === 'failed' && (
+                  <p role="alert" className="m-0 text-sm">
+                    {IDEA_COPY.llm.error[rubricRun.failure]}{rubricRun.failure === 'rate-limited' ? ` ${rubricRun.message}` : ''}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-2">
@@ -267,6 +376,8 @@ export function IdeaScreen({
                 sectionTitleOf={sectionTitleOf}
                 onEditEvent={editEvent}
                 onFocusFinding={setFocus}
+                {...(isDraftable(category.id) ? askModelFor(category.id) : {})}
+                {...(rubricDraft?.areas.find((a) => a.id === category.id) ? { rubricDraft: rubricDraft.areas.find((a) => a.id === category.id)! } : {})}
               />
             ))}
           </div>
