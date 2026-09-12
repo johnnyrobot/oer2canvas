@@ -8,17 +8,18 @@
 
 **Tech Stack:** TypeScript, React 19, `fetch`, IndexedDB (`src/canvas/idb.ts`), Playwright (spike only), Vitest.
 
-**Spec:** `docs/IDEA_REVIEW_SPEC.md` §2.6, §4, §5.2 header, §7.1, §7.2, §8 slice 4.
+**Spec:** `docs/IDEA_REVIEW_SPEC.md` §2.6, §4, §5.2 header, §7.1, §7.2, §8 slice 4. Aligned 2026-09-11 with the revised slices 1–2: ratings are per Rubric 1 **row** (7.1 has three), so the rubric draft is per row too and renders beside each row's radio group; `IdeaScreen` keeps slice 1's `header` / `onHeaderEvent` / `onForget` and slice 2's `edits` / `onEditEvent` / `pending` beside the `llm` prop this slice adds; the model key lives under its own IndexedDB key (`idea.llm.settings`) and is forgotten by *Forget key*, not by slice 1's *Forget all IDEA reviews* — the two are different secrets with different owners and the copy says so.
 
 ## Global Constraints
 
 - **The key is stored only in the user's browser, on the user's device** (IndexedDB, this origin). **Never on the relay, never in a URL, never in a log, never in an error message.** The relay is not in the path for any provider; a provider that fails the CORS spike is `offered: false`.
 - **Nothing is sent without a click.** No call on phase entry, recompile, or in the background. One in-flight request per category; 60 s timeout; aborted on phase exit.
 - **Every model output is `origin: 'draft'`.** An item becomes an `edit` only when its `original` is found verbatim in the section.
-- **The rubric draft rating cannot be copied into the human rating field.** Only the note has a one-click "use this note".
+- **The rubric draft rating cannot be copied into the human rating field.** Only the note has a one-click "use this note". The draft is per Rubric 1 row, matching slice 1's `ratings` map; a model answer that names an area but not its rows is applied only when the area has one row.
+- **Model drafts and runs are never persisted.** They are `RunState` in React; a reload starts clean. Only the settings (provider, key, model) are stored, under `idea.llm.settings`.
 - **No network in tests**: `fetch` is injected; the spike is a script, not a test.
 - **Provider names in copy**: "Gemini", "OpenRouter", "Ollama Cloud".
-- Commit trailer: `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`.
+- Commit trailer: `Co-Authored-By: Claude <model name> <noreply@anthropic.com>`.
 
 ---
 
@@ -166,7 +167,7 @@ Expected: a table in `docs/evidence/idea-llm-cors-<date>.md`. **Read it.** The `
 git add scripts/idea-llm-cors-probe.mjs package.json docs/evidence/idea-llm-cors-*.md
 git commit -m "test: probe which model providers a browser origin can reach directly
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -552,7 +553,7 @@ Expected: PASS.
 git add src/engine/idea/llm
 git commit -m "feat: one model client for three providers, key contained to one header
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -576,9 +577,10 @@ export function sectionText(html: string): string       // block text joined wit
 export interface DraftItem { evidence: string; inference: string; suggestion: string; original?: string; replacement?: string; imageRef?: string }
 export function parseCategoryResponse(text: string): { items: DraftItem[]; summary?: string; raw?: string }
 export function draftsToFindings(category: CategoryId, sectionId: string, html: string, parsed: ReturnType<typeof parseCategoryResponse>): IdeaFinding[]
-export interface RubricDraft { areas: { id: CategoryId; rating: Rating | null; notes: string }[]; raw?: string }
+export interface RubricDraft { areas: { id: CategoryId; rows: { id: string; rating: Rating | null }[]; notes: string }[]; raw?: string }
 export function parseRubricResponse(text: string): RubricDraft
 ```
+`rows` follows slice 1's per-row ratings: one entry per Rubric 1 row of the area (`7.1.a`, `7.1.b`, `7.1.c`; `7.2.a`; …), in Framework order, `null` where the model gave nothing usable.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -620,13 +622,17 @@ test('7.5 asks for the five columns OERI names', () => {
   for (const col of ['scenario', 'population', 'cultural knowledge assumed', 'stereotype risk', 'suggested revision']) expect(p.toLowerCase()).toContain(col)
 })
 
-test('the rubric prompt asks for area / rating / notes over every category', () => {
+test('the rubric prompt asks for area / rows / notes over every category, naming 7.1’s three rows', () => {
   const p = rubricPrompt('4: Nutrition', [input]).map((x) => x.content).join('\n')
   expect(p).toMatch(/"area"/)
-  expect(p).toMatch(/"rating"/)
+  expect(p).toMatch(/"rows"/)
   expect(p).toMatch(/"notes"/)
   expect(p).toContain('7.8')
   expect(p).toMatch(/Not Applicable|Exclusive|Emerging Inclusive|Inclusive/)
+  // Rubric 1's rows are quoted so the model rates what the assessor rates.
+  expect(p).toContain('7.1.a')
+  expect(p).toContain('7.1.c')
+  expect(p).toContain(categoryById('7.1').rows[1]!.emerging)
 })
 
 test('sectionText flattens blocks and drops markup', () => {
@@ -672,17 +678,27 @@ test('a raw response becomes one observation carrying the text', () => {
   expect(f[0]!.kind === 'observation' && f[0]!.columns.response).toBe('plain prose')
 })
 
-test('the rubric parser maps OERI labels to ratings and tolerates unknown labels as null', () => {
+test('the rubric parser maps OERI labels to per-row ratings and tolerates unknown labels as null', () => {
   const r = parseRubricResponse(JSON.stringify({ areas: [
-    { area: '7.1 Illustrations', rating: 'Emerging Inclusive', notes: 'a' },
+    { area: '7.1 Illustrations', rows: [{ row: '7.1.a', rating: 'Emerging Inclusive' }, { row: 'b', rating: 'Exclusive' }, { row: '7.1.z', rating: 'Inclusive' }], notes: 'a' },
     { area: '7.6', rating: 'N/A', notes: 'b' },
     { area: '7.8', rating: 'unsure', notes: 'c' },
   ] }))
   expect(r.areas).toEqual([
-    { id: '7.1', rating: 'emerging', notes: 'a' },
-    { id: '7.6', rating: 'na', notes: 'b' },
-    { id: '7.8', rating: null, notes: 'c' },
+    // Row ids are accepted bare or qualified; a row the Framework lacks is ignored; a missing row is null.
+    { id: '7.1', rows: [{ id: '7.1.a', rating: 'emerging' }, { id: '7.1.b', rating: 'exclusive' }, { id: '7.1.c', rating: null }], notes: 'a' },
+    { id: '7.6', rows: [{ id: '7.6.a', rating: 'na' }], notes: 'b' },
+    { id: '7.8', rows: [{ id: '7.8.a', rating: null }], notes: 'c' },
   ])
+})
+
+// A single "rating" for a three-row area is not spread across the rows: the
+// model did not rate them, and a draft that looks like it did is a draft that
+// gets copied by eye.
+test('a bare rating on a multi-row area leaves its rows null', () => {
+  const r = parseRubricResponse(JSON.stringify({ areas: [{ area: '7.1', rating: 'Inclusive', notes: 'n' }] }))
+  expect(r.areas[0]!.rows.map((x) => x.rating)).toEqual([null, null, null])
+  expect(r.areas[0]!.notes).toBe('n')
 })
 ```
 
@@ -772,13 +788,22 @@ export function rubricPrompt(chapterTitle: string, sections: SectionInput[]): Ms
     {
       role: 'user',
       content:
-        `Chapter: ${chapterTitle}\n\nDraft a Rubric 1 review of this chapter using the IDEA Framework. For each area, rate as one of: Not Applicable, Exclusive, Emerging Inclusive, Inclusive, and give notes that cite evidence from the text. The instructor will make the actual rating; yours is a draft.\n\n` +
+        `Chapter: ${chapterTitle}\n\nDraft a Rubric 1 review of this chapter using the IDEA Framework. For each row of each area, rate as one of: Not Applicable, Exclusive, Emerging Inclusive, Inclusive, and give notes per area that cite evidence from the text. The instructor will make the actual rating; yours is a draft.\n\n` +
         ids.map(lens).join('\n\n') +
-        `\n\nCHAPTER TEXT:\n${body}\n\n` +
-        'Respond with JSON only: {"areas": [{"area": string, "rating": string, "notes": string}]} with one entry per area 7.1 through 7.8, "area" beginning with the number.',
+        `\n\nRUBRIC 1 ROWS:\n${rubricRows()}\n\n` +
+        `CHAPTER TEXT:\n${body}\n\n` +
+        'Respond with JSON only: {"areas": [{"area": string, "rows": [{"row": string, "rating": string}], "notes": string}]} with one entry per area 7.1 through 7.8, "area" beginning with the number, and one "rows" entry per row id listed above.',
     },
   ]
 }
+
+/** Every Rubric 1 row, quoted, so the model rates exactly what the assessor rates. */
+function rubricRows(): string {
+  return IDEA_FRAMEWORK.flatMap((c) => c.rows.map((r) =>
+    `${r.id} (${c.rubricTitle}): Exclusive = "${r.exclusive}"; Emerging Inclusive = "${r.emerging}"; Inclusive = "${r.inclusive}"; Not Applicable = "${RUBRIC_NA_TEXT}"`,
+  )).join('\n')
+}
+// `IDEA_FRAMEWORK` and `RUBRIC_NA_TEXT` join this file's import from '../framework'.
 
 /** Block text, one blank line between blocks, no markup and no ids. */
 export function sectionText(html: string): string {
@@ -891,7 +916,8 @@ export function draftsToFindings(
 }
 
 export interface RubricDraft {
-  areas: { id: CategoryId; rating: Rating | null; notes: string }[]
+  /** One entry per area the model answered; `rows` always lists every Rubric 1 row of that area. */
+  areas: { id: CategoryId; rows: { id: string; rating: Rating | null }[]; notes: string }[]
   raw?: string
 }
 
@@ -902,16 +928,34 @@ const RATING: Record<string, Rating> = {
   inclusive: 'inclusive',
 }
 
+const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null
+const toRating = (v: unknown): Rating | null => RATING[str(v).trim().toLowerCase()] ?? null
+
+/**
+ * Per ROW, because the human's rating is per row (slice 1). A "rows" array is
+ * matched by id, bare ("b") or qualified ("7.1.b"); a bare "rating" on the
+ * area is honoured only when the area has one row. A three-row area with one
+ * rating gets three nulls: spreading it would show the model rating rows it
+ * never looked at.
+ */
 export function parseRubricResponse(text: string): RubricDraft {
   try {
     const j = extractJson(text) as { areas?: unknown }
     const areas = (Array.isArray(j.areas) ? j.areas : [])
-      .filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null)
+      .filter(isRecord)
       .map((x) => {
         const m = /^(7\.[1-8])/.exec(str(x.area).trim())
         if (!m) return undefined
-        const rating = RATING[str(x.rating).trim().toLowerCase()] ?? null
-        return { id: m[1] as CategoryId, rating, notes: str(x.notes) }
+        const id = m[1] as CategoryId
+        const frameworkRows = categoryById(id).rows
+        const given = new Map<string, Rating | null>()
+        for (const r of Array.isArray(x.rows) ? x.rows.filter(isRecord) : []) {
+          const rowId = str(r.row).trim()
+          const full = rowId.startsWith(`${id}.`) ? rowId : `${id}.${rowId}`
+          if (frameworkRows.some((fr) => fr.id === full)) given.set(full, toRating(r.rating))
+        }
+        if (given.size === 0 && frameworkRows.length === 1 && x.rating !== undefined) given.set(frameworkRows[0]!.id, toRating(x.rating))
+        return { id, rows: frameworkRows.map((fr) => ({ id: fr.id, rating: given.get(fr.id) ?? null })), notes: str(x.notes) }
       })
       .filter((x): x is NonNullable<typeof x> => x !== undefined)
     return { areas }
@@ -920,6 +964,7 @@ export function parseRubricResponse(text: string): RubricDraft {
   }
 }
 ```
+(add `categoryById` to this file's import from `../framework`.)
 (`textBefore` is exported from `terms.ts` in slice 2; move it into `text.ts` as part of this task and re-export from `terms.ts` so both imports work — one definition.)
 
 - [ ] **Step 5: Run the tests, typecheck, commit**
@@ -931,7 +976,7 @@ Expected: PASS.
 git add src/engine/idea
 git commit -m "feat: OERI's IDEA prompts and a parser that lets a model propose but not edit unquoted text
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -1140,7 +1185,7 @@ Run: `npx vitest run --project unit src/components/idea/LlmSettingsPanel.test.ts
 git add src/components/idea/useLlmSettings.ts src/components/idea/LlmSettingsPanel.tsx src/components/idea/LlmSettingsPanel.test.tsx src/components/idea/copy.ts
 git commit -m "feat: model provider settings, stored in the user's browser and nowhere else
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -1217,7 +1262,9 @@ test('the rubric run stores a draft per chapter', async () => {
   const complete = vi.fn(async () => ({ text: JSON.stringify({ areas: [{ area: '7.1', rating: 'Inclusive', notes: 'n' }] }) }))
   const { result } = renderHook(() => useModelRuns({ settings, deps: { complete } }))
   act(() => result.current.runRubric('ch', 'C', [input]))
-  await waitFor(() => expect(result.current.rubricDrafts.get('ch')?.areas).toEqual([{ id: '7.1', rating: 'inclusive', notes: 'n' }]))
+  await waitFor(() => expect(result.current.rubricDrafts.get('ch')?.areas).toEqual([
+    { id: '7.1', rows: [{ id: '7.1.a', rating: null }, { id: '7.1.b', rating: null }, { id: '7.1.c', rating: null }], notes: 'n' },
+  ]))
 })
 ```
 
@@ -1257,10 +1304,10 @@ test('running shows a cancel; failed shows the mapped message', () => {
 
 Append to `src/components/idea/CategoryPanel.test.tsx`:
 ```tsx
-test('the rubric draft renders beside the rating with no control that sets the rating', () => {
+test('the rubric draft renders beside the row’s rating with no control that sets the rating', () => {
   render(
     <CategoryPanel category={categoryById('7.2')} review={newReview().categories['7.2']} open onToggle={vi.fn()} onEvent={vi.fn()}
-      rubricDraft={{ rating: 'emerging', notes: 'Names are mostly Anglo.' }} />,
+      rubricDraft={{ rows: [{ id: '7.2.a', rating: 'emerging' }], notes: 'Names are mostly Anglo.' }} />,
   )
   expect(screen.getByText('Model draft')).toBeInTheDocument()
   expect(screen.getByText('Emerging Inclusive', { selector: '.b2c-idea-draft *' })).toBeInTheDocument()
@@ -1270,9 +1317,25 @@ test('the rubric draft renders beside the rating with no control that sets the r
   expect(screen.queryByRole('button', { name: /use this rating/i })).not.toBeInTheDocument()
 })
 
+// 7.1 has three rows and the draft is per row; each row's draft sits beside
+// THAT row, and a row the model left null says so rather than borrowing a
+// neighbour's word.
+test('a three-row area shows one draft per row', () => {
+  render(
+    <CategoryPanel category={categoryById('7.1')} review={newReview().categories['7.1']} open onToggle={vi.fn()} onEvent={vi.fn()}
+      rubricDraft={{ rows: [{ id: '7.1.a', rating: 'exclusive' }, { id: '7.1.b', rating: null }, { id: '7.1.c', rating: 'inclusive' }], notes: 'n' }} />,
+  )
+  const drafts = screen.getAllByText(/^Model draft/, { selector: '.b2c-idea-draft *' })
+  expect(drafts).toHaveLength(3)
+  const groups = within(screen.getByRole('group', { name: /Rubric 1/ })).getAllByRole('radiogroup')
+  expect(groups[0]!.parentElement).toHaveTextContent('Exclusive')
+  expect(groups[1]!.parentElement).toHaveTextContent('no draft')
+  expect(groups[2]!.parentElement).toHaveTextContent('Inclusive')
+})
+
 test('Use this note dispatches a note event with the draft text', () => {
   const onEvent = vi.fn()
-  render(<CategoryPanel category={categoryById('7.2')} review={newReview().categories['7.2']} open onToggle={vi.fn()} onEvent={onEvent} rubricDraft={{ rating: null, notes: 'draft note' }} />)
+  render(<CategoryPanel category={categoryById('7.2')} review={newReview().categories['7.2']} open onToggle={vi.fn()} onEvent={onEvent} rubricDraft={{ rows: [{ id: '7.2.a', rating: null }], notes: 'draft note' }} />)
   fireEvent.click(screen.getByRole('button', { name: 'Use this note' }))
   expect(onEvent).toHaveBeenCalledWith({ type: 'note', categoryId: '7.2', notes: 'draft note' })
 })
@@ -1409,26 +1472,33 @@ export function AskModel({ provider, state, onSend, onCancel, firstRun }: {
 
 - [ ] **Step 5: `CategoryPanel.tsx`**
 
-New props: `askModel?: { provider: LlmProvider | undefined; state: RunState; onSend: () => void; onCancel: () => void; firstRun: boolean }`, `draftFindings?: readonly IdeaFinding[]`, `rubricDraft?: { rating: Rating | null; notes: string }`.
+New props: `askModel?: { provider: LlmProvider | undefined; state: RunState; onSend: () => void; onCancel: () => void; firstRun: boolean }`, `draftFindings?: readonly IdeaFinding[]`, `rubricDraft?: { rows: readonly { id: string; rating: Rating | null }[]; notes: string }`.
 
 - For categories in `DRAFTABLE`, render an **Ask the model** fieldset (legend `IDEA_COPY.llm.draftLabel` → use heading text "Ask the model") after the rule/inventory zone: `<AskModel {...askModel} />`, then `draftFindings` as `FindingRow`s (they carry `origin: 'draft'` and render dashed).
-- In the rubric fieldset, when `rubricDraft` is present, render beside the rows:
+- Slice 1's `RubricRowChoice` gains an optional `draft?: Rating | null` prop (`undefined` = no draft run yet; `null` = the model gave nothing for this row). When it is not `undefined`, it renders, between the row label and the radios:
+  ```tsx
+  <p className="b2c-idea-draft m-0 rounded-md border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700">
+    <span className="font-semibold">{IDEA_COPY.llm.rubricDraft.column}: </span>
+    <span>{draft ? RATING_COPY[draft] : IDEA_COPY.llm.rubricDraft.noDraft}</span>
+  </p>
+  ```
+  `CategoryPanel` passes `draft={rubricDraft ? (rubricDraft.rows.find((r) => r.id === row.id)?.rating ?? null) : undefined}` to each row. Add `noDraft: 'no draft'` under `IDEA_COPY.llm.rubricDraft`.
+- After the rows, when `rubricDraft` is present, the notes block:
   ```tsx
   <div className="b2c-idea-draft rounded-md border border-neutral-300 p-3 text-sm dark:border-neutral-700">
     <p className="m-0 font-semibold">{IDEA_COPY.llm.rubricDraft.column}</p>
-    <p className="m-0"><span>{rubricDraft.rating ? RATING_COPY[rubricDraft.rating] : '—'}</span></p>
     <p className="m-0 text-xs text-neutral-600 dark:text-neutral-400">{IDEA_COPY.llm.rubricDraft.cannotCopy}</p>
     <p className="m-0">{rubricDraft.notes}</p>
     {rubricDraft.notes && <button type="button" className={`${TARGET} rounded-md border border-neutral-300 px-2 text-sm dark:border-neutral-700`} onClick={() => onEvent({ type: 'note', categoryId: category.id, notes: rubricDraft.notes })}>{IDEA_COPY.llm.rubricDraft.useNote}</button>}
   </div>
   ```
-  There is deliberately no handler that dispatches `rate` from this block.
+  There is deliberately no handler that dispatches `rate` from either block.
 
 - [ ] **Step 6: `IdeaScreen.tsx` and `App.tsx`**
 
-`IdeaScreen` gains props `llm: { settings: LlmSettings | undefined; onSave; onForget; runs; rubricDrafts; runCategory; runRubric; cancel }`. In the header card, render `<LlmSettingsPanel …/>` and, when a provider is set, a "Draft a Rubric 1 review with {label}" button that calls `runRubric(key, current.chapter.title, inputs)`. Build `inputs: SectionInput[]` with `useMemo` from `current.sections`: `{ sectionId, sectionTitle: s.title, chapterTitle: current.chapter.title, discipline: current.chapter.attribution.bookTitle, text: sectionText(html), images: imageInventory(s.id, html), metadata: metadataInventory(s.id, html) }` where `html = s.gate?.html ?? s.html`. For each draftable category, pass `askModel` (state from `runs.get(runKey(key, firstSection.id, category))`, `onSend` → `runCategory` for **each** section of the chapter — one request per section, sequentially through `start`'s per-key guard) and `draftFindings` = the union of done runs' findings for that category, filtered by `edits`/`dismissed` like rule findings. `firstRun` = no run in `runs` has status `done` or `failed`.
+`IdeaScreen` gains props `llm: { settings: LlmSettings | undefined; onSave; onForget; runs; rubricDrafts; runCategory; runRubric; cancel }` — beside slice 1's `header` / `onHeaderEvent` / `onForget` / `onExport` and slice 2's `edits` / `onEditEvent` / `pending`, all of which stay. Extend slice 2's `base` object in `IdeaScreen.test.tsx` and the `props` object in `IdeaScreen.browser.test.tsx` with an `llm` stub (`settings: undefined`, `runs: new Map()`, `rubricDrafts: new Map()`, and no-op functions) so existing renders keep compiling; slice 5 reuses that stub as `llmStub`. In the header card, below slice 1's storage sentence and *Forget all IDEA reviews*, render `<LlmSettingsPanel …/>` (its own *Forget key* — the review forget does not touch the key, and the panel's copy says the key is separate) and, when a provider is set, a "Draft a Rubric 1 review with {label}" button that calls `runRubric(key, current.chapter.title, inputs)`. Build `inputs: SectionInput[]` with `useMemo` from `current.sections`: `{ sectionId, sectionTitle: s.title, chapterTitle: current.chapter.title, discipline: current.chapter.attribution.bookTitle, text: sectionText(html), images: imageInventory(s.id, html), metadata: metadataInventory(s.id, html) }` where `html = s.gate?.html ?? s.html`. For each draftable category, pass `askModel` (state from `runs.get(runKey(key, firstSection.id, category))`, `onSend` → `runCategory` for **each** section of the chapter — one request per section, sequentially through `start`'s per-key guard) and `draftFindings` = the union of done runs' findings for that category, filtered by `edits`/`dismissed` like rule findings. `firstRun` = no run in `runs` has status `done` or `failed`.
 
-`App`: `const llm = useLlmSettings()`; `const modelRuns = useModelRuns({ settings: llm.settings })`; pass `llm={{ settings: llm.settings, onSave: llm.save, onForget: llm.forget, ...modelRuns }}`; call `modelRuns.cancelAll()` when `phase` changes away from `'idea'` (a `useEffect` on `phase`).
+`App`: `const llmStore = useMemo(() => createLlmSettingsStore(disk), [])` over the same module-level `createIdbStore()` slice 1 hands to `useIdeaReviews`, then `const llm = useLlmSettings(llmStore)`; `const modelRuns = useModelRuns({ settings: llm.settings })`; pass `llm={{ settings: llm.settings, onSave: llm.save, onForget: llm.forget, ...modelRuns }}`; call `modelRuns.cancelAll()` when `phase` changes away from `'idea'` (a `useEffect` on `phase`). Draft findings that the instructor accepts go through `ideaReviews.dispatchEdit` like rule findings and persist with them; the drafts themselves do not.
 
 - [ ] **Step 7: Run, typecheck, browser a11y, commit**
 
@@ -1439,7 +1509,7 @@ Expected: PASS (the a11y test now renders the settings panel; a `password` input
 git add src/components/idea src/App.tsx
 git commit -m "feat: ask the model per category, drafts beside the rubric, rating never copied
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -1488,20 +1558,24 @@ if it quotes the text verbatim, and never sets a rating.
 
 `docs/RELEASE-ACCEPTANCE.md`:
 ```markdown
-### IDEA review — slice 4
+## 7. IDEA review — slice 4
 
 1. IDEA header: choose OpenRouter, paste a key, Save on this device. Reload the tab: the provider
    and model are remembered; the key field shows dots.
 2. Open 7.2. The disclosure sits above "Send this section to OpenRouter". Press it; the status
    line reads "Waiting for OpenRouter…"; drafts appear with a dashed border and a "draft" chip.
 3. A draft whose original matches the text has Replace; accept one; it lands in Applied and in the
-   render.
-4. Press "Draft a Rubric 1 review with OpenRouter". Each category shows a "Model draft" box with a
-   rating word and notes; the radio buttons stay unchecked; "Use this note" fills Notes only.
+   chapter render beside the panels. Reload and re-prepare: the accepted edit is still applied;
+   the unaccepted drafts are gone until you send again.
+4. Press "Draft a Rubric 1 review with OpenRouter". Every rubric row shows a "Model draft:" line
+   beside its radios — three under 7.1, one elsewhere, "no draft" where the model gave nothing —
+   and each category a notes box; the radio buttons stay unchecked; "Use this note" fills Notes
+   only.
 5. Paste a wrong key, Save, send again: "The provider rejected this key." No key text anywhere
    on screen or in DevTools → Network → request URL.
 6. Forget key; reload: nothing is remembered. DevTools → Application → IndexedDB → oer2canvas →
-   kv: no `idea.llm.settings` key.
+   kv: no `idea.llm.settings` key; the `idea.reviews` document is untouched. Then *Forget all
+   IDEA reviews*: reviews go, and a saved key would stay.
 7. Network tab throughout: no request to `/relay`.
 ```
 
@@ -1513,7 +1587,7 @@ Run: `npm run typecheck && npm test`
 git add PRIVACY.md README.md docs/IDEA.md docs/RELEASE-ACCEPTANCE.md src/docs-claims.test.ts
 git commit -m "docs: disclose the IDEA model path — key on device, send on click, drafts only
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -1524,4 +1598,6 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 **Placeholder scan:** `EVIDENCE = 'docs/evidence/idea-llm-cors-YYYY-MM-DD.md'` is an explicit instruction to substitute the real filename in Task 2 Step 3, not a placeholder left to chance; the evidence-link base in Task 4 likewise names its source. No "TBD".
 
-**Type consistency:** `complete(provider, settings, messages, signal, deps)` identical in Tasks 2, 5; `RunState`/`runKey` in Task 5 test and hook; `SectionInput` in Tasks 3, 5; `draftsToFindings(category, sectionId, html, parsed)` in Tasks 3, 5; `LlmSettings` in Tasks 2, 4, 5; `textBefore` moved to `text.ts` in Task 3 with a re-export kept in `terms.ts`.
+**Alignment with the revised slices 1–2 (2026-09-11):** `RubricDraft.areas[].rows` mirrors slice 1's per-row `ratings`; `RubricRowChoice.draft` renders each row's draft beside that row; `IdeaScreen` keeps every earlier prop and tests extend the shared `base` / `props` objects with an `llm` stub; accepted drafts persist through `dispatchEdit`, drafts and runs do not; the model key and the review document are separate IndexedDB keys with separate forget controls.
+
+**Type consistency:** `complete(provider, settings, messages, signal, deps)` identical in Tasks 2, 5; `RunState`/`runKey` in Task 5 test and hook; `SectionInput` in Tasks 3, 5; `draftsToFindings(category, sectionId, html, parsed)` in Tasks 3, 5; `RubricDraft` rows shape identical in Task 3 parser, Task 5 hook test, and Task 5 panel props; `LlmSettings` in Tasks 2, 4, 5; `textBefore` moved to `text.ts` in Task 3 with a re-export kept in `terms.ts`.

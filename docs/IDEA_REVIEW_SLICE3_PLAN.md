@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, `DOMParser`, Vitest (jsdom), React, Testing Library.
 
-**Spec:** `docs/IDEA_REVIEW_SPEC.md` §3.3, §3.4, §3.5, §5.2, §7.2 ("no inference"), §8 slice 3.
+**Spec:** `docs/IDEA_REVIEW_SPEC.md` §3.3, §3.4, §3.5, §5.2, §7.2 ("no inference"), §8 slice 3. Aligned 2026-09-11 with the revised slices 1 and 2: the render that outlines a focused row is slice 2's `IdeaChapterRender` in the aside beside the panels; inventories are recomputed from the prepared HTML on every render and are never stored, so slice 1's persistence and slice 2's persisted edits are untouched here; `CategoryPanel` and `IdeaScreen` keep every prop slices 1 and 2 gave them.
 
 ## Global Constraints
 
@@ -16,7 +16,8 @@
 - **Inventories are observations**: no `edit` findings, no `suggestion` column, no Dismiss control.
 - **No network.** Pure functions over strings.
 - **Publisher selectors** for key-takeaway/glossary blocks are a fixed list in `metadata.ts`, not a `PublisherProfile` field — finders do not receive a profile.
-- Copy in `src/components/idea/copy.ts`. `npm run typecheck` before each commit. Commit trailer: `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`.
+- **Nothing here is persisted.** Inventory rows are findings: recomputed from the prepared HTML, never written to the IDEA document in IndexedDB (slice 1 §2.7 stores ratings, notes, header, and slice 2's edits; findings stay ephemeral per spec §2.2).
+- Copy in `src/components/idea/copy.ts`. `npm run typecheck` before each commit. Commit trailer: `Co-Authored-By: Claude <model name> <noreply@anthropic.com>` for the model that is actually running. No session links.
 
 ---
 
@@ -264,7 +265,7 @@ npm run typecheck
 git add src/engine/idea/images.ts src/engine/idea/images.test.ts src/engine/idea/findings.ts src/engine/idea/findings.test.ts
 git commit -m "feat: the 7.1 image inventory, text only, no inference
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -460,7 +461,7 @@ npm run typecheck
 git add src/engine/idea/metadata.ts src/engine/idea/metadata.test.ts src/engine/idea/findings.ts
 git commit -m "feat: the 7.7 metadata inventory
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -555,7 +556,7 @@ Expected: PASS.
 git add src/components/idea
 git commit -m "feat: inventory zones for 7.1 and 7.7
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -567,7 +568,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Docs**
 
-`docs/IDEA.md` — heading becomes "Slices 1–3 (this release)"; add:
+`docs/IDEA.md` — the heading slice 2 renamed to "Slices 1–2 (this release)" becomes "Slices 1–3 (this release)"; add:
 ```markdown
 - **Inventories:** 7.1 lists every image's alt text, caption, and preceding sentence and whether
   that text names a person (a fixed noun list — "nurse", "students", "family" — over the image's
@@ -579,11 +580,12 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 `docs/RELEASE-ACCEPTANCE.md` — append:
 ```markdown
-### IDEA review — slice 3
+## 6. IDEA review — slice 3
 
 1. Prepare an OpenStax chapter with figures (Biology 2e, any chapter).
 2. IDEA → 7.1's header reads "N images · M mention people"; open it. The first row is the summary;
-   each image row shows description, caption, reference; focusing a row outlines the image below.
+   each image row shows description, caption, reference; focusing a row outlines the image in the
+   chapter render beside the panels and scrolls it into view.
 3. 7.7's header reads "N items"; open it: headings, key terms, and recurring names are listed.
 4. Neither zone has Replace, Use this wording, or Dismiss.
 ```
@@ -596,7 +598,7 @@ Run: `npm run typecheck && npm test`
 git add docs/IDEA.md docs/RELEASE-ACCEPTANCE.md README.md
 git commit -m "docs: record the IDEA inventories and their no-inference rule
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -606,5 +608,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 **Spec coverage (§8.3):** `images.ts` with alt/caption/reference/src and `mentionsPeople` from a fixed list, per-image rows + section summary, no demographic inference (§3.3) → Task 1; `metadata.ts` headings, `<dl>`, bold-led definitions, key-takeaway blocks by selector, repeated proper nouns (§3.4) → Task 2; observation tables in the panel (§5.2) → Task 3; typed rows exported for slice 4's prompts → Tasks 1–2 (`imageInventory`, `metadataInventory`). Deviation from §3.4: key-block selectors are a fixed list rather than a `PublisherProfile` field, because finders receive no profile.
 
 **Placeholder scan:** none.
+
+**Alignment with the revised slices 1–2 (2026-09-11):** the outline on focus is `IdeaChapterRender`'s (`target: { sectionId, elementId }`), reached through `CategoryPanel`'s existing `onFocusFinding`; the 7.1 header line is appended after slice 1's `ratedSummary` text, so the header regexes in Task 3 match on the trailing part; nothing in this slice writes to the persisted document or to `clearDerivedOutput`.
 
 **Type consistency:** `Finder` and `IdeaFinding` from slice 2's `findings.ts`; `RuleRef.source` widened in Task 1 and used in Tasks 2–3; `IDEA_COPY.inventory` keys used in Task 3 match Step 3's definitions.

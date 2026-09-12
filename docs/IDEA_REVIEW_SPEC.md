@@ -230,7 +230,9 @@ and the `IdeaHeader` are **persisted in the browser**, in the app's existing Ind
   says it again.
 - **Nothing about a review leaves the device.** Not to the relay, not to a provider, not in an
   export the app makes on its own. Findings (§2.2) remain ephemeral; edits (§2.3) join this
-  document in slice 2.
+  document in slice 2; an added image's packaged bytes join it in slice 5, since an image edit
+  is only a reference to them. Model drafts and runs (§4) are never stored; the model key has its
+  own IndexedDB key and its own *Forget key* (§2.6).
 
 ## 3. Deterministic checks and inventories (no model, no network)
 

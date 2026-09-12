@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, React 19, `fetch`, `DOMParser`, `src/import/assets.ts` (`prepareAssets`, `packagedReference`), Playwright (probe only), Vitest.
 
-**Spec:** `docs/IDEA_REVIEW_SPEC.md` §2.3, §6, §7.1, §8 slice 5. One refinement recorded here: §6.3 said a new image "enters the accessibility queue". By the time IDEA runs, the queue session is closed, so instead the placement dialog **requires alt text and checks it with the same rules the queue's Save uses** (`altTextIssue`, the 120-character fit), refusing an `error`-severity alt. The rebuilt section is still re-audited through the gate before it can be published. Same guarantee, earlier.
+**Spec:** `docs/IDEA_REVIEW_SPEC.md` §2.3, §2.7, §6, §7.1, §8 slice 5. Aligned 2026-09-11 with the revised slices 1–2: an image edit is an edit, so it persists in the IDEA document like a wording edit — and because an image edit is only a reference to packaged bytes, the bytes (the `ImportedAsset`) persist beside it, keyed by chapter, and are re-attached to the chapter before its initial compile. Image edits dispatch through `useIdeaReviews.dispatchEdit`; the render that shows the placed figure is slice 2's `IdeaChapterRender` in the aside; `IdeaScreen` keeps every prop from slices 1–4. One refinement recorded here: §6.3 said a new image "enters the accessibility queue". By the time IDEA runs, the queue session is closed, so instead the placement dialog **requires alt text and checks it with the same rules the queue's Save uses** (`altTextIssue`, the 120-character fit), refusing an `error`-severity alt. The rebuilt section is still re-audited through the gate before it can be published. Same guarantee, earlier.
 
 ## Global Constraints
 
@@ -18,7 +18,8 @@
 - **Attribution is TASL** (Title · Author · Source · License) in the caption and in the Source-and-license block; CC BY-SA adds the share-alike sentence. (§6.4)
 - **Block ids are not disturbed**: image insertion runs after `ensureBlockIds`, so existing edit keys stay valid.
 - **No network in tests**; `fetch` is injected everywhere.
-- Commit trailer: `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`.
+- **An added image survives a reload as a whole.** The `image` edit and its asset bytes are stored together in the IDEA document (spec §2.7); restore validates both and drops an edit whose asset is missing rather than emit a packaged reference to nothing. *Forget all IDEA reviews* removes both.
+- Commit trailer: `Co-Authored-By: Claude <model name> <noreply@anthropic.com>`.
 
 ---
 
@@ -31,6 +32,7 @@
 | `src/engine/idea/images/commons.ts`, `openverse.ts` | Adapters with injected fetch and per-result license parsing. |
 | `src/engine/idea/images/fetch-image.ts` | `fetchImageBytes(hit, fetch, signal)` → `Uint8Array`. |
 | `src/engine/idea/edits.ts` | `IdeaEdit` gains the `image` kind; `imageEditKey()`. |
+| `src/engine/idea/store.ts`, `src/components/idea/useIdeaReviews.ts` (slices 1–2, extended) | The document gains per-chapter `assets`; restore replays image edits and validates their bytes; the hook gains `assetsFor` / `addAsset`. |
 | `src/engine/compile/steps/idea-images.ts` | `insertIdeaImages` step. |
 | `src/engine/compile/steps/idea-edits.ts` | Credit lines for image edits. |
 | `src/engine/compile/steps/index.ts` | Register `insertIdeaImages`. |
@@ -130,7 +132,7 @@ Read `docs/evidence/idea-image-api-<date>.md`. Task 2 marks each adapter `offere
 git add scripts/idea-image-api-probe.mjs package.json docs/evidence/idea-image-api-*.md
 git commit -m "test: probe which image APIs and hosts a browser origin can reach
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -544,7 +546,7 @@ Run: `npx vitest run --project unit src/engine/idea/images/ && npm run typecheck
 git add src/engine/idea/images
 git commit -m "feat: Commons and Openverse search behind one port, allowed licences only
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -552,9 +554,9 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ### Task 3: The image edit kind and the insertion step
 
 **Files:**
-- Modify: `src/engine/idea/edits.ts`, `src/engine/compile/steps/idea-edits.ts`, `src/engine/compile/steps/index.ts`
+- Modify: `src/engine/idea/edits.ts`, `src/engine/idea/store.ts`, `src/engine/compile/steps/idea-edits.ts`, `src/engine/compile/steps/index.ts`
 - Create: `src/engine/compile/steps/idea-images.ts`
-- Test: `src/engine/compile/steps/idea-images.test.ts`, `src/engine/idea/edits.test.ts` (append)
+- Test: `src/engine/compile/steps/idea-images.test.ts`, `src/engine/idea/edits.test.ts` (append), `src/engine/idea/store.test.ts` (append)
 
 **Interfaces:**
 ```ts
@@ -586,6 +588,55 @@ test('an image edit is stored under its own key and undone like any other', () =
 })
 ```
 (add `imageEditKey` to that file's import.)
+
+Append to `src/engine/idea/store.test.ts` (slice 2's `toPersisted(header, reviews, edits)` calls gain a fourth argument, `assets`; the compiler names each):
+```ts
+import type { ImportedAsset } from '../../import/types'
+
+const asset: ImportedAsset = {
+  id: 'idea-abc', mediaType: 'image/png', extension: 'png', bytes: new Uint8Array([137, 80, 78, 71]), sha256: 'abc', originPart: 'idea/commons/File:Dot.png', name: 'dot-abc12345.png',
+}
+const imageEdit = {
+  kind: 'image' as const, placement: { kind: 'insert-after' as const, elementId: 'b2c-blk-0' }, assetName: asset.name, width: 1, height: 1,
+  alt: 'A dot.', caption: '', attribution: { text: '“Dot” by A, Wikimedia Commons, CC BY 4.0', sourcePageUrl: 'https://commons.wikimedia.org/wiki/File:Dot.png', licenseName: 'CC BY 4.0', shareAlike: false },
+}
+
+test('an image edit and its asset round-trip together', () => {
+  const { review, header } = sample()
+  const e = reduceEdits(newEdits(), { type: 'image', key: imageEditKey('s1', asset.name), edit: imageEdit })
+  const doc = toPersisted(header, new Map([['k', review]]), new Map([['k', e]]), new Map([['k', [asset]]]))
+  const back = restore(doc)!
+  expect(back.edits.get('k')?.edits.get(imageEditKey('s1', asset.name))).toEqual(imageEdit)
+  expect(back.assets.get('k')).toEqual([asset])
+})
+
+// A packaged reference to bytes that are not there is a blocking finding at
+// export (spec §6.5). Better to lose the edit on restore and say nothing was
+// added than to restore a figure that cannot ship.
+test('an image edit whose asset is missing or malformed is dropped', () => {
+  const { review, header } = sample()
+  const e = reduceEdits(newEdits(), { type: 'image', key: imageEditKey('s1', asset.name), edit: imageEdit })
+  const noAsset = restore(toPersisted(header, new Map([['k', review]]), new Map([['k', e]]), new Map()))!
+  expect(noAsset.edits.get('k')?.edits.size).toBe(0)
+  const badBytes = restore({ ...toPersisted(header, new Map(), new Map([['k', e]]), new Map()), assets: new Map([['k', [{ ...asset, bytes: 'not bytes' }]]]) })!
+  expect(badBytes.assets.get('k') ?? []).toEqual([])
+  expect(badBytes.edits.get('k')?.edits.size).toBe(0)
+})
+
+test('a malformed image edit is dropped, a well-formed one kept', () => {
+  const back = restore({
+    version: 1, header: {}, reviews: new Map(),
+    assets: new Map([['k', [asset]]]),
+    edits: new Map([['k', { edits: new Map([
+      [imageEditKey('s1', asset.name), imageEdit],
+      [imageEditKey('s1', 'other.png'), { ...imageEdit, assetName: 'other.png' }],          // no such asset
+      [imageEditKey('s1', 'x.png'), { ...imageEdit, placement: { kind: 'sideways', elementId: 'a' } }],
+      [imageEditKey('s1', 'y.png'), { ...imageEdit, attribution: 'a string' }],
+    ]) }]]),
+  })!
+  expect([...back.edits.get('k')!.edits.keys()]).toEqual([imageEditKey('s1', asset.name)])
+})
+```
 
 `src/engine/compile/steps/idea-images.test.ts`:
 ```ts
@@ -662,12 +713,25 @@ test('compiling twice is idempotent: no second figure, no second credit', () => 
 
 - [ ] **Step 2: Run to verify they fail**
 
-Run: `npx vitest run --project unit src/engine/idea/edits.test.ts src/engine/compile/steps/idea-images.test.ts`
+Run: `npx vitest run --project unit src/engine/idea/edits.test.ts src/engine/idea/store.test.ts src/engine/compile/steps/idea-images.test.ts`
 Expected: FAIL.
 
 - [ ] **Step 3: Extend `edits.ts`**
 
 Add the types above; `imageEditKey = (sectionId, assetName) => ideaEditKey(sectionId, 'image', 0, assetName)`; the `'image'` event case in `reduceEdits`: `edits.set(event.key, event.edit); dismissed.delete(event.key)`.
+
+Then extend `src/engine/idea/store.ts` (slices 1–2):
+
+- `PersistedIdea` gains `assets: ReadonlyMap<string, readonly ImportedAsset[]>` (by chapter key); `toPersisted(header, reviews, edits, assets)` stores it as given; `restore` returns `assets` too.
+- `restoreAssets(value): Map<string, ImportedAsset[]>` keeps an entry only when `id`, `mediaType`, `extension`, `sha256`, `originPart`, and `name` are strings and `bytes instanceof Uint8Array` (structured clone preserves it). Nothing is replayed here — an asset is bytes, not a decision — but nothing is trusted either.
+- In `restoreEdits`, add the `image` branch after `keep`, guarded by the chapter's restored assets:
+  ```ts
+  } else if (edit.kind === 'image' && isImageEdit(edit) && assetNames.has(edit.assetName)) {
+    e = reduceEdits(e, { type: 'image', key: editKey, edit })
+  }
+  ```
+  where `assetNames` is the set of `name`s restored for that chapter key (so `restoreEdits` now takes the restored assets map, and `restore` calls `restoreAssets` first), and `isImageEdit(v)` checks: `placement` is a record whose `kind` is `'replace' | 'insert-after'` and whose `elementId` is a string; `assetName`, `alt`, `caption` strings; `width`, `height` finite numbers; `attribution` a record with string `text`, `sourcePageUrl`, `licenseName`, boolean `shareAlike`, and `licenseUrl` absent or a string. It returns a freshly built `ImageEdit` from those fields, never the stored object.
+- The header comment gains: *"Image edits (slice 5) are references to packaged bytes, so the bytes are stored beside them and an image edit whose bytes did not survive is dropped on restore — a figure that cannot ship must not be restored as if it could."*
 
 - [ ] **Step 4: Write `idea-images.ts`**
 
@@ -759,7 +823,7 @@ Expected: PASS; the golden suite is unchanged because the fixtures carry no imag
 git add src/engine/idea/edits.ts src/engine/idea/edits.test.ts src/engine/compile/steps
 git commit -m "feat: place an instructor-added image with packaged src and TASL credit
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -1102,7 +1166,7 @@ Run: `npx vitest run --project unit src/components/idea/ImageSearch.test.tsx src
 git add src/components/idea/useImageSearch.ts src/components/idea/ImageSearch.tsx src/components/idea/PlaceImageDialog.tsx src/components/idea/*.test.tsx src/components/idea/copy.ts
 git commit -m "feat: search openly licensed images and place one with alt text checked like the queue's
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -1110,9 +1174,9 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ### Task 5: Wire into 7.1, package the asset, and hand off to compile
 
 **Files:**
-- Modify: `src/components/idea/CategoryPanel.tsx`, `src/components/idea/IdeaScreen.tsx`, `src/App.tsx`
+- Modify: `src/components/idea/CategoryPanel.tsx`, `src/components/idea/IdeaScreen.tsx`, `src/components/idea/useIdeaReviews.ts`, `src/App.tsx`
 - Create: `src/components/idea/useAddImage.ts`
-- Test: `src/components/idea/useAddImage.test.ts`, `src/components/idea/IdeaScreen.test.tsx` (append)
+- Test: `src/components/idea/useAddImage.test.ts`, `src/components/idea/useIdeaReviews.test.ts` (append), `src/components/idea/IdeaScreen.test.tsx` (append)
 
 **Interfaces:**
 ```ts
@@ -1173,6 +1237,47 @@ test('a byte stream that is not a raster is refused', async () => {
   expect(onAsset).not.toHaveBeenCalled()
 })
 ```
+
+Append to `src/components/idea/useIdeaReviews.test.ts` (reuse the `asset` fixture shape from `store.test.ts`):
+```ts
+test('an added asset is kept per chapter, saved with the document, restored, and forgotten with it', async () => {
+  const { map, store } = memoryStore()
+  const { result } = renderHook(() => useIdeaReviews(store))
+  await waitFor(() => expect(result.current.loaded).toBe(true))
+  expect(result.current.assetsFor('ch1')).toEqual([])
+  act(() => result.current.addAsset('ch1', asset))
+  expect(result.current.assetsFor('ch1')).toEqual([asset])
+  await waitFor(() => expect(map.has(IDEA_STORAGE_KEY)).toBe(true), { timeout: SAVE_DELAY_MS * 5 })
+  expect(restore(map.get(IDEA_STORAGE_KEY))!.assets.get('ch1')).toEqual([asset])
+  const again = renderHook(() => useIdeaReviews(store))
+  await waitFor(() => expect(again.result.current.assetsFor('ch1')).toEqual([asset]))
+  act(() => again.result.current.forgetAll())
+  expect(again.result.current.assetsFor('ch1')).toEqual([])
+})
+
+test('adding an asset with a name already present replaces it rather than duplicating', () => {
+  const { result } = renderHook(() => useIdeaReviews())
+  act(() => result.current.addAsset('ch1', asset))
+  act(() => result.current.addAsset('ch1', { ...asset, sha256: 'def' }))
+  expect(result.current.assetsFor('ch1')).toHaveLength(1)
+  expect(result.current.assetsFor('ch1')[0]!.sha256).toBe('def')
+})
+```
+
+In `useIdeaReviews.ts`: `State` gains `assets: ReadonlyMap<string, readonly ImportedAsset[]>` (empty in `empty()`, merged from `found.assets` on load the way `edits` are, written through `toPersisted(header, reviews, edits, assets)`); add
+```ts
+  const assetsFor = useCallback((key: string) => state.assets.get(key) ?? [], [state.assets])
+
+  const addAsset = useCallback((key: string, asset: ImportedAsset) => {
+    dirty.current = true
+    setState((s) => {
+      const assets = new Map(s.assets)
+      assets.set(key, [...(s.assets.get(key) ?? []).filter((a) => a.name !== asset.name), asset])
+      return { ...s, assets }
+    })
+  }, [])
+```
+and return both. `forgetAll` needs nothing: `empty()` clears them.
 
 - [ ] **Step 2: Write the hook**
 
@@ -1245,28 +1350,43 @@ export function useAddImage({ onAsset, onEdit, deps = {} }: {
 
 `IdeaScreen`: state `imageSearch: { query: string } | undefined` and `placing: ImageHit | undefined`. When `imageSearch` is set, render `<ImageSearch initialQuery … onChoose={setPlacing} sources={categoryById('7.1').resources} />` under the 7.1 panel; when `placing` is set, render `<PlaceImageDialog hit options onUse onCancel />` where `options` come from the current section: for each `imageInventory` row → `{ placement: { kind: 'replace', elementId: row.elementId }, label: IDEA_COPY.placeImage.replace(row.caption ?? row.alt ?? row.src) }`, then for each `blockElements` id in the section → `{ placement: { kind: 'insert-after', elementId }, label: IDEA_COPY.placeImage.after(text.slice(0, 50)) }`. `onUse` calls the `onAddImage` prop (`(req: AddImageRequest) => Promise<void>`) with the current chapter key and the render section's id, then clears `placing`. `busy`/`error` from the hook are rendered in the dialog area.
 
-`App`: 
+`App`:
 ```ts
   const addImage = useAddImage({
-    onAsset: (chapterKey, asset) => setPrepared((all) => all.map((c) => reviewKeyOf(c.chapter) === chapterKey
-      ? { ...c, chapter: { ...c.chapter, assets: [...(c.chapter.assets ?? []), asset] } }
-      : c)),
-    onEdit: (chapterKey, key, edit) => ideaEdits.dispatch(chapterKey, { type: 'image', key, edit }),
+    onAsset: (chapterKey, asset) => {
+      // Both: the live chapter for this session's preview and export, and the
+      // document so the bytes are there after a reload.
+      ideaReviews.addAsset(chapterKey, asset)
+      setPrepared((all) => all.map((c) => reviewKeyOf(c.chapter) === chapterKey
+        ? { ...c, chapter: { ...c.chapter, assets: [...(c.chapter.assets ?? []).filter((a) => a.name !== asset.name), asset] } }
+        : c))
+    },
+    onEdit: (chapterKey, key, edit) => ideaReviews.dispatchEdit(chapterKey, { type: 'image', key, edit }),
   })
 ```
 and pass `onAddImage={addImage.add} addImageBusy={addImage.busy} addImageError={addImage.error}` to `IdeaScreen`. `useIdeaRecompile` recompiles the section because its edited-section set changed; the rebuilt section's gate audits the new figure; `collectPackagedAssets` finds the asset by `name` at export.
 
-Append to `IdeaScreen.test.tsx`:
+The initial compile has to see persisted assets too, or a re-prepared chapter would compile its persisted image edit (slice 2 passes it in) against a chapter with no such asset. In `compileForReview`, before `compileAndAuditChapter`, merge them into the chapter:
+```ts
+    const persisted = ideaReviews.assetsFor(reviewKeyOf(ch))
+    const withAssets: Chapter = persisted.length === 0 ? ch : {
+      ...ch,
+      assets: [...(ch.assets ?? []).filter((a) => !persisted.some((p) => p.name === a.name)), ...persisted],
+    }
+```
+and compile `withAssets` in place of `ch` (also `setChapter(withAssets)`). A chapter that never had an IDEA image is untouched — `assets` stays absent for catalog sources.
+
+Append to `IdeaScreen.test.tsx` (slice 2's `base` object, extended by slice 4 with `llm: llmStub`, is in scope):
 ```tsx
 test('7.1 offers Find an openly licensed photo, which opens the search region', () => {
   const c = withHtml('4: Nutrition', '<p id="b2c-blk-0">x</p>')
-  render(<IdeaScreen chapters={[c]} reviews={new Map()} edits={new Map()} pending={new Set()} onEvent={vi.fn()} onEditEvent={vi.fn()} onExport={() => 'x'} onAddImage={vi.fn()} addImageBusy={false} addImageError="" llm={llmStub} />)
+  render(<IdeaScreen {...base} chapters={[c]} onAddImage={vi.fn()} addImageBusy={false} addImageError="" />)
   fireEvent.click(screen.getByRole('button', { name: /^7\.1 / }))
   fireEvent.click(screen.getByRole('button', { name: 'Find an openly licensed photo' }))
   expect(screen.getByRole('region', { name: 'Openly licensed images' })).toBeInTheDocument()
 })
 ```
-(`llmStub` is whatever minimal `llm` prop shape slice 4 established in this file's other tests; reuse it.)
+Add `onAddImage: vi.fn(), addImageBusy: false, addImageError: ''` to `base`, and `onAddImage: () => {}, addImageBusy: false, addImageError: ''` to the browser test's `props`, so every earlier render keeps compiling.
 
 - [ ] **Step 4: Run everything**
 
@@ -1276,10 +1396,10 @@ Expected: green. The a11y browser test renders the search region and the dialog 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/components/idea src/App.tsx
+git add src/components/idea src/engine/idea/store.ts src/engine/idea/store.test.ts src/App.tsx
 git commit -m "feat: add a chosen image to the chapter's assets and place it through compile
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -1316,26 +1436,31 @@ rules the review queue enforces. The caption and the page's Source-and-license b
 Title · Author · Source · License, and a CC BY-SA image adds the share-alike sentence. Only the
 search words leave the browser; no key or account is involved.
 ```
-`docs/IDEA.md` — heading "Slices 1–5"; move the image-search bullet into the shipped list and add: *"Providers offered are those a browser origin was measured to reach (`docs/evidence/idea-image-api-<date>.md`); Unsplash and Pexels are not integrated (non-CC licences; Unsplash's hotlink rule conflicts with packaging)."*
+`docs/IDEA.md` — heading "Slices 1–5"; move the image-search bullet into the shipped list and add: *"Providers offered are those a browser origin was measured to reach (`docs/evidence/idea-image-api-<date>.md`); Unsplash and Pexels are not integrated (non-CC licences; Unsplash's hotlink rule conflicts with packaging)."* Under **Storage**, add: *"An image added through IDEA is stored with its bytes in the same document as the reviews and edits, so it survives a reload; an image edit whose bytes are missing is dropped on restore rather than exported as a broken reference. Forget all IDEA reviews removes the bytes too."* PRIVACY.md's IDEA storage paragraph gains the same sentence about image bytes.
 `THIRD-PARTY-NOTICES.md` — one paragraph: *"Images added through the IDEA review are fetched from Wikimedia Commons or from sources indexed by Openverse under the licence each result declares (CC0, CC BY, CC BY-SA, or public domain). Each such image carries its own attribution in the page; this project reproduces the licence metadata those services publish and does not relicense the images."*
 `docs/RELEASE-ACCEPTANCE.md`:
 ```markdown
-### IDEA review — slice 5
+## 8. IDEA review — slice 5
 
 1. Prepare an OpenStax chapter. IDEA → 7.1 → Find an openly licensed photo. Search "students
    laboratory" on Wikimedia Commons with all four licences on. Results show titles, creators,
    and licence badges; none says NC or ND.
 2. Use one. The dialog names the credit; leave alt empty and press Use: "Not saved: the
    description is empty." Type a real description; choose "After …" a paragraph; Use.
-3. The section render shows the image within a few seconds with the caption ending in "(source)".
-   The Source-and-license block ends with "Additional image: …" and, for a BY-SA image, the
-   share-alike sentence.
-4. Export the cartridge; unzip: `web_resources/oer2canvas/<name>` exists and the page's `<img>`
+3. The chapter render beside the panels shows the image within a few seconds with the caption
+   ending in "(source)". The Source-and-license block ends with "Additional image: …" and, for a
+   BY-SA image, the share-alike sentence.
+4. **Reload the tab** and prepare the same chapter: the image is in the render and in Applied
+   without pressing anything. DevTools → Application → IndexedDB → oer2canvas → kv →
+   `idea.reviews` carries the bytes.
+5. Export the cartridge; unzip: `web_resources/oer2canvas/<name>` exists and the page's `<img>`
    references it with the alt text typed.
-5. Switch to Openverse, search, choose a Flickr-hosted result: if the host refuses the fetch,
+6. Switch to Openverse, search, choose a Flickr-hosted result: if the host refuses the fetch,
    the dialog says which host and points to Document import; nothing is added.
-6. Network tab: requests only to commons.wikimedia.org, upload.wikimedia.org, api.openverse.org,
+7. Network tab: requests only to commons.wikimedia.org, upload.wikimedia.org, api.openverse.org,
    and the chosen image host. None to `/relay`.
+8. *Forget all IDEA reviews* → confirm; the image leaves the render after the recompile, and the
+   next export carries neither the figure nor the credit.
 ```
 
 - [ ] **Step 4: Full suite and commit**
@@ -1346,7 +1471,7 @@ Run: `npm run typecheck && npm test`
 git add PRIVACY.md README.md docs/IDEA.md docs/RELEASE-ACCEPTANCE.md THIRD-PARTY-NOTICES.md src/docs-claims.test.ts
 git commit -m "docs: disclose the IDEA image search and packaging path
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -1354,6 +1479,8 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ## Self-review
 
 **Spec coverage (§8.5):** API spike → Task 1; Commons first, per-file licence parsing, do-not-use categories dropped, unparseable dropped; Openverse anonymous with licence filter; Unsplash/Pexels excluded; More-sources links (§6.1) → Tasks 2, 4; two entry points, licence tri-state (four-state here, adding PD explicitly), results grid, placement picker, Framework guidance line, no demographic ranking (§6.2) → Tasks 4–5; image edit kind, packaged `<figure>` markup, asset fetched into the cartridge (§6.3) → Tasks 3, 5; TASL in caption and Source-and-license block, share-alike sentence, obligation stated before Use (§6.4) → Tasks 3–4; failure modes (§6.5) → Tasks 2, 4, 5; §6.3's "enters the accessibility queue" replaced by alt-at-placement checked with `validateAnswer` — recorded in the header and to be mirrored into the spec.
+
+**Alignment with the revised slices 1–2 (2026-09-11):** image edits dispatch through `useIdeaReviews.dispatchEdit` and persist in the IDEA document; their bytes persist beside them under `assets` and are merged into the chapter before its initial compile (Task 5), with restore dropping an image edit whose bytes are gone (Task 3); the placed figure appears in `IdeaChapterRender`; every `IdeaScreen` render extends the shared `base` / `props` objects.
 
 **Placeholder scan:** `evidence: 'docs/evidence/idea-image-api-YYYY-MM-DD.md'` is an explicit substitute-from-Task-1 instruction, like slice 4's. No TBDs.
 

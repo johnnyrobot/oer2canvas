@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, React 19, `DOMParser`, Vitest (jsdom + browser), Testing Library, axe-core.
 
-**Spec:** `docs/IDEA_REVIEW_SPEC.md` §2.2–§2.4, §3.1, §3.2, §3.6, §5.3, §7.1, §8 slice 2. Two refinements recorded here: (a) the term list is **hand-curated JSON** in v1 rather than generated from retext-equality's YAML — no runtime `unified`/`retext` dependency, no YAML build step, unambiguous CC BY licensing of what ships; retext-equality remains the reference list to grow from and is credited in the file. (b) Block elements gain a compile-time id (`b2c-blk-<n>`) so findings and edits key on an element that exists in the published bytes; this changes the committed goldens (ids added), which must be regenerated and read.
+**Spec:** `docs/IDEA_REVIEW_SPEC.md` §2.2–§2.4, §2.7, §3.1, §3.2, §3.6, §5.3, §7.1, §8 slice 2. This plan was revised 2026-09-11 to follow the slice 1 revision: edits join the persisted review document (spec §2.7) instead of living in a session-only hook; the chapter render slice 1 put beside the panels is what gains highlight-on-focus here, rather than a second render below them; `IdeaScreen` carries slice 1's `header` / `onHeaderEvent` / `onForget` props throughout. Two refinements recorded here: (a) the term list is **hand-curated JSON** in v1 rather than generated from retext-equality's YAML — no runtime `unified`/`retext` dependency, no YAML build step, unambiguous CC BY licensing of what ships; retext-equality remains the reference list to grow from and is credited in the file. (b) Block elements gain a compile-time id (`b2c-blk-<n>`) so findings and edits key on an element that exists in the published bytes; this changes the committed goldens (ids added), which must be regenerated and read.
 
 ## Global Constraints
 
@@ -19,8 +19,10 @@
 - **Compile steps are pure over the detached document**; `applyIdeaEdits` reads `ctx.ideaEdits`, mutates the document, and writes notes through the sink. Nothing edit-shaped enters `CompiledChapter`.
 - **Recompile after an edit re-audits the section**; a section with a fresh compile and no gate is not publishable until its gate returns (`isPublishable` reads `gate`).
 - **User-facing strings** live in `src/components/idea/copy.ts`.
+- **Edits persist with the review** (spec §2.7): the `edits` map is written to the same IndexedDB document as the ratings and restored through the same validating replay. `dismissed` is session-only, as §2.3 says. The initial compile of a chapter receives its persisted edits, so a re-prepared chapter comes back with its wording already applied and re-audited.
+- **The chapter render is the one slice 1 built**, in the aside beside the panels. This slice replaces the component inside that aside; it does not add a second render below the panels.
 - **Goldens:** regenerate with `UPDATE_GOLDENS=1 npx vitest run --project unit src/engine/compile/golden.test.ts` and READ the diff before committing; the only expected change in Task 3 is added `id="b2c-blk-N"` attributes.
-- `npm run typecheck` before every commit. Commit trailer: `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`. No session links.
+- `npm run typecheck` before every commit. Commit trailer: `Co-Authored-By: Claude <model name> <noreply@anthropic.com>`. No session links.
 
 ---
 
@@ -37,10 +39,11 @@
 | `src/engine/idea/data/idea-terms.json`, `idea-idioms.json` | Vendored lists. |
 | `src/engine/idea/terms.ts`, `idioms.ts` | `(sectionId, html) => IdeaFinding[]`. |
 | `src/engine/idea/findings.ts` | `IdeaFinding` types, `findingsFor(section, edits)`, suppression by edits/dismissed. |
-| `src/components/idea/useIdeaEdits.ts` | Per-chapter `IdeaEdits` map, dispatch, reset. |
+| `src/engine/idea/store.ts`, `src/components/idea/useIdeaReviews.ts` (slice 1 files, extended) | The persisted document gains `edits`; the hook gains `edits`, `editsFor`, `dispatchEdit`; `forgetAll` clears them too. |
 | `src/components/idea/useIdeaRecompile.ts` | Edit → recompile → re-audit → replace section in `prepared`. |
 | `src/components/idea/FindingRow.tsx`, `AppliedList.tsx` | The rule-finding rows and the Applied/Undo list. |
-| `src/components/idea/IdeaSectionRender.tsx` | The read-only section render with highlight-on-focus. |
+| `src/components/idea/IdeaChapterRender.tsx` | The read-only chapter render in slice 1's aside, now with highlight-on-focus and a per-section pending line. Replaces `ChapterView` there. |
+| `src/components/ChapterView.tsx` | Loses the `audit` prop slice 1 added; nothing uses it once the IDEA render is its own component. |
 | `src/components/idea/CategoryPanel.tsx`, `IdeaScreen.tsx`, `copy.ts` | Findings zone, render, wiring. |
 | `docs/IDEA.md`, `docs/RELEASE-ACCEPTANCE.md`, `README.md` | Data boundary, acceptance, obligations. |
 
@@ -185,7 +188,7 @@ git commit -m "fix: lift the queue's answers and settled chapters into App
 Plan's count and the export now describe the answered chapter, and the IDEA
 phase has one path to recompile with answers and its own edits.
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -525,7 +528,7 @@ npm run typecheck
 git add src/engine/idea/text.ts src/engine/idea/text.test.ts src/engine/idea/edits.ts src/engine/idea/edits.test.ts
 git commit -m "feat: text-node helpers and the IDEA edits reducer
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -821,7 +824,7 @@ npm run typecheck
 git add src/engine/compile src/engine/index.ts
 git commit -m "feat: block ids and a compile step that applies IDEA edits from source
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -1046,7 +1049,7 @@ Expected: PASS (3 tests; 70 rules, 50 idioms).
 git add src/engine/idea/data src/engine/idea/data.test.ts
 git commit -m "feat: vendor curated inclusive-terminology and idiom lists
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -1431,26 +1434,32 @@ npm run typecheck
 git add src/engine/idea/findings.ts src/engine/idea/terms.ts src/engine/idea/idioms.ts src/engine/idea/*.test.ts
 git commit -m "feat: deterministic terminology, gendered-noun, and idiom findings
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 6: Edits hook and the recompile-on-edit hook
+### Task 6: Edits in the persisted review document, and the recompile-on-edit hook
 
 **Files:**
-- Create: `src/components/idea/useIdeaEdits.ts`, `src/components/idea/useIdeaRecompile.ts`
-- Test: `src/components/idea/useIdeaEdits.test.ts`, `src/components/idea/useIdeaRecompile.test.ts`
+- Modify: `src/engine/idea/store.ts`, `src/components/idea/useIdeaReviews.ts` (both from slice 1)
+- Create: `src/components/idea/useIdeaRecompile.ts`
+- Test: `src/engine/idea/store.test.ts` (append), `src/components/idea/useIdeaReviews.test.ts` (append), `src/components/idea/useIdeaRecompile.test.ts`
 
 **Interfaces:**
 - Produces:
   ```ts
-  export function useIdeaEdits(): {
-    edits: ReadonlyMap<string, IdeaEdits>            // by review key (reviewKeyOf)
-    editsFor: (key: string) => IdeaEdits
-    dispatch: (key: string, event: IdeaEditsEvent) => void
-    reset: () => void
-  }
+  // store.ts — the document gains edits; `dismissed` is NOT persisted (spec §2.3: session-only)
+  export interface PersistedIdea { version: 1; header: IdeaHeader; reviews: ReadonlyMap<string, IdeaReview>; edits: ReadonlyMap<string, IdeaEdits> }
+  export function toPersisted(header: IdeaHeader, reviews: ReadonlyMap<string, IdeaReview>, edits: ReadonlyMap<string, IdeaEdits>): PersistedIdea
+  export function restore(value: unknown): { header: IdeaHeader; reviews: ReadonlyMap<string, IdeaReview>; edits: ReadonlyMap<string, IdeaEdits> } | undefined
+
+  // useIdeaReviews.ts — gains, beside what slice 1 returns:
+  //   edits: ReadonlyMap<string, IdeaEdits>          // by review key (reviewKeyOf)
+  //   editsFor: (key: string) => IdeaEdits
+  //   dispatchEdit: (key: string, event: IdeaEditsEvent) => void
+  //   forgetAll() now clears edits too
+
   export interface IdeaRecompileDeps {
     recompile: (chapter: Chapter, sectionIds: readonly string[], opts: { profile: PublisherProfile; answers: ReadonlyMap<string, QueueAnswer>; ideaEdits: ReadonlyMap<string, IdeaEdit> }) => CompiledSection[]
     audit: (html: string) => Promise<GateResult>
@@ -1467,23 +1476,83 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing tests**
 
-`src/components/idea/useIdeaEdits.test.ts`:
+Append to `src/engine/idea/store.test.ts` (slice 1's `sample()` helper is in scope; add `import { ideaEditKey, newEdits, reduceEdits } from './edits'`):
 ```ts
-import { act, renderHook } from '@testing-library/react'
-import { useIdeaEdits } from './useIdeaEdits'
-import { ideaEditKey } from '../../engine/idea/edits'
+test('edits round-trip with the document; dismissals do not', () => {
+  const { review, header } = sample()
+  const k = ideaEditKey('s1', 'b2c-blk-0', 0, 'crazy')
+  let e = reduceEdits(newEdits(), { type: 'replace', key: k, replacement: 'wild' })
+  e = reduceEdits(e, { type: 'keep', key: ideaEditKey('s1', 'b2c-blk-1', 0, 'the blind'), context: 'as quoted' })
+  e = reduceEdits(e, { type: 'dismiss', key: ideaEditKey('s1', 'b2c-blk-2', 0, 'hit the books') })
+  const doc = toPersisted(header, new Map([['k', review]]), new Map([['k', e]]))
+  const back = restore(doc)!
+  expect(back.edits.get('k')?.edits.get(k)).toEqual({ kind: 'replace', replacement: 'wild' })
+  expect([...back.edits.get('k')!.edits.values()]).toHaveLength(2)
+  // Session-only by spec §2.3: a dismissal hides a finding for THIS session.
+  expect(back.edits.get('k')?.dismissed.size).toBe(0)
+})
 
-test('edits are kept per chapter key and reset together', () => {
-  const { result } = renderHook(() => useIdeaEdits())
-  const k = ideaEditKey('s1', 'a', 0, 'crazy')
-  expect(result.current.editsFor('ch1').edits.size).toBe(0)
-  act(() => result.current.dispatch('ch1', { type: 'replace', key: k, replacement: 'wild' }))
-  expect(result.current.edits.get('ch1')?.edits.get(k)).toEqual({ kind: 'replace', replacement: 'wild' })
-  expect(result.current.editsFor('ch2').edits.size).toBe(0)
-  act(() => result.current.reset())
-  expect(result.current.edits.size).toBe(0)
+test('a document written before edits existed restores with none', () => {
+  const { review, header } = sample()
+  const { edits: _drop, ...older } = toPersisted(header, new Map([['k', review]]), new Map())
+  void _drop
+  expect(restore(older)!.edits.size).toBe(0)
+})
+
+test('malformed edits are dropped, well-formed ones kept', () => {
+  const back = restore({
+    version: 1,
+    header: {},
+    reviews: new Map(),
+    edits: new Map([
+      ['k', { edits: new Map([
+        ['s1::b2c-blk-0::0::crazy', { kind: 'replace', replacement: 'wild' }],
+        ['s1::b2c-blk-1::0::x', { kind: 'keep' }],
+        ['s1::b2c-blk-2::0::y', { kind: 'keep', context: 7 }],
+        ['s1::b2c-blk-3::0::z', { kind: 'delete' }],
+        ['not-a-key', { kind: 'replace', replacement: 'x' }],
+        ['s1::b2c-blk-4::0::w', 'replace'],
+      ]) }],
+      ['bad', 'not a record'],
+    ]),
+  })!
+  const e = back.edits.get('k')!
+  expect([...e.edits.entries()]).toEqual([
+    ['s1::b2c-blk-0::0::crazy', { kind: 'replace', replacement: 'wild' }],
+    ['s1::b2c-blk-1::0::x', { kind: 'keep' }],
+  ])
+  expect(back.edits.has('bad')).toBe(false)
 })
 ```
+
+Append to `src/components/idea/useIdeaReviews.test.ts` (its `memoryStore` helper and its imports of `IDEA_STORAGE_KEY`, `restore`, `toPersisted`, `newHeader`, `SAVE_DELAY_MS` are in scope; add `import { ideaEditKey, newEdits, reduceEdits } from '../../engine/idea/edits'`):
+```ts
+test('edits are kept per chapter key, saved with the document, and forgotten with it', async () => {
+  const { map, store } = memoryStore()
+  const { result } = renderHook(() => useIdeaReviews(store))
+  await waitFor(() => expect(result.current.loaded).toBe(true))
+  const k = ideaEditKey('s1', 'a', 0, 'crazy')
+  expect(result.current.editsFor('ch1').edits.size).toBe(0)
+  act(() => result.current.dispatchEdit('ch1', { type: 'replace', key: k, replacement: 'wild' }))
+  expect(result.current.edits.get('ch1')?.edits.get(k)).toEqual({ kind: 'replace', replacement: 'wild' })
+  expect(result.current.editsFor('ch2').edits.size).toBe(0)
+  await waitFor(() => expect(map.has(IDEA_STORAGE_KEY)).toBe(true), { timeout: SAVE_DELAY_MS * 5 })
+  expect(restore(map.get(IDEA_STORAGE_KEY))!.edits.get('ch1')?.edits.get(k)).toEqual({ kind: 'replace', replacement: 'wild' })
+  act(() => result.current.forgetAll())
+  expect(result.current.edits.size).toBe(0)
+  await waitFor(() => expect(map.has(IDEA_STORAGE_KEY)).toBe(false))
+})
+
+test('a saved edit is restored on mount', async () => {
+  const k = ideaEditKey('s1', 'a', 0, 'crazy')
+  const e = reduceEdits(newEdits(), { type: 'replace', key: k, replacement: 'wild' })
+  const { store } = memoryStore(toPersisted(newHeader(), new Map(), new Map([['ch1', e]])))
+  const { result } = renderHook(() => useIdeaReviews(store))
+  await waitFor(() => expect(result.current.loaded).toBe(true))
+  expect(result.current.edits.get('ch1')?.edits.get(k)).toEqual({ kind: 'replace', replacement: 'wild' })
+})
+```
+(Also update slice 1's existing `toPersisted(...)` calls in both test files to pass `new Map()` as the third argument — the compiler names each one.)
 
 `src/components/idea/useIdeaRecompile.test.ts`:
 ```ts
@@ -1555,33 +1624,85 @@ test('undoing the last edit for a section recompiles that section too', async ()
 
 - [ ] **Step 2: Run to verify they fail**
 
-Run: `npx vitest run --project unit src/components/idea/useIdeaEdits.test.ts src/components/idea/useIdeaRecompile.test.ts`
-Expected: FAIL — modules not found.
+Run: `npx vitest run --project unit src/engine/idea/store.test.ts src/components/idea/useIdeaReviews.test.ts src/components/idea/useIdeaRecompile.test.ts`
+Expected: FAIL — `toPersisted` takes two arguments; `edits`/`dispatchEdit` are not returned; `useIdeaRecompile` not found.
 
-- [ ] **Step 3: Write `useIdeaEdits.ts`**
+- [ ] **Step 3: Extend `store.ts` and `useIdeaReviews.ts`**
 
+In `src/engine/idea/store.ts`:
+
+Add to the imports: `import { newEdits, reduceEdits, type IdeaEdits } from './edits'`. Extend the header comment with one paragraph:
 ```ts
-/**
- * A React shell over `reduceEdits`, one `IdeaEdits` per prepared chapter,
- * keyed like the reviews. Plumbing; every rule is in `engine/idea/edits.ts`.
- */
-import { useCallback, useState } from 'react'
-import { newEdits, reduceEdits, type IdeaEdits, type IdeaEditsEvent } from '../../engine/idea/edits'
+ * Edits (slice 2) live in the same document, restored the same way: each
+ * stored entry is replayed through `reduceEdits`, so a malformed entry is
+ * dropped and a well-formed one becomes exactly the edit the instructor
+ * made. Dismissals are NOT stored — spec §2.3 makes them session-only — so
+ * `restore` always returns an empty `dismissed` set.
+```
+Change the interface and the two functions:
+```ts
+export interface PersistedIdea {
+  version: 1
+  header: IdeaHeader
+  reviews: ReadonlyMap<string, IdeaReview>
+  edits: ReadonlyMap<string, IdeaEdits>
+}
 
-export function useIdeaEdits() {
-  const [edits, setEdits] = useState<ReadonlyMap<string, IdeaEdits>>(new Map())
-  const editsFor = useCallback((key: string) => edits.get(key) ?? newEdits(), [edits])
-  const dispatch = useCallback((key: string, event: IdeaEditsEvent) => {
-    setEdits((current) => {
-      const next = new Map(current)
-      next.set(key, reduceEdits(current.get(key) ?? newEdits(), event))
-      return next
-    })
-  }, [])
-  const reset = useCallback(() => setEdits(new Map()), [])
-  return { edits, editsFor, dispatch, reset }
+export function toPersisted(
+  header: IdeaHeader,
+  reviews: ReadonlyMap<string, IdeaReview>,
+  edits: ReadonlyMap<string, IdeaEdits>,
+): PersistedIdea {
+  // Dismissals stripped on the way out, so the document never carries them.
+  const stripped = new Map<string, IdeaEdits>()
+  for (const [key, e] of edits) stripped.set(key, { edits: e.edits, dismissed: new Set() })
+  return { version: 1, header, reviews, edits: stripped }
+}
+
+/** Four `::`-separated parts, as `ideaEditKey` builds them. */
+const isEditKey = (v: unknown): v is string => typeof v === 'string' && v.split('::').length >= 4
+
+function restoreEdits(value: unknown): ReadonlyMap<string, IdeaEdits> {
+  const out = new Map<string, IdeaEdits>()
+  for (const [key, raw] of entries(value)) {
+    if (typeof key !== 'string' || !isRecord(raw)) continue
+    let e = newEdits()
+    for (const [editKey, edit] of entries(raw.edits)) {
+      if (!isEditKey(editKey) || !isRecord(edit)) continue
+      if (edit.kind === 'replace' && typeof edit.replacement === 'string') {
+        e = reduceEdits(e, { type: 'replace', key: editKey, replacement: edit.replacement })
+      } else if (edit.kind === 'keep' && (edit.context === undefined || typeof edit.context === 'string')) {
+        e = reduceEdits(e, edit.context === undefined ? { type: 'keep', key: editKey } : { type: 'keep', key: editKey, context: edit.context })
+      }
+    }
+    out.set(key, e)
+  }
+  return out
 }
 ```
+and in `restore`, change the return type to include `edits` and the last line to `return { header, reviews, edits: restoreEdits(value.edits) }`. A document with no `edits` field (written by slice 1) passes `undefined` to `entries`, which yields nothing.
+
+In `src/components/idea/useIdeaReviews.ts`:
+
+- Import `newEdits`, `reduceEdits`, `type IdeaEdits`, `type IdeaEditsEvent` from `../../engine/idea/edits`.
+- `State` gains `edits: ReadonlyMap<string, IdeaEdits>`; `empty()` returns `edits: new Map()`.
+- In the load effect, the merge becomes `{ header: s.header, reviews: new Map([...found.reviews, ...s.reviews]), edits: new Map([...found.edits, ...s.edits]) }` for the dirty branch and `found` otherwise.
+- The save effect writes `toPersisted(state.header, state.reviews, state.edits)`.
+- Add, beside `dispatch`:
+  ```ts
+  const editsFor = useCallback((key: string) => state.edits.get(key) ?? newEdits(), [state.edits])
+
+  const dispatchEdit = useCallback((key: string, event: IdeaEditsEvent) => {
+    dirty.current = true
+    setState((s) => {
+      const edits = new Map(s.edits)
+      edits.set(key, reduceEdits(s.edits.get(key) ?? newEdits(), event))
+      return { ...s, edits }
+    })
+  }, [])
+  ```
+- Return `edits: state.edits, editsFor, dispatchEdit` alongside the slice 1 fields. `forgetAll` needs no change: `empty()` already clears them.
+- Extend the header comment: *"Edits (slice 2) ride in the same state and the same document. A dismissal is session-only and is dropped by `toPersisted`; an edit is the instructor's decision about the published bytes and survives a reload for the same reason a rating does."*
 
 - [ ] **Step 4: Write `useIdeaRecompile.ts`**
 
@@ -1700,27 +1821,27 @@ Note the first-render behaviour the second test relies on: `last.current` starts
 
 - [ ] **Step 5: Run the tests**
 
-Run: `npx vitest run --project unit src/components/idea/useIdeaEdits.test.ts src/components/idea/useIdeaRecompile.test.ts`
+Run: `npx vitest run --project unit src/engine/idea/store.test.ts src/components/idea/useIdeaReviews.test.ts src/components/idea/useIdeaRecompile.test.ts`
 Expected: PASS.
 
 - [ ] **Step 6: Typecheck and commit**
 
 ```bash
 npm run typecheck
-git add src/components/idea/useIdeaEdits.ts src/components/idea/useIdeaEdits.test.ts src/components/idea/useIdeaRecompile.ts src/components/idea/useIdeaRecompile.test.ts
-git commit -m "feat: IDEA edits per chapter, recompiled and re-audited on change
+git add src/engine/idea/store.ts src/engine/idea/store.test.ts src/components/idea/useIdeaReviews.ts src/components/idea/useIdeaReviews.test.ts src/components/idea/useIdeaRecompile.ts src/components/idea/useIdeaRecompile.test.ts
+git commit -m "feat: IDEA edits per chapter, kept with the review, recompiled and re-audited on change
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 7: Finding rows, the Applied list, and the section render
+### Task 7: Finding rows, the Applied list, and the chapter render
 
 **Files:**
-- Create: `src/components/idea/FindingRow.tsx`, `src/components/idea/AppliedList.tsx`, `src/components/idea/IdeaSectionRender.tsx`, `src/components/idea/idea.css`
+- Create: `src/components/idea/FindingRow.tsx`, `src/components/idea/AppliedList.tsx`, `src/components/idea/IdeaChapterRender.tsx`, `src/components/idea/idea.css`
 - Modify: `src/components/idea/copy.ts`
-- Test: `src/components/idea/FindingRow.test.tsx`, `src/components/idea/AppliedList.test.tsx`, `src/components/idea/IdeaSectionRender.browser.test.tsx`
+- Test: `src/components/idea/FindingRow.test.tsx`, `src/components/idea/AppliedList.test.tsx`, `src/components/idea/IdeaChapterRender.browser.test.tsx`
 
 **Interfaces:**
 - Produces:
@@ -1735,12 +1856,13 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
     applied: readonly { key: string; edit: IdeaEdit; stale: boolean; sectionTitle: string }[]
     onUndo: (key: string) => void
   }): JSX.Element
-  export function IdeaSectionRender(props: {
-    section: CompiledSection | undefined
-    target: string | undefined                // elementId to outline
-    resolve: (html: string) => string
-  }): JSX.Element | null
+  export function IdeaChapterRender(props: {
+    compiled: CompiledChapter
+    target: { sectionId: string; elementId: string } | undefined   // element to outline and scroll to
+    pending: ReadonlySet<string>                                   // section ids whose recompile is in flight
+  }): JSX.Element
   ```
+  It replaces `<ChapterView compiled={current} audit={false} />` inside slice 1's aside. Same heading (`h2`, the chapter title — slice 1's switcher test looks for it), same attribution line, same `gate.html`-only body per section; what it adds is the outline and the pending line. It resolves packaged-asset references itself with `usePackagedAssetUrls(compiled.chapter.assets)`, as `ChapterView` does.
 
 - [ ] **Step 1: Add copy**
 
@@ -1779,7 +1901,6 @@ Append to `IDEA_COPY` in `src/components/idea/copy.ts`:
     announceDismissed: 'Dismissed.',
   },
   render: {
-    heading: 'Section',
     pending: 'Re-checking this section…',
   },
 ```
@@ -1905,41 +2026,59 @@ test('an empty list renders nothing', () => {
 })
 ```
 
-`src/components/idea/IdeaSectionRender.browser.test.tsx`:
+`src/components/idea/IdeaChapterRender.browser.test.tsx`:
 ```tsx
-import { render } from '@testing-library/react'
-import { IdeaSectionRender } from './IdeaSectionRender'
-import type { CompiledSection } from '../../contracts/index'
+import { render, screen } from '@testing-library/react'
+import { IdeaChapterRender } from './IdeaChapterRender'
+import type { CompiledChapter, CompiledSection } from '../../contracts/index'
+import type { Chapter } from '../../sources/types'
 import type { GateResult } from '../../engine/gate'
 import '../../App.css'
 
 const gate = (html: string): GateResult =>
   ({ html, conformance: { blockers: [], issues: [] }, badgeWithheld: false }) as unknown as GateResult
-const section: CompiledSection = {
-  id: 's1', title: 'S1', html: '', notes: [], queue: [],
-  gate: gate('<p id="b2c-blk-0">one</p><p id="b2c-blk-1">two</p>'),
+const chapter: Chapter = {
+  source: 'openstax', bookId: 'b', title: '4: Nutrition', sections: [], xrefs: new Map(),
+  attribution: { bookTitle: 'Human Biology', publisher: 'LibreTexts', authors: [] },
 }
+const s1: CompiledSection = { id: 's1', title: 'S1', html: '<p>raw one</p>', notes: [], queue: [], gate: gate('<p id="b2c-blk-0">one</p><p id="b2c-blk-1">two</p>') }
+const s2: CompiledSection = { id: 's2', title: 'S2', html: '<p>raw two</p>', notes: [], queue: [], gate: gate('<p id="b2c-blk-0">three</p>') }
+const compiled: CompiledChapter = { chapter, sections: [s1, s2], queue: [] }
+const none = new Set<string>()
 
-test('the target element carries the outline class, and a new target moves it', () => {
-  const { container, rerender } = render(<IdeaSectionRender section={section} target="b2c-blk-1" resolve={(h) => h} />)
-  expect(container.querySelector('#b2c-blk-1')).toHaveClass('b2c-idea-target')
-  expect(container.querySelector('#b2c-blk-0')).not.toHaveClass('b2c-idea-target')
-  rerender(<IdeaSectionRender section={section} target="b2c-blk-0" resolve={(h) => h} />)
-  expect(container.querySelector('#b2c-blk-0')).toHaveClass('b2c-idea-target')
-  expect(container.querySelector('#b2c-blk-1')).not.toHaveClass('b2c-idea-target')
+test('the chapter heading and every gated section render; raw html never does', () => {
+  const { container } = render(<IdeaChapterRender compiled={compiled} target={undefined} pending={none} />)
+  expect(screen.getByRole('heading', { name: '4: Nutrition' })).toBeInTheDocument()
+  expect(screen.getByRole('article', { name: 'S1' })).toBeInTheDocument()
+  expect(screen.getByRole('article', { name: 'S2' })).toBeInTheDocument()
+  expect(container.innerHTML).not.toContain('raw one')
+})
+
+// Block ids repeat across sections (`b2c-blk-0` is in both), so the target is
+// found INSIDE its section's article, never by a document-wide id lookup.
+test('the target element in the named section carries the outline class, and a new target moves it', () => {
+  const { rerender } = render(<IdeaChapterRender compiled={compiled} target={{ sectionId: 's2', elementId: 'b2c-blk-0' }} pending={none} />)
+  const inS2 = screen.getByRole('article', { name: 'S2' }).querySelector('#b2c-blk-0')
+  const inS1 = screen.getByRole('article', { name: 'S1' }).querySelector('#b2c-blk-0')
+  expect(inS2).toHaveClass('b2c-idea-target')
+  expect(inS1).not.toHaveClass('b2c-idea-target')
+  rerender(<IdeaChapterRender compiled={compiled} target={{ sectionId: 's1', elementId: 'b2c-blk-1' }} pending={none} />)
+  expect(inS2).not.toHaveClass('b2c-idea-target')
+  expect(screen.getByRole('article', { name: 'S1' }).querySelector('#b2c-blk-1')).toHaveClass('b2c-idea-target')
 })
 
 test('the outline is geometry only, never a colour', () => {
-  const { container } = render(<IdeaSectionRender section={section} target="b2c-blk-1" resolve={(h) => h} />)
-  const s = getComputedStyle(container.querySelector('#b2c-blk-1')!)
+  render(<IdeaChapterRender compiled={compiled} target={{ sectionId: 's1', elementId: 'b2c-blk-1' }} pending={none} />)
+  const s = getComputedStyle(screen.getByRole('article', { name: 'S1' }).querySelector('#b2c-blk-1')!)
   expect(parseFloat(s.outlineWidth)).toBeGreaterThanOrEqual(3)
   expect(s.outlineColor).toBe(s.color)
 })
 
-test('without a gate it renders the pending line, not un-audited html', () => {
-  const { container, getByText } = render(<IdeaSectionRender section={{ ...section, gate: undefined, html: '<p>raw</p>' }} target={undefined} resolve={(h) => h} />)
-  expect(getByText('Re-checking this section…')).toBeInTheDocument()
-  expect(container.innerHTML).not.toContain('<p>raw</p>')
+test('a pending section shows the pending line in place of its body; the others still render', () => {
+  const { container } = render(<IdeaChapterRender compiled={compiled} target={undefined} pending={new Set(['s1'])} />)
+  expect(screen.getByText('Re-checking this section…')).toBeInTheDocument()
+  expect(container.innerHTML).not.toContain('>one<')
+  expect(container.innerHTML).toContain('>three<')
 })
 ```
 
@@ -2154,60 +2293,87 @@ export function AppliedList({
 }
 ```
 
-- [ ] **Step 7: Write `IdeaSectionRender.tsx`**
+- [ ] **Step 7: Write `IdeaChapterRender.tsx`**
 
 ```tsx
 /**
- * The read-only section render under the panels, with the focused finding's
- * element outlined. Same construction as the queue's region E: only
- * `gate.html` (allowlist-repaired) is ever set as innerHTML; a section whose
- * gate is absent — a recompile in flight — shows a sentence, not raw bytes.
+ * The read-only chapter render in the IDEA aside — the whole chapter, every
+ * section — with the focused finding's element outlined and a section whose
+ * recompile is in flight replaced by a sentence.
+ *
+ * This takes over from `ChapterView` in the IDEA aside (slice 1 used it with
+ * the accessibility verdicts off). Same construction as `ChapterView` and the
+ * queue's region E, and the same invariant: only `gate.html` (allowlist-
+ * repaired) is ever set as innerHTML; `s.html` — compiled but un-audited —
+ * never is, which is why a pending section shows a sentence and not "the
+ * new bytes, briefly". Packaged-asset tokens are resolved for display only,
+ * exactly as `ChapterView` does it.
+ *
+ * The outline is found INSIDE the target's section. Block ids are minted per
+ * section (`b2c-blk-0` exists in every section), so a document-wide id
+ * lookup would light up the first section's paragraph for every finding.
  */
-import { useLayoutEffect, useMemo, useRef } from 'react'
-import type { CompiledSection } from '../../contracts/index'
+import { useLayoutEffect, useRef } from 'react'
+import type { CompiledChapter } from '../../contracts/index'
 import { CanvasShellStyles } from '../CanvasShellStyles'
+import { usePackagedAssetUrls } from '../usePackagedAssetUrls'
 import { IDEA_COPY } from './copy'
 import './idea.css'
 
 const HIGHLIGHT = 'b2c-idea-target'
 
-export function IdeaSectionRender({
-  section, target, resolve,
+export function IdeaChapterRender({
+  compiled, target, pending,
 }: {
-  section: CompiledSection | undefined
-  target: string | undefined
-  resolve: (html: string) => string
+  compiled: CompiledChapter
+  target: { sectionId: string; elementId: string } | undefined
+  pending: ReadonlySet<string>
 }) {
-  const body = useRef<HTMLDivElement>(null)
-  const html = section?.gate?.html
-  const markup = useMemo(() => (html === undefined ? undefined : { __html: resolve(html) }), [html, resolve])
+  const { chapter } = compiled
+  const resolve = usePackagedAssetUrls(chapter.assets)
+  const root = useRef<HTMLElement>(null)
+  // Re-run when the bytes change too: a recompile replaces the section's
+  // article, and the outline has to land on the new element.
+  const bytes = compiled.sections.map((s) => s.gate?.html ?? '').join(' ')
 
   useLayoutEffect(() => {
-    const root = body.current
-    if (!root || !target) return
-    const el = root.querySelector(`#${CSS.escape(target)}`)
+    if (!root.current || !target) return
+    const article = root.current.querySelector(`article[data-section="${CSS.escape(target.sectionId)}"]`)
+    const el = article?.querySelector(`#${CSS.escape(target.elementId)}`)
     if (!el) return
     el.classList.add(HIGHLIGHT)
     el.scrollIntoView({ block: 'center' })
     return () => el.classList.remove(HIGHLIGHT)
-  }, [target, html])
+  }, [target, bytes])
 
-  if (!section) return null
   return (
-    <article className="b2c-idea-render" aria-label={section.title}>
+    <section ref={root} className="b2c-idea-render" aria-labelledby="idea-chapter-heading">
       <CanvasShellStyles />
-      <h4 className="text-sm font-semibold">{IDEA_COPY.render.heading}: {section.title}</h4>
-      {markup === undefined
-        ? <p className="text-sm">{IDEA_COPY.render.pending}</p>
-        : <div className="b2c-section-body" ref={body} dangerouslySetInnerHTML={markup} />}
-    </article>
+      <h2 id="idea-chapter-heading">{chapter.title}</h2>
+      <p>
+        From {chapter.attribution.url
+          ? <a href={chapter.attribution.url}>{chapter.attribution.bookTitle}</a>
+          : chapter.attribution.bookTitle} by{' '}
+        {chapter.attribution.publisher}
+        {chapter.attribution.license ? ` — ${chapter.attribution.license.name}` : ''}
+      </p>
+      {compiled.sections.map((s) => (
+        <article key={s.id} data-section={s.id} aria-label={s.title}>
+          {pending.has(s.id) || !s.gate
+            ? <p className="text-sm">{IDEA_COPY.render.pending}</p>
+            : <div className="b2c-section-body" dangerouslySetInnerHTML={{ __html: resolve(s.gate.html) }} />}
+        </article>
+      ))}
+    </section>
   )
 }
 ```
 
+`data-section` rather than `id={s.id}` on the article: `ChapterView` uses the section id as the element id, and the two never render on one screen, but a section id is publisher data and could collide with a block id inside the body — a data attribute cannot.
+
 - [ ] **Step 8: Run all three test files**
 
-Run: `npx vitest run --project unit src/components/idea/FindingRow.test.tsx src/components/idea/AppliedList.test.tsx && npx vitest run --project browser src/components/idea/IdeaSectionRender.browser.test.tsx`
+Run: `npx vitest run --project unit src/components/idea/FindingRow.test.tsx src/components/idea/AppliedList.test.tsx && npx vitest run --project browser src/components/idea/IdeaChapterRender.browser.test.tsx`
 Expected: PASS.
 
 - [ ] **Step 9: Typecheck and commit**
@@ -2215,9 +2381,9 @@ Expected: PASS.
 ```bash
 npm run typecheck
 git add src/components/idea
-git commit -m "feat: finding rows, the applied list, and the IDEA section render
+git commit -m "feat: finding rows, the applied list, and the IDEA chapter render with highlight-on-focus
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -2225,13 +2391,14 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ### Task 8: Wire findings into the panel, the screen, and the app
 
 **Files:**
-- Modify: `src/components/idea/CategoryPanel.tsx`, `src/components/idea/IdeaScreen.tsx`, `src/App.tsx`
-- Test: `src/components/idea/CategoryPanel.test.tsx` (append), `src/components/idea/IdeaScreen.test.tsx` (append), `src/components/idea/IdeaScreen.browser.test.tsx` (extend the a11y test's props)
+- Modify: `src/components/idea/CategoryPanel.tsx`, `src/components/idea/IdeaScreen.tsx`, `src/components/ChapterView.tsx`, `src/App.tsx`
+- Test: `src/components/idea/CategoryPanel.test.tsx` (append), `src/components/idea/IdeaScreen.test.tsx` (append and amend), `src/components/idea/IdeaScreen.browser.test.tsx` (extend the a11y test's props), `src/components/ChapterView.test.tsx` (remove one test)
 
 **Interfaces:**
 - `CategoryPanel` gains: `findings?: readonly IdeaFinding[]`, `applied?: readonly { key; edit; stale; sectionTitle }[]`, `sectionTitleOf: (sectionId: string) => string`, `onEditEvent?: (e: IdeaEditsEvent) => void`, `onFocusFinding?: (t) => void`.
-- `IdeaScreen` gains: `edits: ReadonlyMap<string, IdeaEdits>`, `onEditEvent: (key: string, e: IdeaEditsEvent) => void`, `pending: ReadonlySet<string>`. It resolves packaged-asset references itself with `usePackagedAssetUrls(chapters[index]?.chapter.assets)` (called before the early return, as hooks must be).
-- `App` composes `useIdeaEdits` + `useIdeaRecompile`, replaces rebuilt sections in `prepared`, resets edits with derived output.
+- `IdeaScreen` gains: `edits: ReadonlyMap<string, IdeaEdits>`, `onEditEvent: (key: string, e: IdeaEditsEvent) => void`, `pending: ReadonlySet<string>` — alongside slice 1's `header`, `onHeaderEvent`, `onForget`, `onExport`, which stay. Its aside swaps `ChapterView` for `IdeaChapterRender`.
+- `ChapterView` loses the `audit` prop slice 1 added: nothing renders it with the verdicts off any more.
+- `App` composes `useIdeaReviews` (which now holds edits) + `useIdeaRecompile`, replaces rebuilt sections in `prepared`, and passes a chapter's persisted edits into its initial compile. Nothing is reset with derived output.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2282,30 +2449,37 @@ const withHtml = (title: string, html: string): CompiledChapter => ({
   queue: [],
 })
 
+/** Slice 1's props plus this slice's, so each test names only what it varies. */
+const base = {
+  reviews: new Map(), header: newHeader(), onEvent: vi.fn(), onHeaderEvent: vi.fn(), onForget: vi.fn(), onExport: () => 'x',
+  edits: new Map<string, IdeaEdits>(), pending: new Set<string>(), onEditEvent: vi.fn(),
+}
+
 test('findings are computed from the prepared html and edits suppress them', () => {
   const c = withHtml('4: Nutrition', '<p id="b2c-blk-0">He suffers from asthma.</p>')
   const onEditEvent = vi.fn()
-  const { rerender } = render(
-    <IdeaScreen chapters={[c]} reviews={new Map()} edits={new Map()} pending={new Set()} onEvent={vi.fn()} onEditEvent={onEditEvent} onExport={() => 'x'} />,
-  )
+  const { rerender } = render(<IdeaScreen {...base} chapters={[c]} onEditEvent={onEditEvent} />)
   fireEvent.click(screen.getByRole('button', { name: /^7\.6 / }))
   fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
   const key = ideaEditKey('4: Nutrition-s1', 'b2c-blk-0', 0, 'suffers from')
   expect(onEditEvent).toHaveBeenCalledWith(reviewKeyOf(chapter('4: Nutrition')), { type: 'replace', key, replacement: 'has' })
   const edits = new Map<string, IdeaEdits>([[reviewKeyOf(chapter('4: Nutrition')), reduceEdits(newEdits(), { type: 'replace', key, replacement: 'has' })]])
-  rerender(<IdeaScreen chapters={[c]} reviews={new Map()} edits={edits} pending={new Set()} onEvent={vi.fn()} onEditEvent={onEditEvent} onExport={() => 'x'} />)
+  rerender(<IdeaScreen {...base} chapters={[c]} edits={edits} onEditEvent={onEditEvent} />)
   expect(screen.queryByRole('button', { name: 'Replace' })).not.toBeInTheDocument()
   expect(screen.getByText('“suffers from” → “has”')).toBeInTheDocument()
 })
 
-test('the section render sits below the panels and shows the pending line for a section being re-checked', () => {
+test('the chapter render beside the panels shows the pending line for a section being re-checked', () => {
   const c = withHtml('4: Nutrition', '<p id="b2c-blk-0">x</p>')
-  render(<IdeaScreen chapters={[c]} reviews={new Map()} edits={new Map()} pending={new Set(['4: Nutrition-s1'])} onEvent={vi.fn()} onEditEvent={vi.fn()} onExport={() => 'x'} />)
-  expect(screen.getByText('Re-checking this section…')).toBeInTheDocument()
+  render(<IdeaScreen {...base} chapters={[c]} pending={new Set(['4: Nutrition-s1'])} />)
+  const aside = screen.getByRole('complementary', { name: 'Chapter as it will be published' })
+  expect(within(aside).getByText('Re-checking this section…')).toBeInTheDocument()
 })
 ```
 
-Update every existing `render(<IdeaScreen …/>)` in that file and in `IdeaScreen.browser.test.tsx` to pass the new required props: `edits={new Map()} pending={new Set()} onEditEvent={vi.fn()}` (in the browser test use `() => {}` for the callback).
+Update slice 1's `renderScreen` helper in that file to spread `edits: new Map(), pending: new Set(), onEditEvent: vi.fn()` into the render, and the `props` object in `IdeaScreen.browser.test.tsx` to add `edits: new Map(), pending: new Set(), onEditEvent: () => {}`. Slice 1's test 'the chapter is readable beside the panels, without the accessibility verdicts' still holds against `IdeaChapterRender` (it renders no `Accessibility` heading either); slice 1's switcher test still finds the `h2` chapter heading.
+
+In `src/components/ChapterView.test.tsx`, delete the test 'with audit off, renders the gated body and no accessibility panel'.
 
 - [ ] **Step 2: Run to verify they fail**
 
@@ -2354,13 +2528,13 @@ Between the restorative block and the checklist fieldset, insert:
           )}
 ```
 
-- [ ] **Step 4: `IdeaScreen.tsx` — compute findings, applied, and the render**
+- [ ] **Step 4: `IdeaScreen.tsx` — compute findings, applied, and swap the render**
 
-Add props `edits`, `onEditEvent`, `pending` (types above). Add imports: `findingsFor`, `findingsByCategory` from `../../engine/idea/findings`; `newEdits`, `parseIdeaEditKey`, `IdeaEdits`, `IdeaEditsEvent` from `../../engine/idea/edits`; `findOccurrence` from `../../engine/idea/text`; `IdeaSectionRender`; `usePackagedAssetUrls` from `../usePackagedAssetUrls`; `useMemo`.
+Add props `edits`, `onEditEvent`, `pending` (types above). Add imports: `findingsFor`, `findingsByCategory` from `../../engine/idea/findings`; `newEdits`, `parseIdeaEditKey`, `IdeaEdits`, `IdeaEditsEvent` from `../../engine/idea/edits`; `findOccurrence` from `../../engine/idea/text`; `IdeaChapterRender` from `./IdeaChapterRender`; `useMemo`. Remove the `ChapterView` import.
 
-Before the `if (chapters.length === 0)` early return (hooks must precede it), add:
+The `focus` state must be declared with the other `useState`s above the early return (hooks must precede it):
 ```tsx
-  const resolve = usePackagedAssetUrls(chapters[Math.min(index, Math.max(0, chapters.length - 1))]?.chapter.assets)
+  const [focus, setFocus] = useState<{ sectionId: string; elementId: string } | undefined>()
 ```
 
 Inside the component, after `review`:
@@ -2391,27 +2565,29 @@ Inside the component, after `review`:
     )
     return { key: k, edit, stale: !present, sectionTitle: section?.title ?? '' }
   })
-  const [focus, setFocus] = useState<{ sectionId: string; elementId: string } | undefined>()
-  const renderSection = focus ? current.sections.find((s) => s.id === focus.sectionId) : current.sections[0]
 ```
 Pass to each `CategoryPanel`: `findings={byCategory.get(category.id) ?? []} applied={applied} sectionTitleOf={sectionTitleOf} onEditEvent={(e) => onEditEvent(key, e)} onFocusFinding={setFocus}`.
 
-After the panels `div`, before the attribution paragraph, add:
+In slice 1's aside, replace `<ChapterView compiled={current} audit={false} />` with:
 ```tsx
-      <IdeaSectionRender
-        section={renderSection && pending.has(renderSection.id) ? { ...renderSection, gate: undefined } : renderSection}
-        target={focus?.elementId}
-        resolve={resolve}
-      />
+          <IdeaChapterRender compiled={current} target={focus} pending={pending} />
 ```
+Nothing is added below the panels; the aside is the render.
+
+Then in `src/components/ChapterView.tsx`, remove the `audit` prop: restore the signature to `({ compiled }: { compiled: CompiledChapter })`, drop the `audit &&` guards, and delete the paragraph of the header comment that described the prop.
 
 - [ ] **Step 5: `App.tsx` — compose**
 
-Imports: `useIdeaEdits` from `./components/idea/useIdeaEdits`; `useIdeaRecompile` from `./components/idea/useIdeaRecompile`; `mergeQueues` from `./engine/compile/index` (already imported for `partial`).
+Imports: `useIdeaRecompile` from `./components/idea/useIdeaRecompile`; `mergeQueues` from `./engine/compile/index` (already imported for `partial`).
+
+The initial compile receives the chapter's persisted edits, so a re-prepared chapter comes back with its wording applied and gated in one pass, the way it would if the edits had been made a minute ago. In `compileForReview`, add to the `compileAndAuditChapter` options:
+```ts
+      ideaEdits: ideaReviews.editsFor(reviewKeyOf(ch)).edits,
+```
+(If the IndexedDB read has not returned by the time a chapter is prepared, the restore changes `edits`, and `useIdeaRecompile` below recompiles the affected sections then. Both orders end in the same bytes.)
 
 After `ideaReviews`:
 ```ts
-  const ideaEdits = useIdeaEdits()
   const onRebuilt = useCallback((chapterKey: string, sections: readonly CompiledSection[]) => {
     setPrepared((all) => all.map((c) => {
       if (reviewKeyOf(c.chapter) !== chapterKey) return c
@@ -2421,12 +2597,12 @@ After `ideaReviews`:
     }))
   }, [])
   const { pending: ideaPending } = useIdeaRecompile({
-    prepared, answers, edits: ideaEdits.edits,
+    prepared, answers, edits: ideaReviews.edits,
     profileOf: (ch) => publisherProfiles[ch.source],
     onRebuilt,
   })
 ```
-In `clearDerivedOutput()` add `ideaEdits.reset()`. `IdeaScreen` render gains `edits={ideaEdits.edits} onEditEvent={ideaEdits.dispatch} pending={ideaPending}`.
+`clearDerivedOutput()` is unchanged — edits are keyed by chapter identity and persist, like the reviews (spec §2.7). `IdeaScreen` render gains `edits={ideaReviews.edits} onEditEvent={ideaReviews.dispatchEdit} pending={ideaPending}`.
 
 `unansweredCount` must also count queue items a rebuilt section reintroduces (none in this slice — `applyIdeaEdits` adds no queue items; slice 5 will). Leave as is.
 
@@ -2438,10 +2614,10 @@ Expected: all green.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/components/idea src/App.tsx
+git add src/components/idea src/components/ChapterView.tsx src/components/ChapterView.test.tsx src/App.tsx
 git commit -m "feat: rule findings in the IDEA panels, applied through recompile to the export
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -2485,10 +2661,13 @@ Run once with `UPDATE_GOLDENS=1` to create the file, read it, commit it.
 - **Rule checks:** the terminology, gendered-noun, and idiom lists are vendored JSON
   (`src/engine/idea/data/`, CC BY 4.0) and run in the browser over the compiled section; no
   network.
-- **Edits:** an accepted suggestion is a map entry applied by a compile step on every recompile.
-  The section is re-audited before it can be published again. Every applied edit adds one sentence
-  to the page's Source-and-license block: "Modified from the original: wording updated for
-  inclusive language."
+- **Edits:** an accepted suggestion is a map entry applied by a compile step on every recompile,
+  including the first compile of a re-prepared chapter. The section is re-audited before it can be
+  published again. Every applied edit adds one sentence to the page's Source-and-license block:
+  "Modified from the original: wording updated for inclusive language."
+- **Storage, extended:** edits are saved in the same IndexedDB document as the ratings and
+  restored through the same validating replay; *Forget all IDEA reviews* removes them too. A
+  dismissed suggestion is not saved — it is hidden for this session only.
 - **The queue's answers now leave the queue screen:** Plan's count and the export describe the
   answered chapter (a pre-existing gap closed by this slice's first task).
 ```
@@ -2505,19 +2684,25 @@ modified, as CC BY requires.
 
 `docs/RELEASE-ACCEPTANCE.md` — append:
 ```markdown
-### IDEA review — slice 2
+## 5. IDEA review — slice 2
 
 1. Prepare an OpenStax chapter whose text contains "suffers from" or "chairman" (Human Biology
    4.2 Nutrients, or paste a paragraph via the Text tab).
 2. IDEA → 7.6 shows "N suggestions" in its header; open it. Focus the Replace button: the
-   paragraph is outlined in the section render below.
-3. Replace one; it moves to Applied; the render shows the new wording within a second and the
-   Source-and-license block ends with the "Modified from the original" sentence.
+   paragraph is outlined in the chapter render beside the panels and scrolled into view.
+3. Replace one; it moves to Applied; the render shows "Re-checking this section…" and then the
+   new wording within a second, and the Source-and-license block ends with the "Modified from the
+   original" sentence.
 4. Undo it; the wording and the sentence revert.
-5. Replace it again, export the cartridge, unzip: the page HTML carries the replacement and the
-   sentence; no `idea-rubric1-*` file is inside.
-6. Answer an alt-text item in Review before step 5 if any exist: the exported page carries the
+5. Replace it again. **Reload the tab** and prepare the same chapter: the replacement is already
+   applied in the render, listed under Applied, and the sentence is present — without pressing
+   anything. Dismiss a different suggestion, reload again: it is back.
+6. Export the cartridge, unzip: the page HTML carries the replacement and the sentence; no
+   `idea-rubric1-*` file is inside.
+7. Answer an alt-text item in Review before step 6 if any exist: the exported page carries the
    answered alt (Task 1's lift).
+8. **Forget all IDEA reviews** → confirm. Applied is empty; the render shows the original wording
+   after the recompile.
 ```
 
 - [ ] **Step 3: Full suite and commit**
@@ -2529,7 +2714,7 @@ Expected: green.
 git add src/engine/compile/golden.test.ts src/engine/compile/__goldens__/page-section.idea-edits.compiled.html docs/IDEA.md README.md docs/RELEASE-ACCEPTANCE.md
 git commit -m "docs: pin IDEA edits with a golden and record the slice-2 obligations
 
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude <model name> <noreply@anthropic.com>"
 ```
 
 ---
@@ -2540,4 +2725,6 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 **Placeholder scan:** none. Every step shows code.
 
-**Type consistency:** `ideaEditKey(sectionId, elementId, occurrence, original)` everywhere; `IdeaEditsEvent` union identical in Tasks 2, 6, 7, 8; `IdeaRecompileDeps.recompile(chapter, ids, { profile, answers, ideaEdits })` matches `recompileSections`'s opts after Task 3; `findingsFor(section, edits)` signature identical in Tasks 5 and 8; `CategoryPanel` new props identical in Tasks 8 test and implementation; `reviewKeyOf` from slice 1 reused unchanged.
+**Alignment with the revised slice 1 (2026-09-11):** edits persist in the same document as reviews through `toPersisted(header, reviews, edits)` / `restore` (Task 6), so `forgetAll` is the one forget and `clearDerivedOutput` touches neither; the initial compile receives persisted edits (Task 8); `IdeaChapterRender` replaces `ChapterView` inside slice 1's aside rather than adding a second render (Tasks 7–8), and `ChapterView.audit` goes away; every `IdeaScreen` render in tests carries slice 1's `header` / `onHeaderEvent` / `onForget`.
+
+**Type consistency:** `ideaEditKey(sectionId, elementId, occurrence, original)` everywhere; `IdeaEditsEvent` union identical in Tasks 2, 6, 7, 8; `IdeaRecompileDeps.recompile(chapter, ids, { profile, answers, ideaEdits })` matches `recompileSections`'s opts after Task 3; `findingsFor(section, edits)` signature identical in Tasks 5 and 8; `CategoryPanel` new props identical in Tasks 8 test and implementation; `useIdeaReviews` returns `edits` / `editsFor` / `dispatchEdit` in Task 6 and App consumes exactly those in Task 8; `IdeaChapterRender({ compiled, target, pending })` identical in Tasks 7 and 8; `reviewKeyOf` from slice 1 reused unchanged.
