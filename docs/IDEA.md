@@ -3,7 +3,7 @@
 This file states, in one place, what the IDEA phase does with data. It is kept current slice by
 slice; the design is in `IDEA_REVIEW_SPEC.md`.
 
-## Slices 1–3 (this release)
+## Slices 1–4 (this release)
 
 - **Network:** none. The Framework text is vendored; the Rubric 1 export is built in the browser
   and handed to the browser's download.
@@ -38,6 +38,17 @@ slice; the design is in `IDEA_REVIEW_SPEC.md`.
   names that recur. Neither infers anything about anyone; both exist so the assessor can tally for
   Rubric 1 from a list rather than by scrolling. Inventory rows are recomputed from the prepared
   HTML on every render and are never stored.
+- **Model calls (slice 4):** go browser → the chosen provider, on click only, with the user's key
+  stored in the user's browser on the user's device (IndexedDB key `idea.llm.settings`) and
+  nowhere else. No key ever transits the relay. Providers offered are those a browser origin was
+  measured to reach directly (`docs/evidence/idea-llm-cors-2026-09-12.md`); a provider that fails
+  that probe is not offered, and there is no relay fallback. What is sent is the section's block
+  text and its image and metadata inventories; for 7.1 only the image inventory. Every model
+  output is `origin: 'draft'`; an item becomes an edit only when its quoted original is found
+  verbatim in the section, and it then goes through the same edits map as a rule finding. The
+  Rubric 1 draft is per row, rendered beside the human's radios, and cannot be copied into them;
+  only its notes have a one-click "Use this note". Runs and drafts are React state and are never
+  stored. *Forget key* removes the key; *Forget all IDEA reviews* does not touch it.
 
 ## Licensing of what ships
 
@@ -48,6 +59,4 @@ slice; the design is in `IDEA_REVIEW_SPEC.md`.
 
 ## Later slices (not yet shipped)
 
-- Model calls go browser → the chosen provider, on click only, with the user's key stored in
-  the user's browser on the user's device and nowhere else. No key ever transits the relay.
 - Image search goes browser → Wikimedia Commons / Openverse, query text only.

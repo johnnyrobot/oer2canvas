@@ -48,6 +48,19 @@ fetches it; they are responsible for publishing an accurate notice for their own
 the last paragraph of this notice says. Everything after the fetch — normalizing, previewing,
 auditing, packaging — happens in your browser exactly as it does on the public app.
 
+The optional **IDEA review** can draft suggestions with a model provider you choose — Gemini
+(Google AI Studio) or OpenRouter; Ollama Cloud is listed but not offered, because a browser cannot
+call it directly — on your own API key. That model key is stored in your browser on this device,
+in the same local database that holds the Canvas address, and is never sent to, stored on, or
+forwarded by this app's server; there is no server-side path for it at all. When you press "Send
+this section to <provider>", the section's text and its image descriptions go directly from your
+browser to that provider; for the illustrations category only the image descriptions are sent.
+Nothing is sent until you press the button, never on a keystroke or in the background. The
+provider's own terms govern what it does with the text; the link beside the key field points to
+them. "Forget key" removes the key from this device; "Forget all IDEA reviews" does not touch it,
+and the panel says so. Drafts the model returns are shown as drafts; none is applied to a page
+unless you accept it, and no rating is ever taken from a model.
+
 Small workflow values remain browser-local. A one-time migration removes Canvas token keys
 saved by earlier releases from both the current and legacy IndexedDB databases. Clearing site
 data removes other browser-local state.

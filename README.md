@@ -385,9 +385,17 @@ race, gender, age, or disability from an image or a name.
 IDEA reviews, the assessor, and the benchmark are saved in this browser on this device (the app's
 IndexedDB database) so a reload or a re-prepare does not lose them; **Forget all IDEA reviews**
 removes them, and clearing site data does too. Nothing about a review is sent anywhere; nothing in
-this phase makes a network request. Framework text is reproduced in full from the
+this phase makes a network request unless you set up a model provider and press its button, as
+the next paragraph describes. Framework text is reproduced in full from the
 ASCCC OERI IDEA Framework and Implementation Guide (March 2025), licensed CC BY 4.0, and is
 attributed on screen and in `THIRD-PARTY-NOTICES.md`.
+
+For the categories no rule can check, the IDEA review can ask a model — Gemini or OpenRouter, on
+your own API key, using the ASCCC OERI IDEA Framework Gen-AI Crosswalk's prompt shapes. (Ollama
+Cloud is listed but not offered: a browser cannot call it directly, and there is no relay
+fallback.) The model key is stored in your browser on this device and never on this app's server;
+nothing is sent until you press the button; every model output is labelled a draft, becomes an
+edit only if it quotes the text verbatim, and never sets a rating. See [PRIVACY.md](PRIVACY.md).
 
 ## Project documents
 

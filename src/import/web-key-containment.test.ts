@@ -12,7 +12,12 @@ import type { ImportResult } from './types'
  * with tests excluded — three hits, plus one the grep cannot see:
  *
  *  1. IndexedDB — `src/canvas/idb.ts:23`, whose header calls it "the one place
- *     this app writes to disk". Holds the Canvas base URL and the push journal.
+ *     this app writes to disk". Holds the Canvas base URL and the push journal;
+ *     since IDEA slice 4 (2026-09-12) also the IDEA review document and, by the
+ *     user's explicit choice, the model API key under `idea.llm.settings` —
+ *     a different secret from the Firecrawl key, with its own containment test
+ *     in `src/engine/idea/llm/key-containment.test.ts`. The Firecrawl key is
+ *     never written there, which is what this file asserts.
  *  2. `localStorage` — one key, the theme, `src/shell/useTheme.ts:51`.
  *  3. Cookies — none. `document.cookie` appears nowhere outside tests.
  *  4. The service worker Cache API — invisible to that grep because workbox

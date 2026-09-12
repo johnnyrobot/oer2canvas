@@ -53,6 +53,13 @@ test('every obligation in criterion 5 is stated in a file a user reads', () => {
     ['idea framework attribution', /IDEA Framework[^.\n]*CC BY 4\.0/i],
     ['idea never gates', /IDEA[^.\n]*(optional|never (blocks|gates))/i],
     ['idea reviews stay in this browser', /IDEA[^.\n]*(IndexedDB|in (this|your) browser)/i],
+    /*
+     * Slice 4: the model key and the model call. The key's location and its
+     * absence from the server are one claim; that nothing is sent without a
+     * press is the other. Both must be in a file a user reads.
+     */
+    ['idea model key on device', /(model|provider) (API )?key[^.\n]*(this|your) (browser|device)[^.\n]*(never|not)[^.\n]*server/i],
+    ['idea model send on click', /(nothing|no text)[^.\n]*sent[^.\n]*(until|unless)[^.\n]*(press|click)/i],
   ]
   const all = Object.values(USER_FACING).join('\n')
   for (const [name, pattern] of obligations) {

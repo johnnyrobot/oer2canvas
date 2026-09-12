@@ -261,3 +261,24 @@ silent, even if nothing was broken outright.
    chapter render beside the panels and scrolls it into view.
 3. 7.7's header reads "N items"; open it: headings, key terms, and recurring names are listed.
 4. Neither zone has Replace, Use this wording, or Dismiss.
+
+## 7. IDEA review — slice 4
+
+1. IDEA header: choose OpenRouter, paste a key, Save on this device. Reload the tab: the provider
+   and model are remembered; the key field shows dots.
+2. Open 7.2. The disclosure sits above "Send this section to OpenRouter". Press it; the status
+   line reads "Waiting for OpenRouter…"; drafts appear with a dashed border and a "draft" chip.
+3. A draft whose original matches the text has Replace; accept one; it lands in Applied and in the
+   chapter render beside the panels. Reload and re-prepare: the accepted edit is still applied;
+   the unaccepted drafts are gone until you send again.
+4. Press "Draft a Rubric 1 review with OpenRouter". Every rubric row shows a "Model draft:" line
+   beside its radios — three under 7.1, one elsewhere, "no draft" where the model gave nothing —
+   and each category a notes box; the radio buttons stay unchecked; "Use this note" fills Notes
+   only.
+5. Paste a wrong key, Save, send again: "The provider rejected this key." No key text anywhere
+   on screen or in DevTools → Network → request URL.
+6. Forget key; reload: nothing is remembered. DevTools → Application → IndexedDB → oer2canvas →
+   kv: no `idea.llm.settings` key; the `idea.reviews` document is untouched. Then *Forget all
+   IDEA reviews*: reviews go, and a saved key would stay.
+7. Network tab throughout: no request to `/relay`. Ollama Cloud is listed as "(not available)"
+   and cannot be chosen; the "measured" link opens the evidence file.
