@@ -128,8 +128,13 @@ export function parseRubricResponse(text: string): RubricDraft {
         const frameworkRows = categoryById(id).rows
         const given = new Map<string, Rating | null>()
         for (const r of Array.isArray(x.rows) ? x.rows.filter(isRecord) : []) {
-          const rowId = str(r.row).trim()
-          const full = rowId.startsWith(`${id}.`) ? rowId : `${id}.${rowId}`
+          // The id at the START of the string, bare or qualified, with
+          // anything after it ignored: Gemini echoes the prompt's row line
+          // back as "7.1.a (Illustrations and Photos of People)" (measured
+          // 2026-09-12), and an exact match dropped every row to null.
+          const m = /^(?:(7\.[1-8])\.)?([a-z])(?![a-z0-9])/i.exec(str(r.row).trim())
+          if (!m) continue
+          const full = `${m[1] ?? id}.${m[2]!.toLowerCase()}`
           if (frameworkRows.some((fr) => fr.id === full)) given.set(full, toRating(r.rating))
         }
         if (given.size === 0 && frameworkRows.length === 1 && x.rating !== undefined) given.set(frameworkRows[0]!.id, toRating(x.rating))

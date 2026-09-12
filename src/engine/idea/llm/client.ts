@@ -58,8 +58,14 @@ export async function complete(
       if (timedOut) throw new LlmError('timeout', `${provider.label} did not answer in ${LLM_TIMEOUT_MS / 1000} seconds. Try again.`)
       throw new LlmError('unreachable', `${provider.label} could not be reached from this browser. Check your connection and try again.`)
     }
-    if (response.status === 401 || response.status === 403) {
-      throw new LlmError('bad-key', `${provider.label} rejected this API key. Check that it is current and pasted in full.`)
+    const badKey = () => new LlmError('bad-key', `${provider.label} rejected this API key. Check that it is current and pasted in full.`)
+    if (response.status === 401 || response.status === 403) throw badKey()
+    // Measured 2026-09-12: Gemini's OpenAI-compatible endpoint answers a wrong
+    // key with 400 "Please pass a valid API key", not 401. The body is read to
+    // classify and is still never rendered.
+    if (response.status === 400) {
+      const body = await response.text().catch(() => '')
+      if (/api key|authorization/i.test(body)) throw badKey()
     }
     if (response.status === 404) {
       throw new LlmError('model-not-found', `${provider.label} does not know the model "${settings.model}". Check the model name.`)

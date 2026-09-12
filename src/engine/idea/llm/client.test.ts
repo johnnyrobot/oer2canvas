@@ -26,6 +26,16 @@ test('maps 401/403 to bad-key, 404 to model-not-found, 429 to rate-limited with 
   await expect(complete(openrouter, settings, msgs, new AbortController().signal, { fetch: at(429, { 'retry-after': '12' }) })).rejects.toMatchObject({ failure: 'rate-limited', retryAfterSeconds: 12 })
 })
 
+// Gemini's OpenAI-compatible endpoint, measured 2026-09-12: a wrong key is a
+// 400 whose body says "Please pass a valid API key". That is a bad key.
+test('a 400 whose body complains about the key is bad-key; any other 400 is not', async () => {
+  const gemini = providerById('gemini')
+  const at = (body: string) => vi.fn(async () => new Response(body, { status: 400 }))
+  await expect(complete(gemini, settings, msgs, new AbortController().signal, { fetch: at('{"error":{"code":400,"message":"Please pass a valid API key","status":"INVALID_ARGUMENT"}}') })).rejects.toMatchObject({ failure: 'bad-key' })
+  await expect(complete(gemini, settings, msgs, new AbortController().signal, { fetch: at('{"error":{"code":400,"message":"Missing or invalid Authorization header."}}') })).rejects.toMatchObject({ failure: 'bad-key' })
+  await expect(complete(gemini, settings, msgs, new AbortController().signal, { fetch: at('{"error":{"message":"messages must not be empty"}}') })).rejects.toMatchObject({ failure: 'unreachable' })
+})
+
 test('a network failure is unreachable; an aborted signal is aborted', async () => {
   const fetch = vi.fn(async () => { throw new TypeError('Failed to fetch') })
   await expect(complete(openrouter, settings, msgs, new AbortController().signal, { fetch })).rejects.toMatchObject({ failure: 'unreachable' })

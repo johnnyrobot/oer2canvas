@@ -48,6 +48,20 @@ test('the rubric parser maps OERI labels to per-row ratings and tolerates unknow
   ])
 })
 
+// Gemini echoes the prompt's row line back with the rubric title in tow.
+// Measured 2026-09-12; before this the whole rubric draft was null.
+test('a row id followed by a title is still that row', () => {
+  const r = parseRubricResponse(JSON.stringify({ areas: [
+    { area: '7.1 Illustrations and Photos', rows: [
+      { row: '7.1.a (Illustrations and Photos of People)', rating: 'Exclusive' },
+      { row: 'b (Illustrations and Photos of People)', rating: 'Not Applicable' },
+      { row: 'Row c', rating: 'Inclusive' },
+      { row: '7.1.ab', rating: 'Inclusive' },
+    ], notes: 'n' },
+  ] }))
+  expect(r.areas[0]!.rows).toEqual([{ id: '7.1.a', rating: 'exclusive' }, { id: '7.1.b', rating: 'na' }, { id: '7.1.c', rating: null }])
+})
+
 // A single "rating" for a three-row area is not spread across the rows: the
 // model did not rate them, and a draft that looks like it did is a draft that
 // gets copied by eye.
