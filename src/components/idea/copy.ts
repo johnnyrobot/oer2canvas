@@ -65,6 +65,41 @@ export const IDEA_COPY = {
   attribution: (title: string, author: string, license: string) =>
     `Framework text from "${title}" by ${author}, licensed ${license}.`,
   empty: 'Nothing to review yet. Prepare chapters first.',
+  findings: {
+    heading: 'What a rule found',
+    none: 'No wording this rule set recognises. That is not a clean bill; the checklist below is the review.',
+    ruleSays: (source: string) => `${source} ↗`,
+    inQuotation: 'inside a quotation',
+    where: (sectionTitle: string) => `in ${sectionTitle}`,
+    replace: 'Replace',
+    edit: 'Edit…',
+    keep: 'Keep, add context…',
+    keepAsIs: 'Keep as is',
+    dismiss: 'Dismiss',
+    save: 'Save',
+    cancel: 'Cancel',
+    contextPlaceholder: 'a widely used term at the time',
+    replacementLabel: 'Replacement',
+    contextLabel: 'Context to add after the term',
+    observation: 'Observation',
+    suggestionLabel: 'Suggested wording',
+    useSuggestion: 'Use this wording',
+    draft: 'draft',
+    rule: 'rule',
+  },
+  applied: {
+    heading: 'Applied',
+    undo: 'Undo',
+    stale: 'no longer matches; not applied',
+    replaced: (from: string, to: string) => `“${from}” → “${to}”`,
+    kept: (term: string, context?: string) => (context ? `“${term}” kept, with “(${context})”` : `“${term}” kept as is`),
+    announceApplied: 'Applied.',
+    announceUndone: 'Undone.',
+    announceDismissed: 'Dismissed.',
+  },
+  render: {
+    pending: 'Re-checking this section…',
+  },
 } as const
 
 export const RATING_COPY: Readonly<Record<Rating, string>> = {

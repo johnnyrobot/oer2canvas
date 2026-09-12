@@ -1,0 +1,20 @@
+/*
+ * The IDEA render's outline. Same rules as `queue.css`'s `.b2c-queue-target`
+ * and for the same reasons: `outline` so publisher layout does not move,
+ * `currentColor` so forced colours and themes keep it, and thicker than any
+ * UA focus ring so "the thing you are judging" and "what your keystroke hits"
+ * stay separable by geometry alone.
+ */
+.b2c-idea-render {
+  border-inline-start: 3px solid currentColor;
+  padding-inline-start: 1rem;
+  margin-inline-start: 0.25rem;
+}
+.b2c-idea-target {
+  outline: 3px solid currentColor;
+  outline-offset: 6px;
+}
+/* A draft row is set apart by a dashed border — geometry, not colour. */
+.b2c-idea-draft {
+  border-style: dashed;
+}
