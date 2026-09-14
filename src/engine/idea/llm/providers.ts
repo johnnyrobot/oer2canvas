@@ -25,6 +25,13 @@ export interface LlmProvider {
   offered: boolean
   /** The evidence file the `offered` flag was read from. */
   evidence: string
+  /**
+   * The request size, in estimated tokens, above which the book review is
+   * refused rather than truncated. Gemini's flash models take 1M; 900k
+   * leaves room for the reply. OpenRouter's model is the user's choice, so
+   * the ceiling is the conservative one.
+   */
+  contextTokens: number
 }
 
 const EVIDENCE = 'docs/evidence/idea-llm-cors-2026-09-12.md'
@@ -39,6 +46,7 @@ export const PROVIDERS: readonly LlmProvider[] = [
     termsUrl: 'https://ai.google.dev/gemini-api/terms',
     offered: true,
     evidence: EVIDENCE,
+    contextTokens: 900_000,
   },
   {
     id: 'openrouter',
@@ -52,6 +60,7 @@ export const PROVIDERS: readonly LlmProvider[] = [
     termsUrl: 'https://openrouter.ai/privacy',
     offered: true,
     evidence: EVIDENCE,
+    contextTokens: 100_000,
   },
   {
     id: 'ollama',
@@ -64,6 +73,7 @@ export const PROVIDERS: readonly LlmProvider[] = [
     // a browser cannot read the response. Listed so the user learns why.
     offered: false,
     evidence: EVIDENCE,
+    contextTokens: 100_000,
   },
 ]
 

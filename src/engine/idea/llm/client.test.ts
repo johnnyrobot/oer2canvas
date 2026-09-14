@@ -58,3 +58,22 @@ test('an empty key is refused before any request', async () => {
   await expect(complete(openrouter, { key: '  ', model: 'm' }, msgs, new AbortController().signal, { fetch })).rejects.toMatchObject({ failure: 'bad-key' })
   expect(fetch).not.toHaveBeenCalled()
 })
+
+test('timeoutMs is honoured and the timeout message names the number it used', async () => {
+  vi.useFakeTimers()
+  try {
+    const fetch = vi.fn((_url: string, init: RequestInit) => new Promise<Response>((_, reject) => {
+      init.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+    }))
+    const p = complete(openrouter, settings, msgs, new AbortController().signal, { fetch: fetch as unknown as typeof globalThis.fetch, timeoutMs: 180_000 })
+    const settled = p.catch((e: LlmError) => e)
+    await vi.advanceTimersByTimeAsync(60_001)
+    expect(fetch.mock.calls).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(120_000)
+    const e = await settled
+    expect(e).toMatchObject({ failure: 'timeout' })
+    expect((e as LlmError).message).toContain('180 seconds')
+  } finally {
+    vi.useRealTimers()
+  }
+})

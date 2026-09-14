@@ -17,9 +17,12 @@ export class LlmError extends Error {
 
 export interface CompleteDeps {
   fetch?: typeof globalThis.fetch
+  /** Per call; the book review (one request over a whole book) passes a longer one. */
+  timeoutMs?: number
 }
 
 export const LLM_TIMEOUT_MS = 60_000
+export const BOOK_TIMEOUT_MS = 180_000
 
 export async function complete(
   provider: LlmProvider,
@@ -33,11 +36,12 @@ export async function complete(
   if (!key) throw new LlmError('bad-key', `Enter your ${provider.label} API key first.`)
   if (signal.aborted) throw new LlmError('aborted', 'Cancelled.')
 
+  const timeoutMs = deps.timeoutMs ?? LLM_TIMEOUT_MS
   const controller = new AbortController()
   const onAbort = () => controller.abort()
   signal.addEventListener('abort', onAbort, { once: true })
   let timedOut = false
-  const timer = setTimeout(() => { timedOut = true; controller.abort() }, LLM_TIMEOUT_MS)
+  const timer = setTimeout(() => { timedOut = true; controller.abort() }, timeoutMs)
 
   try {
     let response: Response
@@ -55,7 +59,7 @@ export async function complete(
       })
     } catch {
       if (signal.aborted) throw new LlmError('aborted', 'Cancelled.')
-      if (timedOut) throw new LlmError('timeout', `${provider.label} did not answer in ${LLM_TIMEOUT_MS / 1000} seconds. Try again.`)
+      if (timedOut) throw new LlmError('timeout', `${provider.label} did not answer in ${timeoutMs / 1000} seconds. Try again.`)
       throw new LlmError('unreachable', `${provider.label} could not be reached from this browser. Check your connection and try again.`)
     }
     const badKey = () => new LlmError('bad-key', `${provider.label} rejected this API key. Check that it is current and pasted in full.`)
