@@ -1,8 +1,10 @@
 import {
-  categoryPrompt, rubricPrompt, sectionText, bookPrompt, DRAFTABLE, filesUnder, type SectionInput,
+  categoryPrompt, rubricPrompt, sectionText, bookPrompt, planPrompt, DRAFTABLE, filesUnder, type SectionInput,
 } from './prompts'
 import { categoryById } from '../framework'
 import { newReview, reduceReview } from '../review'
+import { ideaEditKey } from '../edits'
+import type { AppliedEdit } from '../applied'
 
 const input: SectionInput = {
   sectionId: 's1', sectionTitle: '4.2 Nutrients', chapterTitle: '4: Nutrition', bookTitle: 'Biology',
@@ -134,4 +136,28 @@ test('the book prompt sends every chapter in order with ratings or "not rated", 
   // The lenses and rubric rows come first, as the rubric prompt sends them.
   expect(p.indexOf('FRAMEWORK CATEGORY 7.1')).toBeLessThan(p.indexOf('4: Nutrition'))
   expect(p).toContain('7.1.a (')
+})
+
+test('the plan prompt carries ratings, notes, applied edits, session drafts, and the licence — and no section text', () => {
+  let review = newReview()
+  review = reduceReview(review, { type: 'rate', categoryId: '7.6', rowId: '7.6.a', rating: 'exclusive' })
+  review = reduceReview(review, { type: 'note', categoryId: '7.6', notes: 'see p. 3' })
+  const applied: AppliedEdit[] = [
+    { key: ideaEditKey('s1', 'b2c-blk-0', 0, 'crazy'), edit: { kind: 'replace', replacement: 'wild', category: '7.6' }, stale: false, sectionTitle: '4.2 Nutrients', category: '7.6' },
+    { key: ideaEditKey('s1', 'b2c-blk-1', 0, 'the blind'), edit: { kind: 'keep', context: 'as quoted', category: '7.6' }, stale: false, sectionTitle: '4.2 Nutrients', category: '7.6' },
+  ]
+  const drafts = [
+    { kind: 'observation' as const, key: 's1::llm::7.8::0', category: '7.8' as const, sectionId: 's1', columns: { evidence: 'the settlers arrived', suggestion: 'add the Yokuts perspective' }, rule: { id: 'llm-7.8', source: 'llm' as const }, origin: 'draft' as const },
+  ]
+  const p = planPrompt({ chapterTitle: '4: Nutrition', bookTitle: 'Human Biology', licence: 'CC BY 4.0', region: '', review, applied, drafts }).map((x) => x.content).join('\n')
+  expect(p).toContain('7.6.a: Exclusive')
+  expect(p).toContain('see p. 3')
+  expect(p).toContain('"crazy" → "wild"')
+  expect(p).toContain('"the blind" kept as written (+ "as quoted")')
+  expect(p).toContain('the settlers arrived')
+  expect(p).toContain('add the Yokuts perspective')
+  expect(p).toContain('Source licence: CC BY 4.0')
+  expect(p).not.toContain('Indian spices')
+  expect(p).toMatch(/"studentText"/)
+  expect(p).toMatch(/in-page change|course-level supplement/)
 })

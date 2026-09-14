@@ -1,4 +1,4 @@
-import { draftsToFindings, parseBookResponse, parseCategoryResponse, parseRubricResponse } from './parse'
+import { draftsToFindings, parseBookResponse, parseCategoryResponse, parseRubricResponse, parsePlanResponse } from './parse'
 
 test('a JSON response parses to items; a fenced one too', () => {
   const json = JSON.stringify({ summary: 'ok', items: [{ evidence: 'e', inference: 'i', suggestion: 's' }] })
@@ -98,4 +98,18 @@ test('the book parser is tolerant like the rubric parser and throws on prose', (
   expect(fenced.summary).toBe('f')
   expect(parseBookResponse('{"summary":"only"}')).toEqual({ summary: 'only', areas: [], revisions: [] })
   expect(() => parseBookResponse('I think the book is fine.')).toThrow()
+})
+
+test('the plan parser coerces priority to 1–3 (default 2), tolerates missing arrays, and throws on prose', () => {
+  const r = parsePlanResponse(JSON.stringify({ plan: [
+    { priority: 1, where: 'a', issue: 'i', revision: 'r', rationale: 'y', licence: 'in-page' },
+    { priority: '3', where: 'b', issue: 'i', revision: 'r', rationale: 'y', licence: 'supplement' },
+    { priority: 9, where: 'c', issue: 'i', revision: 'r', rationale: 'y', licence: '' },
+    { where: 'd', issue: 'i', revision: 'r', rationale: 'y' },
+  ], studentText: [{ where: 'a', purpose: 'framing', text: 'Note that…' }] }))
+  expect(r.plan.map((p) => p.priority)).toEqual([1, 3, 2, 2])
+  expect(r.plan[3]!.licence).toBe('')
+  expect(r.studentText).toEqual([{ where: 'a', purpose: 'framing', text: 'Note that…' }])
+  expect(parsePlanResponse('{}')).toEqual({ plan: [], studentText: [] })
+  expect(() => parsePlanResponse('Sure! Here is a plan.')).toThrow()
 })

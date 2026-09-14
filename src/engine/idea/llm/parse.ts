@@ -175,3 +175,24 @@ export function parseBookResponse(text: string): BookDraft {
     .map((x) => ({ where: str(x.where), revision: str(x.revision), rationale: str(x.rationale) }))
   return { summary: str(j.summary), areas, revisions }
 }
+
+export interface PlanDraft {
+  plan: { priority: 1 | 2 | 3; where: string; issue: string; revision: string; rationale: string; licence: string }[]
+  studentText: { where: string; purpose: string; text: string }[]
+}
+
+const toPriority = (v: unknown): 1 | 2 | 3 => {
+  const n = Number(v)
+  return n === 1 || n === 2 || n === 3 ? n : 2
+}
+
+/** Throws on non-JSON, like `parseBookResponse`: there is no row to show a raw reply under. */
+export function parsePlanResponse(text: string): PlanDraft {
+  const j = extractJson(text) as { plan?: unknown; studentText?: unknown }
+  const plan = (Array.isArray(j.plan) ? j.plan : []).filter(isRecord).map((x) => ({
+    priority: toPriority(x.priority), where: str(x.where), issue: str(x.issue), revision: str(x.revision), rationale: str(x.rationale), licence: str(x.licence),
+  }))
+  const studentText = (Array.isArray(j.studentText) ? j.studentText : []).filter(isRecord)
+    .map((x) => ({ where: str(x.where), purpose: str(x.purpose), text: str(x.text) }))
+  return { plan, studentText }
+}

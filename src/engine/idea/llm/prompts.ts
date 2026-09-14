@@ -11,6 +11,9 @@
 import {
   categoryById, CROSSWALK_ATTRIBUTION, FRAMEWORK_ATTRIBUTION, IDEA_FRAMEWORK, RUBRIC_NA_TEXT, type CategoryId,
 } from '../framework'
+import type { AppliedEdit } from '../applied'
+import { parseIdeaEditKey } from '../edits'
+import type { IdeaFinding } from '../findings'
 import type { ImageRow } from '../images'
 import type { MetadataRow } from '../metadata'
 import { RATING_LABEL, type IdeaReview } from '../review'
@@ -183,4 +186,50 @@ export function sectionText(html: string): string {
     .map((el) => (el.textContent ?? '').replace(/\s+/g, ' ').trim())
     .filter(Boolean)
     .join('\n\n')
+}
+
+export interface PlanInput {
+  chapterTitle: string
+  bookTitle: string
+  /** `chapter.attribution.license?.name`, or "not stated". */
+  licence: string
+  region: string
+  review: IdeaReview
+  applied: readonly AppliedEdit[]
+  /** This session's drafts neither accepted nor dismissed. */
+  drafts: readonly IdeaFinding[]
+}
+
+function appliedLine(a: AppliedEdit): string {
+  if (a.edit.kind === 'image') return `- [7.1] ${a.sectionTitle}: image added: "${a.edit.alt}", ${a.edit.attribution.text}`
+  const original = parseIdeaEditKey(a.key).original
+  if (a.edit.kind === 'replace') return `- [${a.category}] ${a.sectionTitle}: "${original}" → "${a.edit.replacement}"`
+  return `- [${a.category}] ${a.sectionTitle}: "${original}" kept as written${a.edit.context ? ` (+ "${a.edit.context}")` : ''}`
+}
+
+function draftLine(f: IdeaFinding): string {
+  if (f.kind === 'edit') return `- [${f.category}] "${f.original}" → "${f.replacement}"${f.rule?.note ? ` — ${f.rule.note}` : ''}`
+  const c = f.columns
+  return `- [${f.category}] ${c.evidence ?? c.summary ?? c.response ?? ''}${c.suggestion ?? c.inference ? ` — ${c.suggestion ?? c.inference}` : ''}`
+}
+
+/**
+ * Crosswalk Step 5 over the decisions already made: no section text. The
+ * plan is about what the review found, and the licence line lets it say
+ * whether a change is an in-page edit or a course-level supplement (5.B).
+ */
+export function planPrompt(i: PlanInput): Msg[] {
+  return [
+    { role: 'system', content: SYSTEM },
+    {
+      role: 'user',
+      content:
+        `Book: ${i.bookTitle}\nChapter: ${i.chapterTitle}\nSource licence: ${i.licence}${i.region ? `\nRegion served: ${i.region}` : ''}\n\n` +
+        `INSTRUCTOR'S RUBRIC 1 RATINGS AND NOTES:\n${ratingsBlock(i.review)}\n\n` +
+        `EDITS THE INSTRUCTOR APPLIED:\n${i.applied.map(appliedLine).join('\n') || '(none)'}\n\n` +
+        `MODEL DRAFTS NOT YET DECIDED (unverified):\n${i.drafts.map(draftLine).join('\n') || '(none)'}\n\n` +
+        'TASK:\nPlan the restorative revisions for this chapter. First, identify the issues this review surfaced. Second, propose the revisions. Third, write them up two ways: instructor-facing notes, and student-facing text only where a passage needs framing rather than replacement. For each instructor item say whether the source licence permits it as an in-page change or only as a course-level supplement. Do not restate the chapter; work from the decisions above.\n\n' +
+        'Respond with JSON only: {"plan": [{"priority": 1 | 2 | 3, "where": string, "issue": string, "revision": string, "rationale": string, "licence": string}], "studentText": [{"where": string, "purpose": string, "text": string}]}. Priority 1 is most urgent.',
+    },
+  ]
 }
