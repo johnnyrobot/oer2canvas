@@ -224,25 +224,39 @@ export function IdeaScreen({
   )
 
   /**
+   * The book card's section inputs, every prepared chapter, rebuilt from the
+   * same gated html the current chapter's are. Three DOM passes per section,
+   * so this memo depends on the chapters and the region only; the review and
+   * the drafts, which change on every keystroke, are attached below.
+   */
+  const bookSections = useMemo(
+    () => chapters.map((c) => {
+      const chapterTitle = c.chapter.title
+      const bookTitle = c.chapter.attribution.bookTitle
+      const sections: SectionInput[] = c.sections.map((s) => {
+        const html = auditedHtml(s)
+        return { sectionId: s.id, sectionTitle: s.title, chapterTitle, bookTitle, region: header.region, text: sectionText(html), images: imageInventory(s.id, html), metadata: metadataInventory(s.id, html) }
+      })
+      return { chapterKey: reviewKeyOf(c.chapter), chapterTitle, bookTitle, sections }
+    }),
+    [chapters, header.region],
+  )
+  /**
    * The book card's input: every prepared chapter of each book, in
    * selection order, with its review and this session's Rubric 1 draft.
-   * Section inputs are rebuilt per chapter from the same gated html the
-   * current chapter's are. One entry per `attribution.bookTitle`.
+   * One entry per `attribution.bookTitle`.
    */
   const books = useMemo(() => {
     const groups = new Map<string, BookChapterInput[]>()
-    for (const c of chapters) {
-      const k = reviewKeyOf(c.chapter)
-      const title = c.chapter.attribution.bookTitle
-      const sections: SectionInput[] = c.sections.map((s) => {
-        const html = auditedHtml(s)
-        return { sectionId: s.id, sectionTitle: s.title, chapterTitle: c.chapter.title, bookTitle: title, region: header.region, text: sectionText(html), images: imageInventory(s.id, html), metadata: metadataInventory(s.id, html) }
-      })
-      const entry: BookChapterInput = { chapterKey: k, chapterTitle: c.chapter.title, review: reviews.get(k) ?? newReview(), sections, ...(llm.rubricDrafts.get(k) ? { rubricDraft: llm.rubricDrafts.get(k)! } : {}) }
-      groups.set(title, [...(groups.get(title) ?? []), entry])
+    for (const { chapterKey, chapterTitle, bookTitle, sections } of bookSections) {
+      const rubricDraft = llm.rubricDrafts.get(chapterKey)
+      const entry: BookChapterInput = {
+        chapterKey, chapterTitle, review: reviews.get(chapterKey) ?? newReview(), sections, ...(rubricDraft ? { rubricDraft } : {}),
+      }
+      groups.set(bookTitle, [...(groups.get(bookTitle) ?? []), entry])
     }
     return groups
-  }, [chapters, reviews, llm.rubricDrafts, header.region])
+  }, [bookSections, reviews, llm.rubricDrafts])
 
   if (!current) {
     return <p className="text-sm text-neutral-700 dark:text-neutral-300">{IDEA_COPY.empty}</p>

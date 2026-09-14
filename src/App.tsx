@@ -759,6 +759,7 @@ export default function App() {
   function exportRubric(key: string, format: 'md' | 'json'): string {
     const compiled = prepared.find((c) => reviewKeyOf(c.chapter) === key)
     const review = ideaReviews.reviewFor(key)
+    const plan = modelRuns.planDrafts.get(key)
     const chapterTitle = compiled?.chapter.title ?? ''
     const ctx = {
       bookTitle: compiled?.chapter.attribution.bookTitle ?? '',
@@ -772,9 +773,7 @@ export default function App() {
         ideaReviews.editsFor(key),
       ),
       // Spec §4.3(a): the instructor-facing plan travels with the chapter's rubric when one exists.
-      ...(modelRuns.planDrafts.get(key)
-        ? { plan: { items: modelRuns.planDrafts.get(key)!.draft.plan, provenance: { provider: modelRuns.planDrafts.get(key)!.provider, draftedAt: new Date(modelRuns.planDrafts.get(key)!.at) } } }
-        : {}),
+      ...(plan ? { plan: { items: plan.draft.plan, provenance: { provider: plan.provider, draftedAt: new Date(plan.at) } } } : {}),
     }
     const name = rubric1Filename(chapterTitle, ctx.exportedAt, format)
     if (format === 'md') downloadTextFile(name, rubric1Markdown(review, ideaReviews.header, ctx), 'text/markdown')
