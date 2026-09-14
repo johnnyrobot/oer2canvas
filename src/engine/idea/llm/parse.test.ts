@@ -20,12 +20,24 @@ test('an item is promoted to an edit only when its original is verbatim in the s
     { evidence: 'e', inference: 'i', suggestion: 's', original: 'the chairperson', replacement: 'the chair' },
     { evidence: 'e', inference: 'i', suggestion: 'no edit' },
   ] }
-  const f = draftsToFindings('7.3', 's1', html, parsed)
+  const f = draftsToFindings('7.2', 's1', html, parsed)
   expect(f.map((x) => x.kind)).toEqual(['edit', 'observation', 'observation'])
   const e = f[0]!
   expect(e.kind === 'edit' && e.elementId).toBe('b2c-blk-0')
   expect(e.kind === 'edit' && e.key).toBe('s1::b2c-blk-0::0::chairman')
   expect(f.every((x) => x.origin === 'draft' && x.rule?.source === 'llm')).toBe(true)
+})
+
+// Spec §3.1 leaves pronoun rewrites to the author. A 7.3 draft is read, never
+// offered as Replace, however verbatim its "original" is.
+test('a 7.3 item with a verbatim original still comes back as an observation', () => {
+  const html = '<p id="b2c-blk-0">Each student must bring his book.</p>'
+  const f = draftsToFindings('7.3', 's1', html, { items: [{ evidence: 'his book', inference: 'binary', suggestion: 'their book', original: 'his book', replacement: 'their book' }] })
+  expect(f.map((x) => x.kind)).toEqual(['observation'])
+  expect(f[0]!.kind === 'observation' && f[0]!.columns.suggestion).toBe('their book')
+  // 7.6 keeps the verbatim rule.
+  const g = draftsToFindings('7.6', 's1', '<p id="b2c-blk-0">The crazy idea.</p>', { items: [{ evidence: 'crazy', inference: 'i', suggestion: 's', original: 'crazy', replacement: 'wild' }] })
+  expect(g.map((x) => x.kind)).toEqual(['edit'])
 })
 
 test('a raw response becomes one observation carrying the text', () => {

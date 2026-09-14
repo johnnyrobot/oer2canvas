@@ -211,7 +211,7 @@ test('a draftable category shows the Ask-the-model zone with its drafts; a rule-
   expect(screen.getByRole('group', { name: 'Ask the model' })).toBeInTheDocument()
   expect(screen.getByText(/No provider set/)).toBeInTheDocument()
   expect(screen.getByText('Anglo')).toBeInTheDocument()
-  // 7.6 is rule-only by spec: the same props add no zone to it.
+  // 7.6 is draftable too (it keeps the verbatim-edit rule; only 7.3 is observation-only).
   render(<CategoryPanel category={categoryById('7.6')} review={newReview().categories['7.6']} open onToggle={vi.fn()} onEvent={vi.fn()} askModel={askModel} />)
-  expect(screen.getAllByRole('group', { name: 'Ask the model' })).toHaveLength(1)
+  expect(screen.getAllByRole('group', { name: 'Ask the model' })).toHaveLength(2)
 })

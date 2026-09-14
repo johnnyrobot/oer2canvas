@@ -183,6 +183,8 @@ export function IdeaScreen({
     return { findings: results.flatMap((r) => r.findings), failures: results.flatMap((r) => r.failures) }
   }, [sections, chapterEdits])
   const byCategory = findingsByCategory(checked.findings)
+  /** Keys a rule already produced: a model draft with the same key is the same suggestion, listed once. */
+  const ruleKeys = useMemo(() => new Set(checked.findings.map((f) => f.key)), [checked.findings])
   const sectionTitleOf = (id: string) => sections.find((s) => s.id === id)?.title ?? ''
   // Against the same html the render shows, so "stale" means what the reader sees.
   const applied = useMemo(
@@ -218,7 +220,7 @@ export function IdeaScreen({
     const keys = current.sections.map((s) => runKey(key, s.id, category))
     const state = categoryRunState(keys.map((k) => llm.runs.get(k) ?? IDLE))
     const draftFindings: IdeaFinding[] = state.status === 'done'
-      ? state.findings.filter((f) => !chapterEdits.edits.has(f.key) && !chapterEdits.dismissed.has(f.key))
+      ? state.findings.filter((f) => !ruleKeys.has(f.key) && !chapterEdits.edits.has(f.key) && !chapterEdits.dismissed.has(f.key))
       : []
     return {
       askModel: {

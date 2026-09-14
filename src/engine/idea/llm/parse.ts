@@ -67,8 +67,10 @@ export function draftsToFindings(
   }
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html')
   const blocks = blockElements(doc.body).filter((el) => el.getAttribute('id'))
+  // 7.3 never edits: pronoun and gendered-noun rewrites are the author's (spec §3.1).
+  const mayEdit = category !== '7.3'
   parsed.items.forEach((item, n) => {
-    if (item.original && item.replacement !== undefined) {
+    if (mayEdit && item.original && item.replacement !== undefined) {
       for (const el of blocks) {
         for (const node of textNodesOf(el)) {
           const at = node.data.indexOf(item.original)
@@ -87,6 +89,7 @@ export function draftsToFindings(
     }
     const columns: Record<string, string> = {}
     for (const [k, v] of Object.entries(item)) if (typeof v === 'string' && v && k !== 'original' && k !== 'replacement') columns[k] = v
+    if (!mayEdit && item.replacement) columns.suggestion = columns.suggestion || item.replacement
     const elementId = item.imageRef && doc.getElementById(item.imageRef) ? item.imageRef : undefined
     out.push({ kind: 'observation', key: `${sectionId}::llm::${category}::${n}`, category, sectionId, ...(elementId ? { elementId } : {}), columns, rule, origin: 'draft' })
   })

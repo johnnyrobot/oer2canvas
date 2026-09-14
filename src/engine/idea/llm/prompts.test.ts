@@ -1,4 +1,4 @@
-import { categoryPrompt, rubricPrompt, sectionText, type SectionInput } from './prompts'
+import { categoryPrompt, rubricPrompt, sectionText, DRAFTABLE, type SectionInput } from './prompts'
 import { categoryById } from '../framework'
 
 const input: SectionInput = {
@@ -55,4 +55,23 @@ test('the system prompt names both documents and their licence', () => {
   const sys = categoryPrompt('7.2', input)[0]!.content
   expect(sys).toContain('Gen-AI Crosswalk Instructions')
   expect(sys.match(/CC BY 4\.0/g)).toHaveLength(2)
+})
+
+test('7.6 asks for outdated or pathologizing terms, names the resources, and asks for historical contextualisation', () => {
+  const p = categoryPrompt('7.6', input).map((x) => x.content).join('\n')
+  expect(p).toMatch(/race, indigeneity, gender, sexuality, disability, and mental health/)
+  expect(p).toMatch(/outdated, pathologizing/)
+  expect(p).toMatch(/historical contextualization/)
+  expect(p).toContain(categoryById('7.6').resources[0]!.url)
+  expect(p).toContain('Indian spices')
+  expect(p).toMatch(/respond with json/i)
+})
+
+test('7.3 asks about gendered language and pronouns, the rubric rows as text, and where rewrites would go', () => {
+  const p = categoryPrompt('7.3', input).map((x) => x.content).join('\n')
+  expect(p).toMatch(/gender nonconforming pronouns/)
+  expect(p).toMatch(/binary or stereotypical/)
+  expect(p).toMatch(/area, rating, and notes/)
+  expect(p).toMatch(/where inclusive rewrites would best be incorporated/)
+  expect(DRAFTABLE).toEqual(['7.1', '7.2', '7.3', '7.4', '7.5', '7.6', '7.7', '7.8'])
 })

@@ -266,13 +266,15 @@ test('with a provider, the rubric-draft button sends the chapter once per click,
 })
 
 test('a done run’s drafts show under the category, minus ones the edits map already decided; the rubric draft reaches its row', () => {
-  const html = '<p id="b2c-blk-0">The chairman spoke.</p>'
+  // "Priyanka", not "chairman": the latter collides with the 7.3 gendered-noun rule's
+  // key (keys don't carry category), which the new rule-key dedupe would drop.
+  const html = '<p id="b2c-blk-0">Priyanka spoke.</p>'
   const c = withHtml('4: Nutrition', html)
   const key = reviewKeyOf(chapter('4: Nutrition'))
-  const editKey = ideaEditKey('4: Nutrition-s1', 'b2c-blk-0', 0, 'chairman')
+  const editKey = ideaEditKey('4: Nutrition-s1', 'b2c-blk-0', 0, 'Priyanka')
   const findings = [
-    { kind: 'edit' as const, key: editKey, category: '7.2' as const, sectionId: '4: Nutrition-s1', elementId: 'b2c-blk-0', original: 'chairman', occurrence: 0, replacement: 'chair', inQuotation: false, rule: { id: 'llm-7.2', source: 'llm' as const }, origin: 'draft' as const },
-    { kind: 'observation' as const, key: '4: Nutrition-s1::llm::7.2::1', category: '7.2' as const, sectionId: '4: Nutrition-s1', columns: { evidence: 'chairman', inference: 'a gendered title' }, rule: { id: 'llm-7.2', source: 'llm' as const }, origin: 'draft' as const },
+    { kind: 'edit' as const, key: editKey, category: '7.2' as const, sectionId: '4: Nutrition-s1', elementId: 'b2c-blk-0', original: 'Priyanka', occurrence: 0, replacement: 'the presenter', inQuotation: false, rule: { id: 'llm-7.2', source: 'llm' as const }, origin: 'draft' as const },
+    { kind: 'observation' as const, key: '4: Nutrition-s1::llm::7.2::1', category: '7.2' as const, sectionId: '4: Nutrition-s1', columns: { evidence: 'Priyanka', inference: 'a stereotype-associated name' }, rule: { id: 'llm-7.2', source: 'llm' as const }, origin: 'draft' as const },
   ]
   const runs = new Map([[`${key}::4: Nutrition-s1::7.2`, { status: 'done' as const, findings, at: 1 }]])
   const rubricDrafts = new Map([[key, { areas: [{ id: '7.2' as const, rows: [{ id: '7.2.a', rating: 'emerging' as const }], notes: 'mostly Anglo' }] }]])
@@ -280,14 +282,14 @@ test('a done run’s drafts show under the category, minus ones the edits map al
   const { rerender } = render(<IdeaScreen {...base} chapters={[c]} llm={llm} />)
   fireEvent.click(screen.getByRole('button', { name: /^7\.2 / }))
   expect(screen.getByRole('button', { name: 'Replace' })).toBeInTheDocument()
-  expect(screen.getByText('a gendered title')).toBeInTheDocument()
+  expect(screen.getByText('a stereotype-associated name')).toBeInTheDocument()
   expect(screen.getByText('Emerging Inclusive', { selector: '.b2c-idea-draft *' })).toBeInTheDocument()
   expect(screen.getByText('mostly Anglo')).toBeInTheDocument()
   // Accepting the draft edit goes through the edits map like a rule finding, and the draft row is gone.
-  const edits = new Map<string, IdeaEdits>([[key, reduceEdits(newEdits(), { type: 'replace', key: editKey, replacement: 'chair' })]])
+  const edits = new Map<string, IdeaEdits>([[key, reduceEdits(newEdits(), { type: 'replace', key: editKey, replacement: 'the presenter' })]])
   rerender(<IdeaScreen {...base} chapters={[c]} llm={llm} edits={edits} />)
   expect(screen.queryByRole('button', { name: 'Replace' })).not.toBeInTheDocument()
-  expect(screen.getByText('a gendered title')).toBeInTheDocument()
+  expect(screen.getByText('a stereotype-associated name')).toBeInTheDocument()
 })
 
 test('7.1 offers Find an openly licensed photo, which opens the search region; Close removes it', () => {
@@ -324,4 +326,27 @@ test('the region field dispatches a region event and is not part of the assessor
   fireEvent.change(field, { target: { value: 'Central Valley' } })
   expect(onHeaderEvent).toHaveBeenCalledWith({ type: 'region', region: 'Central Valley' })
   expect(screen.getByText(/used only to focus the model/)).toBeInTheDocument()
+})
+
+test('7.3 and 7.6 show the Ask-the-model zone below the rule zone; a draft whose key a rule already found is not listed twice', () => {
+  const html = '<p id="b2c-blk-0">He suffers from asthma.</p>'
+  const c = withHtml('4: Nutrition', html)
+  const key = reviewKeyOf(chapter('4: Nutrition'))
+  const ruleKey = ideaEditKey('4: Nutrition-s1', 'b2c-blk-0', 0, 'suffers from')
+  const findings = [
+    { kind: 'edit' as const, key: ruleKey, category: '7.6' as const, sectionId: '4: Nutrition-s1', elementId: 'b2c-blk-0', original: 'suffers from', occurrence: 0, replacement: 'lives with', inQuotation: false, rule: { id: 'llm-7.6', source: 'llm' as const }, origin: 'draft' as const },
+    { kind: 'observation' as const, key: '4: Nutrition-s1::llm::7.6::1', category: '7.6' as const, sectionId: '4: Nutrition-s1', columns: { evidence: 'asthma', inference: 'needs context' }, rule: { id: 'llm-7.6', source: 'llm' as const }, origin: 'draft' as const },
+  ]
+  const runs = new Map([[`${key}::4: Nutrition-s1::7.6`, { status: 'done' as const, findings, at: 1 }]])
+  const llm = { ...base.llm, settings: { provider: 'gemini' as const, key: 'k', model: 'm' }, runs }
+  render(<IdeaScreen {...base} chapters={[c]} llm={llm} />)
+  fireEvent.click(screen.getByRole('button', { name: /^7\.6 / }))
+  const rule = screen.getByRole('group', { name: 'What a rule found' })
+  const ask = screen.getByRole('group', { name: 'Ask the model' })
+  expect(rule.compareDocumentPosition(ask) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  // One Replace: the rule's. The draft with the same key is dropped, the observation stays.
+  expect(screen.getAllByRole('button', { name: 'Replace' })).toHaveLength(1)
+  expect(screen.getByText('needs context')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /^7\.3 / }))
+  expect(screen.getByRole('group', { name: 'Ask the model' })).toBeInTheDocument()
 })
