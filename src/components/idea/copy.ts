@@ -229,6 +229,29 @@ export const IDEA_COPY = {
       useNote: 'Use this note',
       cannotCopy: 'A draft rating is shown for comparison only; choose your own rating.',
     },
+    book: {
+      heading: 'Across the chapters',
+      intro: 'OERI’s Crosswalk ends with a chapter-level pattern review: which areas are consistently strong, inconsistently applied, or mostly unmet across the book, and what to revise first.',
+      single: 'With one chapter prepared, the Rubric 1 draft above is the whole book. Prepare more chapters on Content to compare across them.',
+      size: (n: number, words: number, provider: string) =>
+        `This sends the text of ${n} chapters (about ${words.toLocaleString()} words) and each chapter’s Rubric 1 ratings and notes to ${provider}.`,
+      over: (tokens: number, provider: string, ceiling: number) =>
+        `This is about ${tokens.toLocaleString()} tokens; ${provider} accepts ${ceiling.toLocaleString()}. Deselect chapters on Content to bring it under.`,
+      send: (provider: string) => `Send the book to ${provider}`,
+      summary: 'Summary',
+      areas: 'Areas',
+      area: 'Area',
+      rating: 'Rating',
+      notes: 'Notes',
+      noDraft: 'no draft',
+      revisions: 'Prioritized revisions or supplements',
+      where: 'Where',
+      revision: 'Revision or supplement',
+      rationale: 'Rationale',
+      unverified: 'Model draft, unverified. There is no book-level rating to copy into; rate each chapter yourself.',
+      markdown: 'Download patterns (Markdown)',
+      json: 'Download patterns (JSON)',
+    },
   },
 } as const
 
