@@ -128,3 +128,19 @@ test('spec §2.5: the appendix lists applied edits and added images in both form
   expect(rubric1Json(review, header, ctx).applied).toBeUndefined()
   expect(rubric1Markdown(review, header, ctx)).not.toContain('Appendix')
 })
+
+test('the Rubric 1 file carries a Revision plan section and the second provenance sentence only when a plan is supplied', () => {
+  const { review, header } = sample()
+  const without = rubric1Markdown(review, header, ctx)
+  expect(without).not.toContain('## Revision plan')
+  expect(without).not.toContain('was drafted by')
+  expect(rubric1Json(review, header, ctx).plan).toBeUndefined()
+  const plan = { items: [{ priority: 1 as const, where: '4.2', issue: 'i', revision: 'r', rationale: 'y', licence: 'in-page' }], provenance: { provider: 'Gemini', draftedAt: new Date('2026-09-11T17:00:00Z') } }
+  const md = rubric1Markdown(review, header, { ...ctx, plan })
+  expect(md).toContain('## Revision plan')
+  expect(md).toContain('| 1 | 4.2 | i | r | y | in-page |')
+  expect(md).toContain('none were produced by software. The revision plan was drafted by Gemini on 2026-09-11 and has not been verified')
+  expect(md.indexOf('## Revision plan')).toBeGreaterThan(md.indexOf('## Appendix: images added') === -1 ? 0 : md.indexOf('## Appendix: images added'))
+  const j = rubric1Json(review, header, { ...ctx, plan })
+  expect(j.plan).toEqual({ items: plan.items, provider: 'Gemini', draftedAt: '2026-09-11T17:00:00.000Z' })
+})

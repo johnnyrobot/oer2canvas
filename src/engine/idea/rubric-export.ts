@@ -23,6 +23,9 @@ import { FRAMEWORK_ATTRIBUTION, IDEA_FRAMEWORK } from './framework'
 import type { AppliedEdit } from './applied'
 import { parseIdeaEditKey } from './edits'
 import { RATING_LABEL, ratingCounts, type ChecklistAnswer, type IdeaHeader, type IdeaReview, type Rating } from './review'
+import { cell, provenanceSentence, slug, type DraftProvenance } from './export-text'
+import type { PlanDraft } from './llm/parse'
+import { planTableLines } from './plan-export'
 
 export { RATING_LABEL }
 
@@ -34,6 +37,8 @@ export interface Rubric1Context {
   exportedAt: Date
   /** The chapter's Applied list; absent (slice 1 callers) exports no appendix. */
   applied?: readonly AppliedEdit[]
+  /** This session's revision plan, when one exists at export time (spec §4.3). Instructor items only. */
+  plan?: { items: PlanDraft['plan']; provenance: DraftProvenance }
 }
 
 const NOT_RATED = 'Not rated'
@@ -103,6 +108,8 @@ export interface Rubric1Json {
   suggestions: string
   /** Present when the caller supplied the Applied list (spec §2.5). */
   applied?: { edits: AppliedEditJson[]; images: AddedImageJson[] }
+  /** Present when the caller supplied a revision plan (spec §4.3). */
+  plan?: { items: PlanDraft['plan']; provider: string; draftedAt: string }
 }
 
 export function rubric1Json(review: IdeaReview, header: IdeaHeader, ctx: Rubric1Context): Rubric1Json {
@@ -142,11 +149,9 @@ export function rubric1Json(review: IdeaReview, header: IdeaHeader, ctx: Rubric1
     summary: review.summary,
     suggestions: review.suggestions,
     ...(ctx.applied ? { applied: appendixOf(ctx.applied) } : {}),
+    ...(ctx.plan ? { plan: { items: ctx.plan.items, provider: ctx.plan.provenance.provider, draftedAt: ctx.plan.provenance.draftedAt.toISOString() } } : {}),
   }
 }
-
-/** A cell must not carry a bare pipe or a newline, or the table falls apart. */
-const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ').trim()
 
 export function rubric1Markdown(review: IdeaReview, header: IdeaHeader, ctx: Rubric1Context): string {
   const j = rubric1Json(review, header, ctx)
@@ -219,24 +224,25 @@ export function rubric1Markdown(review: IdeaReview, header: IdeaHeader, ctx: Rub
       }
     }
   }
+  if (ctx.plan) {
+    lines.push('', '## Revision plan (model draft, unverified)', '')
+    if (ctx.plan.items.length === 0) lines.push('None.')
+    else lines.push(...planTableLines(ctx.plan.items))
+  }
   lines.push('')
   lines.push('---')
   lines.push('')
   lines.push(
     `Rubric and category text from "${FRAMEWORK_ATTRIBUTION.title}" by ${FRAMEWORK_ATTRIBUTION.author}, ` +
       `${FRAMEWORK_ATTRIBUTION.url}, licensed ${FRAMEWORK_ATTRIBUTION.license.name} (${FRAMEWORK_ATTRIBUTION.license.url}). ` +
-      'Ratings, notes, checklist answers, summary, and suggestions were entered by the assessor named above; none were produced by software.',
+      'Ratings, notes, checklist answers, summary, and suggestions were entered by the assessor named above; none were produced by software.' +
+      (ctx.plan ? ` ${provenanceSentence('revision plan', ctx.plan.provenance)}` : ''),
   )
   lines.push('')
   return lines.join('\n')
 }
 
 export function rubric1Filename(chapterTitle: string, now: Date, ext: 'md' | 'json'): string {
-  const slug = chapterTitle
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60)
   const date = now.toISOString().slice(0, 10)
-  return `idea-rubric1-${slug || 'chapter'}-${date}.${ext}`
+  return `idea-rubric1-${slug(chapterTitle) || 'chapter'}-${date}.${ext}`
 }
