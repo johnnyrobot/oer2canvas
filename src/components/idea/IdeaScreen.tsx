@@ -204,9 +204,10 @@ export function IdeaScreen({
         sectionId: s.id, sectionTitle: s.title, chapterTitle: current?.chapter.title ?? '',
         bookTitle: current?.chapter.attribution.bookTitle ?? '',
         text: sectionText(html), images: imageInventory(s.id, html), metadata: metadataInventory(s.id, html),
+        region: header.region,
       }
     }),
-    [sections, current],
+    [sections, current, header.region],
   )
 
   if (!current) {

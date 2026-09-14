@@ -75,3 +75,13 @@ test('7.3 asks about gendered language and pronouns, the rubric rows as text, an
   expect(p).toMatch(/where inclusive rewrites would best be incorporated/)
   expect(DRAFTABLE).toEqual(['7.1', '7.2', '7.3', '7.4', '7.5', '7.6', '7.7', '7.8'])
 })
+
+test('7.4 asks for alternative researchers with a primary link, and centres the region only when one is given', () => {
+  const without = categoryPrompt('7.4', input).map((x) => x.content).join('\n')
+  expect(without).toMatch(/alternative researchers and\/or studies/)
+  expect(without).toMatch(/primary link/)
+  expect(without).not.toMatch(/Region served/)
+  const withRegion = categoryPrompt('7.4', { ...input, region: 'Central Valley' }).map((x) => x.content).join('\n')
+  expect(withRegion).toContain('Region served: Central Valley')
+  expect(withRegion).toMatch(/historically marginalized scholars and\/or communities within Central Valley/)
+})

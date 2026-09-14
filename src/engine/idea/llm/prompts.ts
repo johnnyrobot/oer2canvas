@@ -28,6 +28,8 @@ export interface SectionInput {
   text: string
   images: ImageRow[]
   metadata: MetadataRow[]
+  /** `IdeaHeader.region`; empty or absent means the regional element is left out. */
+  region?: string
 }
 
 type Msg = { role: 'system' | 'user'; content: string }
@@ -45,7 +47,8 @@ function lens(c: CategoryId): string {
     (cat.resources.length ? `\nResources you may name (do not fetch): ${cat.resources.map((r) => `${r.label} <${r.url}>`).join('; ')}` : '')
 }
 
-const CONTEXT = (i: SectionInput) => `Chapter: ${i.chapterTitle}\nSection: ${i.sectionTitle}${i.bookTitle ? `\nBook: ${i.bookTitle}` : ''}`
+const CONTEXT = (i: SectionInput) =>
+  `Chapter: ${i.chapterTitle}\nSection: ${i.sectionTitle}${i.bookTitle ? `\nBook: ${i.bookTitle}` : ''}${i.region ? `\nRegion served: ${i.region}` : ''}`
 
 const ITEM_SHAPE =
   'Respond with JSON only, no prose before or after: {"summary": string, "items": [{"evidence": string, "inference": string, "suggestion": string, "original"?: string, "replacement"?: string}]}. ' +
@@ -59,7 +62,11 @@ const TASK: Record<DraftableCategory, (i: SectionInput) => string> = {
   '7.2': (i) => `Identify the example names used for people in this text. Consider whether they represent various countries of origin, ethnicities, genders, and races and whether any is associated with a stereotype. Do not assert a person’s identity from a name; say what a name suggests only as an inference.\n\nTEXT:\n${i.text}\n\n${ITEM_SHAPE}`,
   '7.3': (i) =>
     `Review this text for gendered language and pronoun use. Identify where the language is inclusive of gender (including gender nonconforming pronouns) and where it is binary or stereotypical. Evaluate it against the Rubric 1 rows for this area — put that evaluation in "summary" as text with the columns area, rating, and notes — and propose where inclusive rewrites would best be incorporated for sentences or scenarios. Pronoun rewrites are the author's to make: describe where and why, and quote the passage as "evidence".\n\nTEXT:\n${i.text}\n\n${ITEM_SHAPE}`,
-  '7.4': (i) => `Identify the authors, researchers, scholars, and studies referenced in this text. Assess the diversity of the contributors cited and whether historically underrepresented contributors are absent; suggest current, relevant contributors where appropriate, naming only real people and works you are confident exist.\n\nTEXT:\n${i.text}\n\n${ITEM_SHAPE}`,
+  '7.4': (i) =>
+    `Identify the authors, researchers, scholars, and studies referenced in this text. Assess the diversity of the contributors cited and whether historically underrepresented contributors are absent; suggest current, relevant contributors where appropriate, naming only real people and works you are confident exist. ` +
+    'Then identify alternative researchers and/or studies that could be utilized to help diversify the sources used: for each, give a primary link to the source material (name it; nothing will be fetched) and a short description of how it could replace what currently exists.' +
+    (i.region ? ` Then identify ways in which this chapter could center historically marginalized scholars and/or communities within ${i.region} in more intentional ways through the examples or narrative descriptions used.` : '') +
+    `\n\nTEXT:\n${i.text}\n\n${ITEM_SHAPE}`,
   '7.5': (i) =>
     `Review the applications, examples, and problem scenarios in this text for whether they relate to diverse audiences, assume cultural knowledge, or risk a stereotype.\n\nTEXT:\n${i.text}\n\n` +
     'Respond with JSON only: {"summary": string, "items": [{"scenario": string, "population": string, "cultural knowledge assumed": string, "stereotype risk": string, "suggested revision": string, "original"?: string, "replacement"?: string}]}.',
