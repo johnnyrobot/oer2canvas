@@ -63,7 +63,7 @@ function countLine(id: CategoryId, found: readonly IdeaFinding[]): string | unde
 
 export function CategoryPanel({
   category, review, open, onToggle, onEvent, findings, applied, sectionTitleOf, onEditEvent, onFocusFinding, failures,
-  askModel, draftFindings, rubricDraft, onFindImage,
+  askModel, askModelSummaries, draftFindings, rubricDraft, onFindImage,
 }: {
   category: IdeaCategory
   review: CategoryReview
@@ -79,6 +79,8 @@ export function CategoryPanel({
   failures?: readonly { sectionTitle: string; message: string }[]
   /** Slice 4: the Ask-the-model zone, rendered only for the draftable categories. */
   askModel?: { provider: LlmProvider | undefined; state: RunState; onSend: () => void; onCancel: () => void; firstRun: boolean }
+  /** 7.7 only: the Crosswalk's 7.7.1 sub-prompt, a second button in the same zone. */
+  askModelSummaries?: { provider: LlmProvider | undefined; state: RunState; onSend: () => void; onCancel: () => void; firstRun: boolean }
   /** What the model drafted for this category, already filtered by the edits map. */
   draftFindings?: readonly IdeaFinding[]
   /** The model's Rubric 1 draft for this category: per row, beside the human's rating, never copied into it. */
@@ -191,6 +193,16 @@ export function CategoryPanel({
             <fieldset className="m-0 border-0 p-0">
               <legend className="mb-2 text-sm font-semibold">{IDEA_COPY.llm.heading}</legend>
               <AskModel {...askModel} />
+              {askModelSummaries && category.id === '7.7' && (
+                <div className="mt-3 flex flex-col gap-2">
+                  <p className="m-0 text-sm font-semibold">{IDEA_COPY.llm.summaries.heading}</p>
+                  <AskModel
+                    {...askModelSummaries}
+                    sends={IDEA_COPY.llm.summaries.sends}
+                    {...(askModelSummaries.provider ? { label: IDEA_COPY.llm.summaries.button(askModelSummaries.provider.label) } : {})}
+                  />
+                </div>
+              )}
               {(draftFindings ?? []).length > 0 && (
                 <ul className="m-0 mt-3 flex list-none flex-col gap-2 p-0" aria-label={IDEA_COPY.llm.draftLabel}>
                   {(draftFindings ?? []).map((f) => (

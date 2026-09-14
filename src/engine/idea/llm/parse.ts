@@ -9,6 +9,7 @@ import type { IdeaFinding } from '../findings'
 import type { Rating } from '../review'
 import { ideaEditKey } from '../edits'
 import { blockElements, countOccurrences, findOccurrence, isQuotation, textBefore, textNodesOf } from '../text'
+import { filesUnder, type DraftableCategory } from './prompts'
 
 export interface DraftItem {
   evidence: string
@@ -51,24 +52,25 @@ export function parseCategoryResponse(text: string): { items: DraftItem[]; summa
 }
 
 export function draftsToFindings(
-  category: CategoryId,
+  category: DraftableCategory,
   sectionId: string,
   html: string,
   parsed: { items: DraftItem[]; summary?: string; raw?: string },
 ): IdeaFinding[] {
   const out: IdeaFinding[] = []
+  const filed = filesUnder(category)
   const rule = { id: `llm-${category}`, source: 'llm' as const }
+  // 7.3 never edits (spec §3.1); 7.7.1 never edits (summaries are structural).
+  const mayEdit = category !== '7.3' && category !== '7.7.1'
   if (parsed.raw !== undefined) {
-    out.push({ kind: 'observation', key: `${sectionId}::llm::${category}::raw`, category, sectionId, columns: { response: parsed.raw }, rule: { ...rule, note: 'The model did not answer in the requested shape; its reply is shown as written.' }, origin: 'draft' })
+    out.push({ kind: 'observation', key: `${sectionId}::llm::${category}::raw`, category: filed, sectionId, columns: { response: parsed.raw }, rule: { ...rule, note: 'The model did not answer in the requested shape; its reply is shown as written.' }, origin: 'draft' })
     return out
   }
   if (parsed.summary) {
-    out.push({ kind: 'observation', key: `${sectionId}::llm::${category}::summary`, category, sectionId, columns: { summary: parsed.summary }, rule, origin: 'draft' })
+    out.push({ kind: 'observation', key: `${sectionId}::llm::${category}::summary`, category: filed, sectionId, columns: { summary: parsed.summary }, rule, origin: 'draft' })
   }
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html')
   const blocks = blockElements(doc.body).filter((el) => el.getAttribute('id'))
-  // 7.3 never edits: pronoun and gendered-noun rewrites are the author's (spec §3.1).
-  const mayEdit = category !== '7.3'
   parsed.items.forEach((item, n) => {
     if (mayEdit && item.original && item.replacement !== undefined) {
       for (const el of blocks) {
@@ -79,7 +81,7 @@ export function draftsToFindings(
           const occurrence = countOccurrences(textBefore(el, node, at), item.original)
           if (!findOccurrence(el, item.original, occurrence)) continue
           out.push({
-            kind: 'edit', key: ideaEditKey(sectionId, elementId, occurrence, item.original), category, sectionId, elementId,
+            kind: 'edit', key: ideaEditKey(sectionId, elementId, occurrence, item.original), category: filed, sectionId, elementId,
             original: item.original, occurrence, replacement: item.replacement, inQuotation: isQuotation(el),
             rule: { ...rule, note: item.inference || item.suggestion }, origin: 'draft',
           })
@@ -91,7 +93,7 @@ export function draftsToFindings(
     for (const [k, v] of Object.entries(item)) if (typeof v === 'string' && v && k !== 'original' && k !== 'replacement') columns[k] = v
     if (!mayEdit && item.replacement) columns.suggestion = columns.suggestion || item.replacement
     const elementId = item.imageRef && doc.getElementById(item.imageRef) ? item.imageRef : undefined
-    out.push({ kind: 'observation', key: `${sectionId}::llm::${category}::${n}`, category, sectionId, ...(elementId ? { elementId } : {}), columns, rule, origin: 'draft' })
+    out.push({ kind: 'observation', key: `${sectionId}::llm::${category}::${n}`, category: filed, sectionId, ...(elementId ? { elementId } : {}), columns, rule, origin: 'draft' })
   })
   return out
 }

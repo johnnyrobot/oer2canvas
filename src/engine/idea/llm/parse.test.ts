@@ -82,3 +82,9 @@ test('a bare rating on a multi-row area leaves its rows null', () => {
   expect(r.areas[0]!.rows.map((x) => x.rating)).toEqual([null, null, null])
   expect(r.areas[0]!.notes).toBe('n')
 })
+
+test('7.7.1 drafts are observations filed under 7.7 with their own keys', () => {
+  const f = draftsToFindings('7.7.1', 's1', '<p id="a">x</p>', { summary: 's', items: [{ evidence: 'e', inference: 'i', suggestion: 'add “redlining”', original: 'x', replacement: 'y' }] })
+  expect(f.every((x) => x.category === '7.7' && x.kind === 'observation')).toBe(true)
+  expect(f.map((x) => x.key)).toEqual(['s1::llm::7.7.1::summary', 's1::llm::7.7.1::0'])
+})

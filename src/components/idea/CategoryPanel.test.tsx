@@ -215,3 +215,19 @@ test('a draftable category shows the Ask-the-model zone with its drafts; a rule-
   render(<CategoryPanel category={categoryById('7.6')} review={newReview().categories['7.6']} open onToggle={vi.fn()} onEvent={vi.fn()} askModel={askModel} />)
   expect(screen.getAllByRole('group', { name: 'Ask the model' })).toHaveLength(2)
 })
+
+import { providerById } from '../../engine/idea/llm/providers'
+
+test('7.7 offers a second button for chapter summaries when given askModelSummaries', () => {
+  const onSend = vi.fn()
+  const onSendSummaries = vi.fn()
+  const ask = { provider: providerById('gemini'), state: { status: 'idle' as const }, onCancel: vi.fn(), firstRun: true }
+  render(
+    <CategoryPanel category={categoryById('7.7')} review={newReview().categories['7.7']} open onToggle={vi.fn()} onEvent={vi.fn()}
+      askModel={{ ...ask, onSend }} askModelSummaries={{ ...ask, onSend: onSendSummaries }} />,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Draft: chapter summaries and key concepts (Gemini)' }))
+  expect(onSendSummaries).toHaveBeenCalledTimes(1)
+  expect(onSend).not.toHaveBeenCalled()
+  expect(screen.getByRole('button', { name: 'Send this section to Gemini' })).toBeInTheDocument()
+})

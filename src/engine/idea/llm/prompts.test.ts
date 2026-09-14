@@ -1,4 +1,6 @@
-import { categoryPrompt, rubricPrompt, sectionText, DRAFTABLE, type SectionInput } from './prompts'
+import {
+  categoryPrompt, rubricPrompt, sectionText, DRAFTABLE, filesUnder, type SectionInput,
+} from './prompts'
 import { categoryById } from '../framework'
 
 const input: SectionInput = {
@@ -84,4 +86,26 @@ test('7.4 asks for alternative researchers with a primary link, and centres the 
   const withRegion = categoryPrompt('7.4', { ...input, region: 'Central Valley' }).map((x) => x.content).join('\n')
   expect(withRegion).toContain('Region served: Central Valley')
   expect(withRegion).toMatch(/historically marginalized scholars and\/or communities within Central Valley/)
+})
+
+test('7.7.1 sends headings and key blocks plus the section’s opening and closing blocks, and files under 7.7', () => {
+  const i: SectionInput = {
+    ...input,
+    text: 'First.\n\nSecond.\n\nThird.\n\nFourth.\n\nFifth.',
+    metadata: [
+      { sectionId: 's1', kind: 'heading', text: 'Key terms' },
+      { sectionId: 's1', kind: 'key-block', text: 'Summary: cells divide.' },
+      { sectionId: 's1', kind: 'proper-noun', text: 'Darwin', detail: '3' },
+    ],
+  }
+  const p = categoryPrompt('7.7.1', i).map((x) => x.content).join('\n')
+  expect(p).toContain('Key terms')
+  expect(p).toContain('Summary: cells divide.')
+  expect(p).not.toContain('Darwin')
+  expect(p).toContain('First.\n\nSecond.')
+  expect(p).toContain('Fourth.\n\nFifth.')
+  expect(p).not.toContain('Third.')
+  expect(p).toMatch(/missing or lacking/)
+  expect(filesUnder('7.7.1')).toBe('7.7')
+  expect(filesUnder('7.2')).toBe('7.2')
 })

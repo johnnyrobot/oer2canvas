@@ -15,9 +15,11 @@ import type { ImageRow } from '../images'
 import type { MetadataRow } from '../metadata'
 import { blockElements } from '../text'
 
-export type DraftableCategory = '7.1' | '7.2' | '7.3' | '7.4' | '7.5' | '7.6' | '7.7' | '7.8'
-/** The categories with an Ask-the-model zone — every one, since the Crosswalk has a prompt for each. */
-export const DRAFTABLE: readonly DraftableCategory[] = ['7.1', '7.2', '7.3', '7.4', '7.5', '7.6', '7.7', '7.8']
+export type DraftableCategory = '7.1' | '7.2' | '7.3' | '7.4' | '7.5' | '7.6' | '7.7' | '7.7.1' | '7.8'
+/** The categories with an Ask-the-model zone — every one, since the Crosswalk has a prompt for each. 7.7.1 is a second button under 7.7, not a panel of its own. */
+export const DRAFTABLE: readonly Exclude<DraftableCategory, '7.7.1'>[] = ['7.1', '7.2', '7.3', '7.4', '7.5', '7.6', '7.7', '7.8']
+/** Where a draft's findings are filed. 7.7.1 is the Crosswalk's sub-prompt for 7.7's chapter summaries. */
+export const filesUnder = (c: DraftableCategory): CategoryId => (c === '7.7.1' ? '7.7' : c)
 
 export interface SectionInput {
   sectionId: string
@@ -55,6 +57,12 @@ const ITEM_SHAPE =
   '"evidence" quotes the text exactly; "inference" is what you conclude; "suggestion" is the revision. ' +
   'Include "original" and "replacement" ONLY when the suggestion is a direct wording substitution and "original" is copied verbatim from the text.'
 
+/** Crosswalk 7.7.1 reads summaries and key concepts: the opening and closing blocks are where publishers put them. */
+function edges(text: string, n: number): { head: string; tail: string } {
+  const blocks = text.split(/\n\n+/).filter(Boolean)
+  return { head: blocks.slice(0, n).join('\n\n'), tail: blocks.length > n ? blocks.slice(-n).join('\n\n') : '' }
+}
+
 const TASK: Record<DraftableCategory, (i: SectionInput) => string> = {
   '7.1': (i) =>
     `Analyze the following image descriptions, alt text, and captions for how people are visually represented — diversity across race, ethnicity, age, gender, ability, and more; whether people appear where identity is not the subject; whether any depiction risks a stereotype. Do NOT infer identity from a description that does not state it.\n\nIMAGES:\n${i.images.map((r, n) => `${n + 1}. ref=${r.elementId} alt="${r.alt ?? '(none)'}" caption="${r.caption ?? ''}" reference="${r.reference ?? ''}"`).join('\n') || '(no images)'}\n\n` +
@@ -73,13 +81,18 @@ const TASK: Record<DraftableCategory, (i: SectionInput) => string> = {
   '7.6': (i) =>
     `Identify all terms in this text that may be related to race, indigeneity, gender, sexuality, disability, and mental health, and flag any that may be outdated, pathologizing, or inconsistent with equity-oriented professional or community language. Suggest alternative, appropriate terminology, naming which of the resources listed above you drew on. Note any terms that may need explicit historical contextualization rather than replacement.\n\nTEXT:\n${i.text}\n\n${ITEM_SHAPE}`,
   '7.7': (i) => `Review the keywords, glossary terms, headings, and summary content below for whether diverse topics, scholars, and perspectives are represented among what the section signals as important.\n\nMETADATA:\n${i.metadata.map((m) => `- [${m.kind}] ${m.text}${m.detail ? ` — ${m.detail}` : ''}`).join('\n') || '(none)'}\n\n${ITEM_SHAPE}`,
+  '7.7.1': (i) => {
+    const { head, tail } = edges(i.text, 2)
+    const summaries = i.metadata.filter((m) => m.kind === 'heading' || m.kind === 'key-block')
+    return `Evaluate this section's summaries and key concepts — the headings and key blocks below, and the section's opening and closing blocks — for whether they use the IDEA-related terms the section's content warrants. First, evaluate where important IDEA-related terms are used that connect to the specific elements of this section (put that in "summary"). Second, list summaries where IDEA-related terms are missing or lacking, and suggest terms that could be added based on the section's contents that would support a culturally-responsive review. Summaries are the publisher's structural text: suggest additions, do not rewrite.\n\nHEADINGS AND KEY BLOCKS:\n${summaries.map((m) => `- [${m.kind}] ${m.text}`).join('\n') || '(none)'}\n\nOPENING:\n${head || '(none)'}\n\nCLOSING:\n${tail || '(none)'}\n\n${ITEM_SHAPE}`
+  },
   '7.8': (i) => `Identify issues, events, and concepts in this text where perspectives of underrepresented groups are relevant, and whether they are present, balanced, and free of generalization.\n\nTEXT:\n${i.text}\n\n${ITEM_SHAPE}`,
 }
 
 export function categoryPrompt(category: DraftableCategory, input: SectionInput): Msg[] {
   return [
     { role: 'system', content: SYSTEM },
-    { role: 'user', content: `${CONTEXT(input)}\n\n${lens(category)}\n\nTASK:\n${TASK[category](input)}` },
+    { role: 'user', content: `${CONTEXT(input)}\n\n${lens(filesUnder(category))}\n\nTASK:\n${TASK[category](input)}` },
   ]
 }
 

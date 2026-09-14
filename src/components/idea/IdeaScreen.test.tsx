@@ -350,3 +350,14 @@ test('7.3 and 7.6 show the Ask-the-model zone below the rule zone; a draft whose
   fireEvent.click(screen.getByRole('button', { name: /^7\.3 / }))
   expect(screen.getByRole('group', { name: 'Ask the model' })).toBeInTheDocument()
 })
+
+test('the 7.7.1 button runs the 7.7.1 category once per section', () => {
+  const c = withHtml('4: Nutrition', '<p id="b2c-blk-0">x</p>')
+  const runCategory = vi.fn()
+  const llm = { ...base.llm, settings: { provider: 'gemini' as const, key: 'k', model: 'm' }, runCategory }
+  render(<IdeaScreen {...base} chapters={[c]} llm={llm} />)
+  fireEvent.click(screen.getByRole('button', { name: /^7\.7 / }))
+  fireEvent.click(screen.getByRole('button', { name: 'Draft: chapter summaries and key concepts (Gemini)' }))
+  expect(runCategory).toHaveBeenCalledTimes(1)
+  expect(runCategory.mock.calls[0]![1]).toBe('7.7.1')
+})

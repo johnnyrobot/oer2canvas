@@ -217,6 +217,11 @@ export const IDEA_COPY = {
       link: 'IDEA Framework Gen-AI Crosswalk Instructions',
       licence: '(CC BY 4.0).',
     },
+    summaries: {
+      heading: 'Chapter summaries and key concepts',
+      button: (label: string) => `Draft: chapter summaries and key concepts (${label})`,
+      sends: 'What leaves your browser for this button: this section’s headings and key blocks and its first and last two paragraphs.',
+    },
     rubricDraft: {
       button: (label: string) => `Draft a Rubric 1 review with ${label}`,
       column: 'Model draft',

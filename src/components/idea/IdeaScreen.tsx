@@ -233,7 +233,14 @@ export function IdeaScreen({
       draftFindings,
     }
   }
-  const isDraftable = (id: CategoryId): id is DraftableCategory => (DRAFTABLE as readonly string[]).includes(id)
+  const isDraftable = (id: CategoryId): id is Exclude<DraftableCategory, '7.7.1'> => (DRAFTABLE as readonly string[]).includes(id)
+  /** 7.7 gets a second button (7.7.1); its drafts file under 7.7 and list with 7.7's. */
+  const draftablePropsFor = (id: Exclude<DraftableCategory, '7.7.1'>) => {
+    const main = askModelFor(id)
+    if (id !== '7.7') return main
+    const summaries = askModelFor('7.7.1')
+    return { askModel: main.askModel, askModelSummaries: summaries.askModel, draftFindings: [...main.draftFindings, ...summaries.draftFindings] }
+  }
 
   /**
    * Spec §5.3: Applied / Undone announced through the live region. A dismissal
@@ -463,7 +470,7 @@ export function IdeaScreen({
                 sectionTitleOf={sectionTitleOf}
                 onEditEvent={editEvent}
                 onFocusFinding={setFocus}
-                {...(isDraftable(category.id) ? askModelFor(category.id) : {})}
+                {...(isDraftable(category.id) ? draftablePropsFor(category.id) : {})}
                 {...(rubricDraft?.areas.find((a) => a.id === category.id) ? { rubricDraft: rubricDraft.areas.find((a) => a.id === category.id)! } : {})}
                 {...(category.id === '7.1'
                   ? { onFindImage: openImageSearch }
