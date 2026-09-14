@@ -396,6 +396,11 @@ Cloud is listed but not offered: a browser cannot call it directly, and there is
 fallback.) The model key is stored in your browser on this device and never on this app's server;
 nothing is sent until you press the button; every model output is labelled a draft, becomes an
 edit only if it quotes the text verbatim, and never sets a rating. See [PRIVACY.md](PRIVACY.md).
+With two or more chapters of one book prepared, *Across the chapters* sends them all in one request
+for OERI's chapter-level pattern review, sized before you press Send and refused above the
+provider's ceiling. Under each chapter, *Plan the revisions* turns your ratings, notes, and applied
+edits into a restorative revision plan with copy-only student-facing drafts; both are downloads, and
+neither is stored.
 
 Where a section would benefit from a photo, the illustrations category can search Wikimedia
 Commons and Openverse for CC0, CC BY, CC BY-SA, and public-domain images only (anything else is

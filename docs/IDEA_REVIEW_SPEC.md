@@ -386,6 +386,15 @@ In the IDEA phase header: provider select, key field (masked, paste-only), model
 from the preset, *Forget key*. No-key state on every panel is a sentence and a link to this
 panel, not a disabled button.
 
+### 4.7 Crosswalk completion *(added 2026-09-13)*
+
+`IDEA_CROSSWALK_SPEC.md` adds what the Crosswalk has and slice 4 did not: the 7.3, 7.6, and 7.7.1
+prompts and 7.4's alternative elements; Appendix B's book-level pattern review (*Across the
+chapters*); and Step 5's restorative revision plan (*Plan the revisions*) with copy-only
+student-facing drafts. Two decisions recorded there: the book send carries every prepared chapter's
+full text, sized and refused above a per-provider ceiling, never truncated; and neither new result
+is persisted — the download is the record. Everything in §1 and §4.3–4.5 still holds.
+
 ## 5. The IDEA phase: shell, screen, interaction
 
 ### 5.1 Shell

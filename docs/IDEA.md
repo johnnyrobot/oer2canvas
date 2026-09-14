@@ -8,7 +8,16 @@ slice; the design is in `IDEA_REVIEW_SPEC.md`.
 - **Network:** two paths, each on a click and each described below — a model call (slice 4) and an
   image search (slice 5). Nothing else: the Framework text is vendored, the rule checks and
   inventories run in the browser, and the Rubric 1 export is built in the browser and handed to
-  the browser's download.
+  the browser's download. Two more, each on its own click, complete OERI's Crosswalk (design:
+  `IDEA_CROSSWALK_SPEC.md`): a **whole-book send** (*Across the chapters*: every prepared chapter's
+  section text and image descriptions plus the instructor's Rubric 1 ratings and notes, and the
+  session's Rubric 1 drafts, to the chosen provider in one request; its size is stated before Send
+  and it is refused, never truncated, above the provider's ceiling) and a **per-chapter plan send**
+  (*Plan the revisions*: this chapter's ratings, notes, applied edits, and this session's undecided
+  drafts — no section text). These two clicks are the only ones that send the instructor's own
+  words. Neither result is stored; the downloads are the record, and the plan's instructor list
+  also goes into the chapter's Rubric 1 file when one exists at export time. The region-served
+  field, if filled, goes into the 7.4, book, and plan prompts and into no export.
 - **Storage:** the review (ratings, checklist answers, notes, summary, suggestions, per chapter),
   the assessor, and the benchmark are written to the app's IndexedDB database
   (`oer2canvas`, key `idea.reviews`) on this device, debounced after each change. They are read

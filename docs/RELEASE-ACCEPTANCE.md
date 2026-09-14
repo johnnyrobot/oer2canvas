@@ -305,3 +305,37 @@ silent, even if nothing was broken outright.
    None to `/relay`.
 8. *Forget all IDEA reviews* → confirm; the image leaves the render after the recompile, and the
    next export carries neither the figure nor the credit.
+
+## 9. IDEA review — Crosswalk completion
+
+1. Prepare two chapters of one OpenStax book. IDEA: the *Across the chapters* card sits above the
+   chapter picker and reads "This sends the text of 2 chapters (about N words) …". With one chapter
+   prepared it is a sentence instead.
+2. Type a region ("Central Valley") in *Region served*. Open 7.4 and send: the reply mentions the
+   region. Export Rubric 1: the file does not contain the word "Central Valley".
+3. Open 7.3: an *Ask the model* zone sits below *What a rule found*. Send. Every draft is an
+   observation — no Replace button anywhere under 7.3. Open 7.6 and send: a draft that matches a
+   rule's finding is not listed twice; a verbatim one has Replace.
+4. Open 7.7: two buttons. Press *Draft: chapter summaries and key concepts (…)*; the drafts list
+   under 7.7 with the "draft" chip and no Replace.
+5. Rate one row and press *Send the book to <provider>*. The status line reads "Waiting for …";
+   the card fills with a Summary, an Areas table with "Model draft" and no radios, and a Where /
+   Revision / Rationale table. Download Markdown: `idea-book-patterns-<book>-<date>.md` ends with
+   both attributions and "The pattern review was drafted by <provider> on <date> and has not been
+   verified".
+6. Switch to OpenRouter with a key and select six or more chapters on Content: the book card's
+   button is disabled and the sentence names the token estimate and "OpenRouter accepts 100,000".
+   Deselect chapters until it enables. Nothing was sent while disabled (Network tab).
+7. On a chapter with no rating, note, edit, or draft, *Plan the revisions* is disabled with "Rate,
+   note, accept, or draft something first". Rate one row; the button enables. Send: the request
+   body (Network tab) contains the rating and no section text. The result shows a plan table sorted
+   by priority and student-facing drafts each with one *Copy* button and no Place. Press Copy; the
+   status line reads "Copied."; paste into a text editor.
+8. Export Rubric 1 for that chapter: a "## Revision plan" section follows the appendices and the
+   footer carries the second provenance sentence. Export the plan itself:
+   `idea-revision-plan-<chapter>-<date>.json` has `plan` and `studentText`.
+9. Reload the tab: the book and plan results are gone; ratings, notes, edits, and the key remain.
+   DevTools → IndexedDB → `idea.reviews`: no `bookDrafts`, no `planDrafts`, and `region` present.
+10. Leave the IDEA phase while a book send is in flight: the request is cancelled (Network tab).
+11. Settings panel: "Prompts follow OERI's *IDEA Framework Gen-AI Crosswalk Instructions* (CC BY
+    4.0)" with a link opening in a new tab.
