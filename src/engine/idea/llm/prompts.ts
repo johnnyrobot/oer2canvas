@@ -210,7 +210,11 @@ function appliedLine(a: AppliedEdit): string {
 function draftLine(f: IdeaFinding): string {
   if (f.kind === 'edit') return `- [${f.category}] "${f.original}" → "${f.replacement}"${f.rule?.note ? ` — ${f.rule.note}` : ''}`
   const c = f.columns
-  return `- [${f.category}] ${c.evidence ?? c.summary ?? c.response ?? ''}${c.suggestion ?? c.inference ? ` — ${c.suggestion ?? c.inference}` : ''}`
+  const seen = c.evidence ?? c.summary ?? c.response
+  const said = c.suggestion ?? c.inference
+  // Model drafts carry evidence/suggestion; anything else is listed column by column so nothing is silently dropped.
+  if (seen === undefined && said === undefined) return `- [${f.category}] ${Object.entries(c).map(([k, v]) => `${k}: ${v}`).join('; ')}`
+  return `- [${f.category}] ${seen ?? ''}${said ? ` — ${said}` : ''}`
 }
 
 /**

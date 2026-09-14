@@ -161,3 +161,11 @@ test('the plan prompt carries ratings, notes, applied edits, session drafts, and
   expect(p).toMatch(/"studentText"/)
   expect(p).toMatch(/in-page change|course-level supplement/)
 })
+
+test('a plan draft with no evidence/suggestion-like columns lists every column so nothing is dropped', () => {
+  const drafts = [
+    { kind: 'observation' as const, key: 's1::llm::7.3::0', category: '7.3' as const, sectionId: 's1', columns: { text: 'his', alternative: 'their', context: 'p. 3' }, origin: 'draft' as const },
+  ]
+  const p = planPrompt({ chapterTitle: '4: Nutrition', bookTitle: 'Human Biology', licence: 'CC BY 4.0', region: '', review: newReview(), applied: [], drafts }).map((x) => x.content).join('\n')
+  expect(p).toContain('text: his; alternative: their; context: p. 3')
+})
