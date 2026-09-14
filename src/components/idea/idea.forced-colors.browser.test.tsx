@@ -50,7 +50,7 @@ test('a book-level draft is set apart by a dashed border, not a colour', () => {
   const bookDrafts = new Map([['B', { draft: { summary: 's', areas: [], revisions: [] }, provider: 'Gemini', at: 1 }]])
   const llm = { ...props.llm, settings: { provider: 'gemini' as const, key: 'k', model: 'm' }, bookDrafts }
   render(<IdeaScreen chapters={[compiled, { ...compiled, chapter: { ...chapter, title: '5' } }]} {...props} llm={llm} />)
-  const card = screen.getByRole('region', { name: 'Across the chapters' })
+  const card = screen.getByRole('region', { name: /^Across the chapters/ })
   const draft = card.querySelector('.b2c-idea-draft')!
   expect(getComputedStyle(draft).borderTopStyle).toBe('dashed')
 })

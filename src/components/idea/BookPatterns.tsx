@@ -46,8 +46,10 @@ export function BookPatterns({
   const over = provider ? overCeiling(size.tokens, provider) : false
   const download = (format: 'md' | 'json') => onAnnounce(IDEA_COPY.export.done(onExport(format)))
   return (
-    <section aria-label={c.heading} className={CARD}>
-      <h2 className="m-0 text-base font-semibold">{c.heading}</h2>
+    <section aria-label={`${c.heading}: ${bookTitle}`} className={CARD}>
+      <h2 className="m-0 text-base font-semibold">
+        {c.heading} <span className="font-normal text-neutral-600 dark:text-neutral-400">— {bookTitle}</span>
+      </h2>
       <p className="m-0 text-sm text-neutral-700 dark:text-neutral-300">{c.intro}</p>
       {provider && (
         <p className="m-0 text-sm">

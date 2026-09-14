@@ -19,7 +19,7 @@ test('renders nothing with fewer than two chapters', () => {
 test('states the size, sends once on click, and names the provider', () => {
   const onSend = vi.fn()
   render(<BookPatterns {...base} chapters={[ch('a'), ch('b')]} onSend={onSend} />)
-  expect(screen.getByRole('region', { name: 'Across the chapters' })).toBeInTheDocument()
+  expect(screen.getByRole('region', { name: /^Across the chapters/ })).toBeInTheDocument()
   expect(screen.getByText(/This sends the text of 2 chapters \(about 6 words\)/)).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Send the book to OpenRouter' }))
   expect(onSend).toHaveBeenCalledTimes(1)

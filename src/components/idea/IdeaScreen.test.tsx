@@ -368,7 +368,7 @@ test('with two chapters of one book the Across-the-chapters card sends every cha
   const llm = { ...base.llm, settings: { provider: 'gemini' as const, key: 'k', model: 'm' }, runBook }
   const header = reduceHeader(newHeader(), { type: 'region', region: 'Central Valley' })
   const { rerender } = render(<IdeaScreen {...base} header={header} chapters={[withHtml('4: Nutrition', '<p id="a">a</p>'), withHtml('5: Digestion', '<p id="b">b</p>')]} llm={llm} />)
-  const card = screen.getByRole('region', { name: 'Across the chapters' })
+  const card = screen.getByRole('region', { name: /^Across the chapters/ })
   fireEvent.click(within(card).getByRole('button', { name: 'Send the book to Gemini' }))
   expect(runBook).toHaveBeenCalledTimes(1)
   const [title, chapters, region] = runBook.mock.calls[0]!
@@ -376,7 +376,7 @@ test('with two chapters of one book the Across-the-chapters card sends every cha
   expect(chapters.map((c: { chapterTitle: string }) => c.chapterTitle)).toEqual(['4: Nutrition', '5: Digestion'])
   expect(region).toBe('Central Valley')
   rerender(<IdeaScreen {...base} header={header} chapters={[withHtml('4: Nutrition', '<p id="a">a</p>')]} llm={llm} />)
-  expect(screen.queryByRole('region', { name: 'Across the chapters' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('region', { name: /^Across the chapters/ })).not.toBeInTheDocument()
   expect(screen.getByText(/stands on its own/)).toBeInTheDocument()
 })
 
@@ -389,11 +389,13 @@ test('one book card per book with two or more chapters; none, and the single sen
   const { rerender } = render(
     <IdeaScreen {...base} chapters={[withHtml('4: Nutrition', '<p id="a">a</p>'), withHtml('5: Digestion', '<p id="b">b</p>'), notes('Week 1')]} llm={llm} />,
   )
-  expect(screen.getAllByRole('region', { name: 'Across the chapters' })).toHaveLength(1)
+  const cards = screen.getAllByRole('region', { name: /^Across the chapters/ })
+  expect(cards).toHaveLength(1)
+  expect(cards[0]).toHaveAccessibleName(/Human Biology/)
   expect(screen.queryByText(/stands on its own/)).not.toBeInTheDocument()
 
   rerender(<IdeaScreen {...base} chapters={[withHtml('4: Nutrition', '<p id="a">a</p>'), notes('Week 1')]} llm={llm} />)
-  expect(screen.queryByRole('region', { name: 'Across the chapters' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('region', { name: /^Across the chapters/ })).not.toBeInTheDocument()
   expect(screen.getByText(/stands on its own/)).toBeInTheDocument()
 })
 
@@ -407,7 +409,7 @@ test('two qualifying books render two cards, each sending its own chapters', () 
   render(
     <IdeaScreen {...base} chapters={[withHtml('4: Nutrition', '<p id="a">a</p>'), notes('Week 1'), withHtml('5: Digestion', '<p id="b">b</p>'), notes('Week 2')]} llm={llm} />,
   )
-  const cards = screen.getAllByRole('region', { name: 'Across the chapters' })
+  const cards = screen.getAllByRole('region', { name: /^Across the chapters/ })
   expect(cards).toHaveLength(2)
   fireEvent.click(within(cards[1]!).getByRole('button', { name: 'Send the book to Gemini' }))
   expect(runBook).toHaveBeenCalledTimes(1)

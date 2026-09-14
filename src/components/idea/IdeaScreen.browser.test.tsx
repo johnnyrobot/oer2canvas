@@ -108,8 +108,31 @@ test('the book card and the plan card, with results rendered, have no WCAG A/AA 
   const { container } = render(
     <IdeaScreen chapters={[compiled, { ...compiled, chapter: { ...chapter, title: '5: Digestion' } }]} {...props} llm={llm} />,
   )
-  expect(screen.getByRole('region', { name: 'Across the chapters' })).toBeInTheDocument()
+  expect(screen.getByRole('region', { name: /^Across the chapters/ })).toBeInTheDocument()
   expect(screen.getByRole('region', { name: 'Plan the revisions' })).toBeInTheDocument()
+  expect(duplicateIds(container)).toEqual([])
+  expect(await violationsIn(container)).toEqual([])
+})
+
+test('two qualifying books give two book cards with distinct landmark names and no WCAG A/AA violations', async () => {
+  const notes = (title: string): CompiledChapter => ({
+    ...compiled,
+    chapter: { ...chapter, title, attribution: { ...chapter.attribution, bookTitle: 'Imported notes' } },
+    sections: [{ id: `${title}-s1`, title: 'S1', html: '<p>n</p>', notes: [], queue: [], gate: GATE }],
+  })
+  const llm = { ...props.llm, settings: { provider: 'gemini' as const, key: 'k', model: 'm' } }
+  const { container } = render(
+    <IdeaScreen chapters={[compiled, { ...compiled, chapter: { ...chapter, title: '5: Digestion' } }, notes('Week 1'), notes('Week 2')]} {...props} llm={llm} />,
+  )
+  // `landmark-unique` is an axe best-practice rule, outside the WCAG tag set
+  // `violationsIn` runs, so it is asked for by name: two regions with the same
+  // accessible name would fail it, and did before the title joined the label.
+  const unique = await axe.run(container, { runOnly: { type: 'rule', values: ['landmark-unique'] } })
+  expect(unique.violations.map((v) => v.id)).toEqual([])
+  const cards = screen.getAllByRole('region', { name: /^Across the chapters/ })
+  expect(cards).toHaveLength(2)
+  expect(cards[0]).toHaveAccessibleName('Across the chapters: Human Biology')
+  expect(cards[1]).toHaveAccessibleName('Across the chapters: Imported notes')
   expect(duplicateIds(container)).toEqual([])
   expect(await violationsIn(container)).toEqual([])
 })
