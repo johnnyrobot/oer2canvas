@@ -54,15 +54,15 @@ export function BookPatterns({
     <section aria-label={c.heading} className={CARD}>
       <h2 className="m-0 text-base font-semibold">{c.heading}</h2>
       <p className="m-0 text-sm text-neutral-700 dark:text-neutral-300">{c.intro}</p>
-      {provider && over && (
+      {provider && (
         <p className="m-0 text-sm">
-          {c.over(size.tokens, provider.label, provider.contextTokens)}
+          {over ? c.over(size.tokens, provider.label, provider.contextTokens) : c.size(chapters.length, size.words, provider.label)}
         </p>
       )}
       <AskModel
         provider={provider} state={state} firstRun={firstRun} onSend={onSend} onCancel={onCancel}
         {...(provider ? { label: c.send(provider.label) } : {})}
-        sends={IDEA_COPY.llm.book.size(chapters.length, size.words, provider?.label ?? '')}
+        sends={c.sends}
         disabled={over}
       />
       {stored && (

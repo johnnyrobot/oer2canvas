@@ -238,6 +238,7 @@ export const IDEA_COPY = {
       over: (tokens: number, provider: string, ceiling: number) =>
         `This is about ${tokens.toLocaleString()} tokens; ${provider} accepts ${ceiling.toLocaleString()}. Deselect chapters on Content to bring it under.`,
       send: (provider: string) => `Send the book to ${provider}`,
+      sends: 'What leaves your browser when you press the button: every prepared chapter of this book — its text and image descriptions — with your Rubric 1 ratings and notes and this session’s Rubric 1 drafts. Nothing is sent until you press it.',
       summary: 'Summary',
       areas: 'Areas',
       area: 'Area',
