@@ -1,7 +1,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { useModelRuns } from './useModelRuns'
+import { useModelRuns, bookRunKey, planRunKey } from './useModelRuns'
 import type { SectionInput } from '../../engine/idea/llm/prompts'
-import { LlmError } from '../../engine/idea/llm/client'
+import { complete as defaultComplete, LlmError } from '../../engine/idea/llm/client'
+import { newReview } from '../../engine/idea/review'
 
 const settings = { provider: 'openrouter' as const, key: 'k', model: 'm' }
 const input: SectionInput = { sectionId: 's1', sectionTitle: 'S', chapterTitle: 'C', text: 'The chairman spoke.', images: [], metadata: [] }
@@ -54,4 +55,54 @@ test('nothing runs without settings', () => {
   act(() => result.current.runCategory('ch', '7.2', input, html))
   expect(complete).not.toHaveBeenCalled()
   expect(result.current.runs.size).toBe(0)
+})
+
+const bookChapters = [{ chapterKey: 'ch', chapterTitle: 'C', review: newReview(), sections: [input] }]
+const planInput = { chapterTitle: 'C', bookTitle: 'B', licence: 'CC BY 4.0', region: '', review: newReview(), applied: [], drafts: [] }
+
+test('runBook posts once with the long timeout and stores the draft by book title with provenance', async () => {
+  const complete = vi.fn<typeof defaultComplete>(async () => ({ text: JSON.stringify({ summary: 's', areas: [{ area: '7.1', rating: 'Inclusive', notes: 'n' }], revisions: [] }) }))
+  const { result } = renderHook(() => useModelRuns({ settings, deps: { complete } }))
+  act(() => result.current.runBook('Human Biology', bookChapters, ''))
+  expect(result.current.runs.get(bookRunKey('Human Biology'))?.status).toBe('running')
+  await waitFor(() => expect(result.current.runs.get(bookRunKey('Human Biology'))?.status).toBe('done'))
+  expect(complete).toHaveBeenCalledTimes(1)
+  expect(complete.mock.calls[0]![4]).toMatchObject({ timeoutMs: 180_000 })
+  const stored = result.current.bookDrafts.get('Human Biology')!
+  expect(stored.draft.areas).toEqual([{ area: '7.1', rating: 'inclusive', notes: 'n' }])
+  expect(stored.provider).toBe('OpenRouter')
+  expect(stored.at).toBeGreaterThan(0)
+})
+
+test('runBook refuses a prompt over the provider ceiling without calling', () => {
+  const complete = vi.fn()
+  const { result } = renderHook(() => useModelRuns({ settings, deps: { complete } }))
+  const huge = [{ ...bookChapters[0]!, sections: [{ ...input, text: 'x'.repeat(100_000 * 4 + 1) }] }]
+  act(() => result.current.runBook('Big', huge, ''))
+  expect(complete).not.toHaveBeenCalled()
+  expect(result.current.runs.get(bookRunKey('Big'))).toBeUndefined()
+})
+
+test('runPlan stores the plan by chapter key; a prose reply fails the run', async () => {
+  const complete = vi.fn(async () => ({ text: JSON.stringify({ plan: [{ priority: 1, where: 'w', issue: 'i', revision: 'r', rationale: 'y', licence: 'l' }], studentText: [] }) }))
+  const { result } = renderHook(() => useModelRuns({ settings, deps: { complete } }))
+  act(() => result.current.runPlan('ch', planInput))
+  await waitFor(() => expect(result.current.planDrafts.get('ch')?.draft.plan).toHaveLength(1))
+  expect(result.current.runs.get(planRunKey('ch'))?.status).toBe('done')
+
+  const prose = vi.fn(async () => ({ text: 'Sure, here is a plan.' }))
+  const second = renderHook(() => useModelRuns({ settings, deps: { complete: prose } }))
+  act(() => second.result.current.runPlan('ch', planInput))
+  await waitFor(() => expect(second.result.current.runs.get(planRunKey('ch'))?.status).toBe('failed'))
+  expect(second.result.current.planDrafts.has('ch')).toBe(false)
+})
+
+test('unmount aborts a book run in flight', () => {
+  let signal: AbortSignal | undefined
+  const complete = vi.fn((_p: unknown, _s: unknown, _m: unknown, s: AbortSignal) => { signal = s; return new Promise<{ text: string }>(() => {}) })
+  const { result, unmount } = renderHook(() => useModelRuns({ settings, deps: { complete: complete as never } }))
+  act(() => result.current.runBook('B', bookChapters, ''))
+  expect(signal?.aborted).toBe(false)
+  unmount()
+  expect(signal?.aborted).toBe(true)
 })
