@@ -15,9 +15,10 @@ slice; the design is in `IDEA_REVIEW_SPEC.md`.
   and it is refused, never truncated, above the provider's ceiling) and a **per-chapter plan send**
   (*Plan the revisions*: this chapter's ratings, notes, applied edits, and this session's undecided
   drafts — no section text). These two clicks are the only ones that send the instructor's own
-  words. Neither result is stored; the downloads are the record, and the plan's instructor list
-  also goes into the chapter's Rubric 1 file when one exists at export time. The region-served
-  field, if filled, goes into the 7.4, book, and plan prompts and into no export.
+  words, apart from the region-served field, which, if filled, also goes into the per-section 7.4
+  send (and into the book and plan prompts, and into no export). Neither result is stored; the
+  downloads are the record, and the plan's instructor list also goes into the chapter's Rubric 1
+  file when one exists at export time.
 - **Storage:** the review (ratings, checklist answers, notes, summary, suggestions, per chapter),
   the assessor, and the benchmark are written to the app's IndexedDB database
   (`oer2canvas`, key `idea.reviews`) on this device, debounced after each change. They are read

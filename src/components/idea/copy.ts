@@ -209,6 +209,7 @@ export const IDEA_COPY = {
       'model-not-found': 'The provider does not know this model name. Check it in the settings above.',
       'rate-limited': 'The provider is rate-limiting this key.',
       unreachable: 'The provider could not be reached from this browser.',
+      unreadable: 'The provider answered, but not in the shape this app can read. Send again.',
       timeout: 'The provider did not answer in time.',
       aborted: 'Cancelled.',
     } as const,
@@ -232,7 +233,7 @@ export const IDEA_COPY = {
     book: {
       heading: 'Across the chapters',
       intro: 'OERI’s Crosswalk ends with a chapter-level pattern review: which areas are consistently strong, inconsistently applied, or mostly unmet across the book, and what to revise first.',
-      single: 'With one chapter prepared, the Rubric 1 draft above is the whole book. Prepare more chapters on Content to compare across them.',
+      single: 'No book in this selection has two or more chapters prepared, so each chapter’s Rubric 1 draft stands on its own. Prepare more chapters of one book on Content to compare across them.',
       size: (n: number, words: number, provider: string) =>
         `This sends the text of ${n} chapters (about ${words.toLocaleString()} words) and each chapter’s Rubric 1 ratings and notes to ${provider}.`,
       over: (tokens: number, provider: string, ceiling: number) =>
@@ -270,6 +271,7 @@ export const IDEA_COPY = {
       purpose: 'Purpose',
       copy: 'Copy',
       copied: 'Copied.',
+      copyFailed: 'Could not copy. Select the text and copy it by hand.',
       howToUse: 'To use one: paste it through Edit… on a finding, or through the Text tab on a re-import. Nothing here is placed for you.',
       unverified: 'Model draft, unverified.',
       markdown: 'Download plan (Markdown)',

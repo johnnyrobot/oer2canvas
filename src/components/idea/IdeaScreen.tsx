@@ -266,8 +266,8 @@ export function IdeaScreen({
   const rubricRun = llm.runs.get(rubricRunKey(key)) ?? IDLE
   const rubricDraft = llm.rubricDrafts.get(key)
   const bookTitle = current.chapter.attribution.bookTitle
-  const bookChapters = books.get(bookTitle) ?? []
-  const bookState = llm.runs.get(bookRunKey(bookTitle)) ?? IDLE
+  /** Spec §3.4: one card per book with two or more chapters prepared, in selection order. */
+  const qualifyingBooks = [...books.entries()].filter(([, chs]) => chs.length >= 2)
   const planState = llm.runs.get(planRunKey(key)) ?? IDLE
   /** This session's undecided drafts for this chapter, every category. */
   const sessionDrafts: IdeaFinding[] = current.sections.flatMap((s) =>
@@ -384,16 +384,17 @@ export function IdeaScreen({
     <div className="flex w-full flex-col gap-4">
       <p className="m-0 text-sm text-neutral-700 dark:text-neutral-300">{IDEA_COPY.intro}</p>
 
-      {bookChapters.length >= 2 ? (
+      {qualifyingBooks.length > 0 ? qualifyingBooks.map(([title, bookChapters]) => (
         <BookPatterns
-          bookTitle={bookTitle} chapters={bookChapters} region={header.region} provider={provider} state={bookState}
-          stored={llm.bookDrafts.get(bookTitle)} firstRun={firstRun}
-          onSend={() => llm.runBook(bookTitle, bookChapters, header.region)}
-          onCancel={() => llm.cancel(bookRunKey(bookTitle))}
-          onExport={(format) => llm.exportBook(bookTitle, format)}
+          key={title}
+          bookTitle={title} chapters={bookChapters} region={header.region} provider={provider} state={llm.runs.get(bookRunKey(title)) ?? IDLE}
+          stored={llm.bookDrafts.get(title)} firstRun={firstRun}
+          onSend={() => llm.runBook(title, bookChapters, header.region)}
+          onCancel={() => llm.cancel(bookRunKey(title))}
+          onExport={(format) => llm.exportBook(title, format)}
           onAnnounce={setStatus}
         />
-      ) : (
+      )) : (
         <p className="m-0 text-sm text-neutral-700 dark:text-neutral-300">{IDEA_COPY.llm.book.single}</p>
       )}
 

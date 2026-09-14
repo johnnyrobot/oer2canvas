@@ -41,3 +41,12 @@ test('a result renders the plan sorted by priority, student drafts with Copy onl
   fireEvent.click(screen.getByRole('button', { name: 'Download plan (JSON)' }))
   expect(base.onExport).toHaveBeenCalledWith('json')
 })
+
+test('a rejected clipboard write announces that the copy failed', async () => {
+  const stored = { draft: { plan: [], studentText: [{ where: '4.1', purpose: 'framing', text: 'Before reading…' }] }, provider: 'Gemini', at: 1 }
+  const writeText = vi.fn(async () => { throw new Error('denied') })
+  const onAnnounce = vi.fn()
+  render(<RevisionPlan {...base} state={{ status: 'done', findings: [], at: 1 }} stored={stored} writeText={writeText} onAnnounce={onAnnounce} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
+  await waitFor(() => expect(onAnnounce).toHaveBeenCalledWith('Could not copy. Select the text and copy it by hand.'))
+})

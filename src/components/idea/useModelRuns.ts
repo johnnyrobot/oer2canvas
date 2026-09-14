@@ -100,7 +100,7 @@ export function useModelRuns({ settings, deps = { complete: defaultComplete } }:
       const { text } = await deps.complete(provider, settings, messages, signal, { timeoutMs: BOOK_TIMEOUT_MS })
       if (signal.aborted) return
       let draft: BookDraft
-      try { draft = parseBookResponse(text) } catch { throw new LlmError('unreachable', UNREADABLE) }
+      try { draft = parseBookResponse(text) } catch { throw new LlmError('unreadable', UNREADABLE) }
       setBookDrafts((m) => { const n = new Map(m); n.set(bookTitle, { draft, provider: provider.label, at: Date.now() }); return n })
       set(key, { status: 'done', findings: [], at: Date.now() })
     })
@@ -114,7 +114,7 @@ export function useModelRuns({ settings, deps = { complete: defaultComplete } }:
       const { text } = await deps.complete(provider, settings, planPrompt(input), signal)
       if (signal.aborted) return
       let draft: PlanDraft
-      try { draft = parsePlanResponse(text) } catch { throw new LlmError('unreachable', UNREADABLE) }
+      try { draft = parsePlanResponse(text) } catch { throw new LlmError('unreadable', UNREADABLE) }
       setPlanDrafts((m) => { const n = new Map(m); n.set(chapterKey, { draft, provider: provider.label, at: Date.now() }); return n })
       set(key, { status: 'done', findings: [], at: Date.now() })
     })

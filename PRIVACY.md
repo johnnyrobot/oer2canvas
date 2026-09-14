@@ -62,8 +62,9 @@ and the panel says so. Drafts the model returns are shown as drafts; none is app
 unless you accept it, and no rating is ever taken from a model. Two further buttons send more:
 "Send the book to <provider>" sends every prepared chapter's text together with your own Rubric 1
 ratings and notes, and "Draft a revision plan with <provider>" sends a chapter's ratings, notes,
-and the edits you applied (not its text); these are the only two actions that send words you
-typed, and neither result is stored anywhere but the file you download.
+the edits you applied, and this session’s undecided drafts (not its text); these are the only two
+actions that send words you typed, apart from the optional region you may enter, which also goes
+into the per-section 7.4 send, and neither result is stored anywhere but the file you download.
 
 The IDEA review's image search sends **only the words you type** from your browser to Wikimedia
 Commons (`commons.wikimedia.org`) and to Openverse (`api.openverse.org`), without any account or

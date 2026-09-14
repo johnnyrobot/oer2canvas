@@ -94,6 +94,7 @@ test('runPlan stores the plan by chapter key; a prose reply fails the run', asyn
   const second = renderHook(() => useModelRuns({ settings, deps: { complete: prose } }))
   act(() => second.result.current.runPlan('ch', planInput))
   await waitFor(() => expect(second.result.current.runs.get(planRunKey('ch'))?.status).toBe('failed'))
+  expect(second.result.current.runs.get(planRunKey('ch'))).toMatchObject({ failure: 'unreadable' })
   expect(second.result.current.planDrafts.has('ch')).toBe(false)
 })
 

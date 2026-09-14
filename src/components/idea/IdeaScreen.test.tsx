@@ -377,7 +377,42 @@ test('with two chapters of one book the Across-the-chapters card sends every cha
   expect(region).toBe('Central Valley')
   rerender(<IdeaScreen {...base} header={header} chapters={[withHtml('4: Nutrition', '<p id="a">a</p>')]} llm={llm} />)
   expect(screen.queryByRole('region', { name: 'Across the chapters' })).not.toBeInTheDocument()
-  expect(screen.getByText(/the Rubric 1 draft above is the whole book/)).toBeInTheDocument()
+  expect(screen.getByText(/stands on its own/)).toBeInTheDocument()
+})
+
+test('one book card per book with two or more chapters; none, and the single sentence, when no book qualifies', () => {
+  const llm = { ...base.llm, settings: { provider: 'gemini' as const, key: 'k', model: 'm' } }
+  const notes = (title: string): CompiledChapter => {
+    const c = withHtml(title, '<p id="n">n</p>')
+    return { ...c, chapter: { ...c.chapter, attribution: { ...c.chapter.attribution, bookTitle: 'Imported notes' } } }
+  }
+  const { rerender } = render(
+    <IdeaScreen {...base} chapters={[withHtml('4: Nutrition', '<p id="a">a</p>'), withHtml('5: Digestion', '<p id="b">b</p>'), notes('Week 1')]} llm={llm} />,
+  )
+  expect(screen.getAllByRole('region', { name: 'Across the chapters' })).toHaveLength(1)
+  expect(screen.queryByText(/stands on its own/)).not.toBeInTheDocument()
+
+  rerender(<IdeaScreen {...base} chapters={[withHtml('4: Nutrition', '<p id="a">a</p>'), notes('Week 1')]} llm={llm} />)
+  expect(screen.queryByRole('region', { name: 'Across the chapters' })).not.toBeInTheDocument()
+  expect(screen.getByText(/stands on its own/)).toBeInTheDocument()
+})
+
+test('two qualifying books render two cards, each sending its own chapters', () => {
+  const runBook = vi.fn()
+  const llm = { ...base.llm, settings: { provider: 'gemini' as const, key: 'k', model: 'm' }, runBook }
+  const notes = (title: string): CompiledChapter => {
+    const c = withHtml(title, '<p id="n">n</p>')
+    return { ...c, chapter: { ...c.chapter, attribution: { ...c.chapter.attribution, bookTitle: 'Imported notes' } } }
+  }
+  render(
+    <IdeaScreen {...base} chapters={[withHtml('4: Nutrition', '<p id="a">a</p>'), notes('Week 1'), withHtml('5: Digestion', '<p id="b">b</p>'), notes('Week 2')]} llm={llm} />,
+  )
+  const cards = screen.getAllByRole('region', { name: 'Across the chapters' })
+  expect(cards).toHaveLength(2)
+  fireEvent.click(within(cards[1]!).getByRole('button', { name: 'Send the book to Gemini' }))
+  expect(runBook).toHaveBeenCalledTimes(1)
+  expect(runBook.mock.calls[0]![0]).toBe('Imported notes')
+  expect(runBook.mock.calls[0]![1].map((c: { chapterTitle: string }) => c.chapterTitle)).toEqual(['Week 1', 'Week 2'])
 })
 
 test('the plan card is disabled until the chapter has something reviewed, then sends this chapter’s key with ratings, applied edits, and the licence', () => {

@@ -31,9 +31,9 @@ credential, revoke it in Canvas immediately and mention only that it was revoked
   this device only), because the IDEA review spans sessions; `Forget key` removes it. A stored
   setting naming a provider the app no longer offers is loaded as no setting at all. The
   provider list is fixed at build time from a measured CORS probe; the app cannot be pointed at
-  an arbitrary model host. The whole-book request is bounded by a per-provider size ceiling
-  (`LlmProvider.contextTokens`) and refused above it rather than truncated, so the app cannot
-  build a request larger than the provider accepts; no new host and no new storage are involved.
+  an arbitrary model host. The whole-book request is bounded by a per-provider estimate (four
+  characters per token against `LlmProvider.contextTokens`) and refused above it rather than
+  truncated; no new host and no new storage are involved.
 - The IDEA review's image search sends only the query text, without credentials, to
   `commons.wikimedia.org` and `api.openverse.org` on a click, and fetches a chosen image's bytes
   from the host the result names. Fetched bytes go through the same sniff, hash, and naming path

@@ -33,7 +33,7 @@ export function RevisionPlan({
 }) {
   const c = IDEA_COPY.llm.plan
   const download = (format: 'md' | 'json') => onAnnounce(IDEA_COPY.export.done(onExport(format)))
-  const copy = (text: string) => { void writeText(text).then(() => onAnnounce(c.copied)).catch(() => {}) }
+  const copy = (text: string) => { void writeText(text).then(() => onAnnounce(c.copied)).catch(() => onAnnounce(c.copyFailed)) }
   const plan = stored ? [...stored.draft.plan].sort((a, b) => a.priority - b.priority) : []
   return (
     <section aria-label={c.heading} className={CARD}>

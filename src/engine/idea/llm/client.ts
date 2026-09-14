@@ -6,7 +6,7 @@
  */
 import type { LlmProvider } from './providers'
 
-export type LlmFailure = 'bad-key' | 'model-not-found' | 'rate-limited' | 'unreachable' | 'timeout' | 'aborted'
+export type LlmFailure = 'bad-key' | 'model-not-found' | 'rate-limited' | 'unreachable' | 'unreadable' | 'timeout' | 'aborted'
 
 export class LlmError extends Error {
   constructor(public readonly failure: LlmFailure, message: string, public readonly retryAfterSeconds?: number) {
