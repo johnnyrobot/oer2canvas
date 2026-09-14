@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import axe from 'axe-core'
 import { IdeaScreen } from './IdeaScreen'
+import { reviewKeyOf } from './useIdeaReviews'
 import { newHeader } from '../../engine/idea/review'
 import type { CompiledChapter, CompiledSection } from '../../contracts/index'
 import type { Chapter } from '../../sources/types'
@@ -48,7 +49,7 @@ const commons: ImageSearch = { id: 'commons', label: 'Wikimedia Commons', offere
 const props = {
   reviews: new Map(), header: newHeader(), onEvent: () => {}, onHeaderEvent: () => {}, onForget: () => {}, onExport: () => 'x.md',
   edits: new Map(), pending: new Set<string>(), onEditEvent: () => {},
-  llm: { settings: undefined, onSave: () => {}, onForget: () => {}, runs: new Map(), rubricDrafts: new Map(), runCategory: () => {}, runRubric: () => {}, cancel: () => {} },
+  llm: { settings: undefined, onSave: () => {}, onForget: () => {}, runs: new Map(), rubricDrafts: new Map(), runCategory: () => {}, runRubric: () => {}, cancel: () => {}, bookDrafts: new Map(), planDrafts: new Map(), runBook: () => {}, runPlan: () => {}, exportBook: () => 'x.md', exportPlan: () => 'x.md' },
   image: { add: async () => true, busy: false, error: '' },
 }
 
@@ -97,4 +98,18 @@ test('every non-inline control meets the 24x24 target floor', () => {
     const box = target.getBoundingClientRect()
     expect(Math.min(box.width, box.height), (el as HTMLElement).outerHTML.slice(0, 80)).toBeGreaterThanOrEqual(24)
   }
+})
+
+test('the book card and the plan card, with results rendered, have no WCAG A/AA violations', async () => {
+  const key = reviewKeyOf(chapter)
+  const bookDrafts = new Map([['Human Biology', { draft: { summary: 'Weak on 7.4.', areas: [{ area: '7.4' as const, rating: 'exclusive' as const, notes: 'few' }], revisions: [{ where: 'Ch 5', revision: 'cite', rationale: 'why' }] }, provider: 'Gemini', at: 1 }]])
+  const planDrafts = new Map([[key, { draft: { plan: [{ priority: 1 as const, where: 'a', issue: 'i', revision: 'r', rationale: 'y', licence: 'in-page' }], studentText: [{ where: 'a', purpose: 'framing', text: 'Note…' }] }, provider: 'Gemini', at: 1 }]])
+  const llm = { ...props.llm, settings: { provider: 'gemini' as const, key: 'k', model: 'm' }, bookDrafts, planDrafts }
+  const { container } = render(
+    <IdeaScreen chapters={[compiled, { ...compiled, chapter: { ...chapter, title: '5: Digestion' } }]} {...props} llm={llm} />,
+  )
+  expect(screen.getByRole('region', { name: 'Across the chapters' })).toBeInTheDocument()
+  expect(screen.getByRole('region', { name: 'Plan the revisions' })).toBeInTheDocument()
+  expect(duplicateIds(container)).toEqual([])
+  expect(await violationsIn(container)).toEqual([])
 })

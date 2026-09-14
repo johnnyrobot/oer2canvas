@@ -12,12 +12,7 @@ import type { PlanDraft } from '../../engine/idea/llm/parse'
 import { AskModel } from './AskModel'
 import type { RunState, StoredDraft } from './useModelRuns'
 import { IDEA_COPY } from './copy'
-import { PRIMARY, QUIET } from './styles'
-
-const CARD = 'flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900'
-const TABLE = 'w-full border-collapse text-sm'
-const TH = 'border-b border-neutral-300 py-1 pr-3 text-left font-semibold dark:border-neutral-700'
-const TD = 'border-b border-neutral-200 py-1 pr-3 align-top dark:border-neutral-800'
+import { CARD, PRIMARY, QUIET, TABLE, TD, TH } from './styles'
 
 export function RevisionPlan({
   provider, state, stored, firstRun, canPlan, onSend, onCancel, onExport, onAnnounce,

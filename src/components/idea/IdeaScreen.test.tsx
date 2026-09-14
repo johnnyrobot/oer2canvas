@@ -38,6 +38,7 @@ const imageStub = { add: vi.fn(async () => true), busy: false, error: '' }
 const llmStub = {
   settings: undefined, onSave: () => {}, onForget: () => {}, runs: new Map(), rubricDrafts: new Map(),
   runCategory: () => {}, runRubric: () => {}, cancel: () => {},
+  bookDrafts: new Map(), planDrafts: new Map(), runBook: () => {}, runPlan: () => {}, exportBook: () => 'x.md', exportPlan: () => 'x.md',
 }
 
 function renderScreen({
@@ -360,4 +361,59 @@ test('the 7.7.1 button runs the 7.7.1 category once per section', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Draft: chapter summaries and key concepts (Gemini)' }))
   expect(runCategory).toHaveBeenCalledTimes(1)
   expect(runCategory.mock.calls[0]![1]).toBe('7.7.1')
+})
+
+test('with two chapters of one book the Across-the-chapters card sends every chapter under the book title; with one it is a sentence', () => {
+  const runBook = vi.fn()
+  const llm = { ...base.llm, settings: { provider: 'gemini' as const, key: 'k', model: 'm' }, runBook }
+  const header = reduceHeader(newHeader(), { type: 'region', region: 'Central Valley' })
+  const { rerender } = render(<IdeaScreen {...base} header={header} chapters={[withHtml('4: Nutrition', '<p id="a">a</p>'), withHtml('5: Digestion', '<p id="b">b</p>')]} llm={llm} />)
+  const card = screen.getByRole('region', { name: 'Across the chapters' })
+  fireEvent.click(within(card).getByRole('button', { name: 'Send the book to Gemini' }))
+  expect(runBook).toHaveBeenCalledTimes(1)
+  const [title, chapters, region] = runBook.mock.calls[0]!
+  expect(title).toBe('Human Biology')
+  expect(chapters.map((c: { chapterTitle: string }) => c.chapterTitle)).toEqual(['4: Nutrition', '5: Digestion'])
+  expect(region).toBe('Central Valley')
+  rerender(<IdeaScreen {...base} header={header} chapters={[withHtml('4: Nutrition', '<p id="a">a</p>')]} llm={llm} />)
+  expect(screen.queryByRole('region', { name: 'Across the chapters' })).not.toBeInTheDocument()
+  expect(screen.getByText(/the Rubric 1 draft above is the whole book/)).toBeInTheDocument()
+})
+
+test('the plan card is disabled until the chapter has something reviewed, then sends this chapter’s key with ratings, applied edits, and the licence', () => {
+  const runPlan = vi.fn()
+  const c = withHtml('4: Nutrition', '<p id="b2c-blk-0">He suffers from asthma.</p>')
+  const key = reviewKeyOf(chapter('4: Nutrition'))
+  const llm = { ...base.llm, settings: { provider: 'gemini' as const, key: 'k', model: 'm' }, runPlan }
+  const { rerender } = render(<IdeaScreen {...base} chapters={[c]} llm={llm} />)
+  const card = () => screen.getByRole('region', { name: 'Plan the revisions' })
+  expect(within(card()).getByRole('button', { name: 'Draft a revision plan with Gemini' })).toBeDisabled()
+  const reviews = new Map([[key, reduceReview(newReview(), { type: 'rate', categoryId: '7.6', rowId: '7.6.a', rating: 'exclusive' })]])
+  const editKey = ideaEditKey('4: Nutrition-s1', 'b2c-blk-0', 0, 'suffers from')
+  const edits = new Map<string, IdeaEdits>([[key, reduceEdits(newEdits(), { type: 'replace', key: editKey, replacement: 'has', category: '7.6' })]])
+  rerender(<IdeaScreen {...base} chapters={[c]} llm={llm} reviews={reviews} edits={edits} />)
+  fireEvent.click(within(card()).getByRole('button', { name: 'Draft a revision plan with Gemini' }))
+  expect(runPlan).toHaveBeenCalledTimes(1)
+  const [k, input] = runPlan.mock.calls[0]!
+  expect(k).toBe(key)
+  expect(input.chapterTitle).toBe('4: Nutrition')
+  expect(input.licence).toBe('not stated')
+  expect(input.review.categories['7.6'].ratings.get('7.6.a')).toBe('exclusive')
+  expect(input.applied).toHaveLength(1)
+  expect(JSON.stringify(input)).not.toContain('suffers from asthma.')
+})
+
+test('book and plan downloads go through the injected exporters and announce', () => {
+  const exportBook = vi.fn(() => 'idea-book-patterns-human-biology-2026-09-13.md')
+  const exportPlan = vi.fn(() => 'idea-revision-plan-4-nutrition-2026-09-13.json')
+  const key = reviewKeyOf(chapter('4: Nutrition'))
+  const bookDrafts = new Map([['Human Biology', { draft: { summary: 's', areas: [], revisions: [] }, provider: 'Gemini', at: 1 }]])
+  const planDrafts = new Map([[key, { draft: { plan: [], studentText: [] }, provider: 'Gemini', at: 1 }]])
+  const llm = { ...base.llm, settings: { provider: 'gemini' as const, key: 'k', model: 'm' }, bookDrafts, planDrafts, exportBook, exportPlan }
+  render(<IdeaScreen {...base} chapters={[withHtml('4: Nutrition', '<p id="a">a</p>'), withHtml('5: Digestion', '<p id="b">b</p>')]} llm={llm} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Download patterns (Markdown)' }))
+  expect(exportBook).toHaveBeenCalledWith('Human Biology', 'md')
+  expect(screen.getByRole('status')).toHaveTextContent('Downloaded idea-book-patterns-human-biology-2026-09-13.md.')
+  fireEvent.click(screen.getByRole('button', { name: 'Download plan (JSON)' }))
+  expect(exportPlan).toHaveBeenCalledWith(key, 'json')
 })

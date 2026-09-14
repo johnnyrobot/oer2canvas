@@ -16,12 +16,7 @@ import { overCeiling, promptTokens, wordCount } from '../../engine/idea/llm/size
 import { AskModel } from './AskModel'
 import type { RunState, StoredDraft } from './useModelRuns'
 import { IDEA_COPY, RATING_COPY } from './copy'
-import { PRIMARY } from './styles'
-
-const CARD = 'flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900'
-const TABLE = 'w-full border-collapse text-sm'
-const TH = 'border-b border-neutral-300 py-1 pr-3 text-left font-semibold dark:border-neutral-700'
-const TD = 'border-b border-neutral-200 py-1 pr-3 align-top dark:border-neutral-800'
+import { CARD, PRIMARY, TABLE, TD, TH } from './styles'
 
 export function BookPatterns({
   bookTitle, chapters, region, provider, state, stored, firstRun, onSend, onCancel, onExport, onAnnounce,

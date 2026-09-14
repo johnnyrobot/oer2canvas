@@ -53,6 +53,8 @@ import { createLlmSettingsStore } from './engine/idea/llm/settings'
 import { ratedCount } from './engine/idea/review'
 import { IDEA_CATEGORY_IDS } from './engine/idea/framework'
 import { rubric1Filename, rubric1Json, rubric1Markdown } from './engine/idea/rubric-export'
+import { bookPatternsFilename, bookPatternsJson, bookPatternsMarkdown } from './engine/idea/book-export'
+import { planFilename, planJson, planMarkdown } from './engine/idea/plan-export'
 import { appliedEdits } from './engine/idea/applied'
 import { downloadTextFile } from './engine/idea/download'
 import { ideaSummary } from './shell/phases'
@@ -769,10 +771,46 @@ export default function App() {
         (compiled?.sections ?? []).map((s) => ({ id: s.id, title: s.title, html: auditedHtml(s) })),
         ideaReviews.editsFor(key),
       ),
+      // Spec §4.3(a): the instructor-facing plan travels with the chapter's rubric when one exists.
+      ...(modelRuns.planDrafts.get(key)
+        ? { plan: { items: modelRuns.planDrafts.get(key)!.draft.plan, provenance: { provider: modelRuns.planDrafts.get(key)!.provider, draftedAt: new Date(modelRuns.planDrafts.get(key)!.at) } } }
+        : {}),
     }
     const name = rubric1Filename(chapterTitle, ctx.exportedAt, format)
     if (format === 'md') downloadTextFile(name, rubric1Markdown(review, ideaReviews.header, ctx), 'text/markdown')
     else downloadTextFile(name, JSON.stringify(rubric1Json(review, ideaReviews.header, ctx), null, 2), 'application/json')
+    return name
+  }
+
+  /** The book-level pattern review as a file. Download only; nothing here is stored or packaged. */
+  function exportBook(bookTitle: string, format: 'md' | 'json'): string {
+    const stored = modelRuns.bookDrafts.get(bookTitle)
+    if (!stored) return ''
+    const ctx = {
+      bookTitle,
+      chapterTitles: prepared.filter((c) => c.chapter.attribution.bookTitle === bookTitle).map((c) => c.chapter.title),
+      header: ideaReviews.header, exportedAt: new Date(),
+      provenance: { provider: stored.provider, draftedAt: new Date(stored.at) },
+    }
+    const name = bookPatternsFilename(bookTitle, ctx.exportedAt, format)
+    if (format === 'md') downloadTextFile(name, bookPatternsMarkdown(stored.draft, ctx), 'text/markdown')
+    else downloadTextFile(name, JSON.stringify(bookPatternsJson(stored.draft, ctx), null, 2), 'application/json')
+    return name
+  }
+
+  /** The revision plan as a file, both lists. Download only. */
+  function exportPlan(key: string, format: 'md' | 'json'): string {
+    const stored = modelRuns.planDrafts.get(key)
+    const compiled = prepared.find((c) => reviewKeyOf(c.chapter) === key)
+    if (!stored || !compiled) return ''
+    const ctx = {
+      bookTitle: compiled.chapter.attribution.bookTitle, chapterTitle: compiled.chapter.title,
+      header: ideaReviews.header, exportedAt: new Date(),
+      provenance: { provider: stored.provider, draftedAt: new Date(stored.at) },
+    }
+    const name = planFilename(compiled.chapter.title, ctx.exportedAt, format)
+    if (format === 'md') downloadTextFile(name, planMarkdown(stored.draft, ctx), 'text/markdown')
+    else downloadTextFile(name, JSON.stringify(planJson(stored.draft, ctx), null, 2), 'application/json')
     return name
   }
 
@@ -997,7 +1035,7 @@ export default function App() {
           edits={ideaReviews.edits}
           onEditEvent={ideaReviews.dispatchEdit}
           pending={ideaPending}
-          llm={{ settings: llm.settings, onSave: llm.save, onForget: llm.forget, ...modelRuns }}
+          llm={{ settings: llm.settings, onSave: llm.save, onForget: llm.forget, ...modelRuns, exportBook, exportPlan }}
           image={addImage}
         />
       )}

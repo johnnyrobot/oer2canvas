@@ -25,6 +25,10 @@
  * came from (or the first section, from the Find button) and hands the
  * choice to App's `onAddImage`; the fetch, the asset, and the edit are
  * App's, because the chapter's asset list is.
+ *
+ * Crosswalk completion: the book card above the picker and the plan card
+ * after Summary and Suggestions. Both are draft-only; neither result is
+ * stored.
  */
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Download, Trash2 } from 'lucide-react'
@@ -45,25 +49,27 @@ import { imageInventory } from '../../engine/idea/images'
 import { metadataInventory } from '../../engine/idea/metadata'
 import { providerById } from '../../engine/idea/llm/providers'
 import type { LlmSettings } from '../../engine/idea/llm/settings'
-import { DRAFTABLE, sectionText, type DraftableCategory, type SectionInput } from '../../engine/idea/llm/prompts'
-import type { RubricDraft } from '../../engine/idea/llm/parse'
+import {
+  DRAFTABLE, sectionText, type BookChapterInput, type DraftableCategory, type PlanInput, type SectionInput,
+} from '../../engine/idea/llm/prompts'
+import type { BookDraft, PlanDraft, RubricDraft } from '../../engine/idea/llm/parse'
 import type { IdeaFinding } from '../../engine/idea/findings'
 import { CategoryPanel } from './CategoryPanel'
 import { RunFailure } from './AskModel'
 import { LlmSettingsPanel } from './LlmSettingsPanel'
 import { ImageSearch } from './ImageSearch'
 import { PlaceImageDialog, type PlacementOption } from './PlaceImageDialog'
+import { BookPatterns } from './BookPatterns'
+import { RevisionPlan } from './RevisionPlan'
 import type { AddImageRequest } from './useAddImage'
-import { rubricRunKey, runKey, type RunState } from './useModelRuns'
+import { bookRunKey, planRunKey, rubricRunKey, runKey, type RunState, type StoredDraft } from './useModelRuns'
 import { IDEA_COPY } from './copy'
 import { categoryById } from '../../engine/idea/framework'
 import { reviewKeyOf } from './useIdeaReviews'
-import { FIELD, TARGET } from './styles'
+import { CARD, FIELD, TARGET } from './styles'
 
 const AREA =
   'rounded-md border border-neutral-300 bg-white p-2 text-sm dark:border-neutral-700 dark:bg-neutral-950'
-const CARD =
-  'flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900'
 const BUTTON =
   `${TARGET} inline-flex items-center gap-2 rounded-md border px-3 text-sm`
 const PRIMARY = `${BUTTON} border-brand-700 bg-brand-700 text-white`
@@ -85,9 +91,16 @@ export interface IdeaLlmProps {
   onForget: () => void
   runs: ReadonlyMap<string, RunState>
   rubricDrafts: ReadonlyMap<string, RubricDraft>
+  bookDrafts: ReadonlyMap<string, StoredDraft<BookDraft>>
+  planDrafts: ReadonlyMap<string, StoredDraft<PlanDraft>>
   runCategory: (chapterKey: string, category: DraftableCategory, input: SectionInput, html: string) => void
   runRubric: (chapterKey: string, chapterTitle: string, sections: SectionInput[]) => void
+  runBook: (bookTitle: string, chapters: readonly BookChapterInput[], region: string) => void
+  runPlan: (chapterKey: string, input: PlanInput) => void
   cancel: (key: string) => void
+  /** Downloads; each returns the filename for the status line. */
+  exportBook: (bookTitle: string, format: 'md' | 'json') => string
+  exportPlan: (chapterKey: string, format: 'md' | 'json') => string
 }
 
 /**
@@ -210,6 +223,27 @@ export function IdeaScreen({
     [sections, current, header.region],
   )
 
+  /**
+   * The book card's input: every prepared chapter of each book, in
+   * selection order, with its review and this session's Rubric 1 draft.
+   * Section inputs are rebuilt per chapter from the same gated html the
+   * current chapter's are. One entry per `attribution.bookTitle`.
+   */
+  const books = useMemo(() => {
+    const groups = new Map<string, BookChapterInput[]>()
+    for (const c of chapters) {
+      const k = reviewKeyOf(c.chapter)
+      const title = c.chapter.attribution.bookTitle
+      const sections: SectionInput[] = c.sections.map((s) => {
+        const html = auditedHtml(s)
+        return { sectionId: s.id, sectionTitle: s.title, chapterTitle: c.chapter.title, bookTitle: title, region: header.region, text: sectionText(html), images: imageInventory(s.id, html), metadata: metadataInventory(s.id, html) }
+      })
+      const entry: BookChapterInput = { chapterKey: k, chapterTitle: c.chapter.title, review: reviews.get(k) ?? newReview(), sections, ...(llm.rubricDrafts.get(k) ? { rubricDraft: llm.rubricDrafts.get(k)! } : {}) }
+      groups.set(title, [...(groups.get(title) ?? []), entry])
+    }
+    return groups
+  }, [chapters, reviews, llm.rubricDrafts, header.region])
+
   if (!current) {
     return <p className="text-sm text-neutral-700 dark:text-neutral-300">{IDEA_COPY.empty}</p>
   }
@@ -217,6 +251,24 @@ export function IdeaScreen({
   const firstRun = ![...llm.runs.values()].some((r) => r.status === 'done' || r.status === 'failed')
   const rubricRun = llm.runs.get(rubricRunKey(key)) ?? IDLE
   const rubricDraft = llm.rubricDrafts.get(key)
+  const bookTitle = current.chapter.attribution.bookTitle
+  const bookChapters = books.get(bookTitle) ?? []
+  const bookState = llm.runs.get(bookRunKey(bookTitle)) ?? IDLE
+  const planState = llm.runs.get(planRunKey(key)) ?? IDLE
+  /** This session's undecided drafts for this chapter, every category. */
+  const sessionDrafts: IdeaFinding[] = current.sections.flatMap((s) =>
+    [...llm.runs.entries()]
+      .filter(([k, r]) => k.startsWith(`${key}::${s.id}::`) && r.status === 'done')
+      .flatMap(([, r]) => (r.status === 'done' ? r.findings : []))
+      .filter((f) => !ruleKeys.has(f.key) && !chapterEdits.edits.has(f.key) && !chapterEdits.dismissed.has(f.key)),
+  )
+  const hasReview = Object.values(review.categories).some((c) => c.ratings.size > 0 || c.notes.trim() !== '')
+    || review.summary.trim() !== '' || review.suggestions.trim() !== ''
+  const canPlan = hasReview || applied.length > 0 || sessionDrafts.length > 0 || rubricDraft !== undefined
+  const planInput = (): PlanInput => ({
+    chapterTitle: current.chapter.title, bookTitle, licence: current.chapter.attribution.license?.name ?? 'not stated',
+    region: header.region, review, applied, drafts: sessionDrafts,
+  })
   const askModelFor = (category: DraftableCategory) => {
     const keys = current.sections.map((s) => runKey(key, s.id, category))
     const state = categoryRunState(keys.map((k) => llm.runs.get(k) ?? IDLE))
@@ -317,6 +369,19 @@ export function IdeaScreen({
     // the rubric on one side and the chapter on the other both want the room.
     <div className="flex w-full flex-col gap-4">
       <p className="m-0 text-sm text-neutral-700 dark:text-neutral-300">{IDEA_COPY.intro}</p>
+
+      {bookChapters.length >= 2 ? (
+        <BookPatterns
+          bookTitle={bookTitle} chapters={bookChapters} region={header.region} provider={provider} state={bookState}
+          stored={llm.bookDrafts.get(bookTitle)} firstRun={firstRun}
+          onSend={() => llm.runBook(bookTitle, bookChapters, header.region)}
+          onCancel={() => llm.cancel(bookRunKey(bookTitle))}
+          onExport={(format) => llm.exportBook(bookTitle, format)}
+          onAnnounce={setStatus}
+        />
+      ) : (
+        <p className="m-0 text-sm text-neutral-700 dark:text-neutral-300">{IDEA_COPY.llm.book.single}</p>
+      )}
 
       <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2 lg:items-start">
         <div className="flex min-w-0 flex-col gap-4">
@@ -522,6 +587,14 @@ export function IdeaScreen({
               onChange={(e) => dispatch({ type: 'suggestions', text: e.target.value })}
             />
           </fieldset>
+
+          <RevisionPlan
+            provider={provider} state={planState} stored={llm.planDrafts.get(key)} firstRun={firstRun} canPlan={canPlan}
+            onSend={() => llm.runPlan(key, planInput())}
+            onCancel={() => llm.cancel(planRunKey(key))}
+            onExport={(format) => llm.exportPlan(key, format)}
+            onAnnounce={setStatus}
+          />
 
           <p className="m-0 text-xs text-neutral-600 dark:text-neutral-400">
             {IDEA_COPY.attribution(FRAMEWORK_ATTRIBUTION.title, FRAMEWORK_ATTRIBUTION.author, FRAMEWORK_ATTRIBUTION.license.name)}{' '}

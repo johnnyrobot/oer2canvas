@@ -26,7 +26,7 @@ const compiled: CompiledChapter = { chapter, sections: [], queue: [] }
 const props = {
   reviews: new Map(), header: newHeader(), onEvent: () => {}, onHeaderEvent: () => {}, onForget: () => {}, onExport: () => 'x.md',
   edits: new Map(), pending: new Set<string>(), onEditEvent: () => {},
-  llm: { settings: undefined, onSave: () => {}, onForget: () => {}, runs: new Map(), rubricDrafts: new Map(), runCategory: () => {}, runRubric: () => {}, cancel: () => {} },
+  llm: { settings: undefined, onSave: () => {}, onForget: () => {}, runs: new Map(), rubricDrafts: new Map(), runCategory: () => {}, runRubric: () => {}, cancel: () => {}, bookDrafts: new Map(), planDrafts: new Map(), runBook: () => {}, runPlan: () => {}, exportBook: () => 'x.md', exportPlan: () => 'x.md' },
   image: { add: async () => true, busy: false, error: '' },
 }
 
@@ -44,4 +44,13 @@ test('a rating is a native radio whose checked state does not depend on colour',
   const style = getComputedStyle(label)
   // A border is what survives forced colours; a background does not.
   expect(parseFloat(style.borderTopWidth)).toBeGreaterThan(0)
+})
+
+test('a book-level draft is set apart by a dashed border, not a colour', () => {
+  const bookDrafts = new Map([['B', { draft: { summary: 's', areas: [], revisions: [] }, provider: 'Gemini', at: 1 }]])
+  const llm = { ...props.llm, settings: { provider: 'gemini' as const, key: 'k', model: 'm' }, bookDrafts }
+  render(<IdeaScreen chapters={[compiled, { ...compiled, chapter: { ...chapter, title: '5' } }]} {...props} llm={llm} />)
+  const card = screen.getByRole('region', { name: 'Across the chapters' })
+  const draft = card.querySelector('.b2c-idea-draft')!
+  expect(getComputedStyle(draft).borderTopStyle).toBe('dashed')
 })
