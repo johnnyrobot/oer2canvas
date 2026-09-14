@@ -10,6 +10,7 @@
  */
 import { useEffect, useId, useState } from 'react'
 import { Eye, EyeOff, ExternalLink } from 'lucide-react'
+import { CROSSWALK_ATTRIBUTION } from '../../engine/idea/framework'
 import { PROVIDERS, providerById, type ProviderId } from '../../engine/idea/llm/providers'
 import type { LlmSettings } from '../../engine/idea/llm/settings'
 import { IDEA_COPY } from './copy'
@@ -108,6 +109,13 @@ export function LlmSettingsPanel({
         <a href={current.termsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline">
           {c.terms(current.label)}<ExternalLink className="size-3" aria-hidden="true" /><span className="sr-only">({IDEA_COPY.opensNewTab})</span>
         </a>
+      </p>
+      <p className="m-0 text-xs">
+        {c.crosswalk.sentence}{' '}
+        <a href={CROSSWALK_ATTRIBUTION.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline">
+          <em>{c.crosswalk.link}</em><ExternalLink className="size-3" aria-hidden="true" /><span className="sr-only">({IDEA_COPY.opensNewTab})</span>
+        </a>{' '}
+        {c.crosswalk.licence}
       </p>
       {PROVIDERS.filter((p) => !p.offered).map((p) => (
         <p key={p.id} className="m-0 text-xs text-neutral-600 dark:text-neutral-400">

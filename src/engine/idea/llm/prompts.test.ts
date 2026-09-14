@@ -50,3 +50,9 @@ test('the rubric prompt asks for area / rows / notes over every category, naming
 test('sectionText flattens blocks and drops markup', () => {
   expect(sectionText('<p id="b2c-blk-0">One <em>two</em>.</p><ul><li id="x">Three</li></ul>')).toBe('One two.\n\nThree')
 })
+
+test('the system prompt names both documents and their licence', () => {
+  const sys = categoryPrompt('7.2', input)[0]!.content
+  expect(sys).toContain('Gen-AI Crosswalk Instructions')
+  expect(sys.match(/CC BY 4\.0/g)).toHaveLength(2)
+})

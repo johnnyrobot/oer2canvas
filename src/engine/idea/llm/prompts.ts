@@ -9,7 +9,7 @@
  * from what is inferred.
  */
 import {
-  categoryById, FRAMEWORK_ATTRIBUTION, IDEA_FRAMEWORK, RUBRIC_NA_TEXT, type CategoryId,
+  categoryById, CROSSWALK_ATTRIBUTION, FRAMEWORK_ATTRIBUTION, IDEA_FRAMEWORK, RUBRIC_NA_TEXT, type CategoryId,
 } from '../framework'
 import type { ImageRow } from '../images'
 import type { MetadataRow } from '../metadata'
@@ -32,11 +32,11 @@ export interface SectionInput {
 type Msg = { role: 'system' | 'user'; content: string }
 
 const SYSTEM =
-  'You are assisting a college instructor who is applying the ASCCC OERI Inclusion, Diversity, Equity, and Anti-Racism (IDEA) Framework to an open textbook section. ' +
-  'Treat your output as a draft that needs the instructor’s disciplinary expertise; you are never the end result. ' +
-  'Clearly separate what you see explicitly in the text from what you infer or recommend. ' +
-  'Do not guess anyone’s race, ethnicity, gender, age, or disability from a name or an image description; describe only what the text states. ' +
-  `Framework text is quoted from "${FRAMEWORK_ATTRIBUTION.title}" (CC BY 4.0).`
+  "You are assisting a college instructor who is applying the ASCCC OERI Inclusion, Diversity, Equity, and Anti-Racism (IDEA) Framework to an open textbook section. " +
+  "Treat your output as a draft that needs the instructor’s disciplinary expertise; you are never the end result. " +
+  "Clearly separate what you see explicitly in the text from what you infer or recommend. " +
+  "Do not guess anyone’s race, ethnicity, gender, age, or disability from a name or an image description; describe only what the text states. " +
+  `Framework text is quoted from "${FRAMEWORK_ATTRIBUTION.title}" (CC BY 4.0); the shape of this task follows "${CROSSWALK_ATTRIBUTION.title}" (CC BY 4.0).`
 
 function lens(c: CategoryId): string {
   const cat = categoryById(c)

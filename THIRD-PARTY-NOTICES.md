@@ -43,6 +43,16 @@ licensed CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). The text is v
 kept with its bullet) is recorded; element and row ids there are ours, stable, and never
 renumbered.
 
+The IDEA phase's model prompts follow the prompt shapes of the "ASCCC OERI IDEA Framework Gen-AI
+Crosswalk Instructions, April 2026" by the ASCCC Open Educational Resources Initiative
+(https://asccc-oeri.org/asccc-oeri-inclusion-diversity-equity-and-anti-racism-idea-audit-framework/),
+licensed CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). What is quoted: the per-area
+task wording of Appendix A (7.1–7.8, 7.7.1), the two Appendix B review shapes (single chapter,
+chapter-level patterns), Step 5's restorative planning chain, and the three Appendix C stance
+sentences (draft not result; separate seen from inferred; specify framework and role). The
+document is cited and linked in the app, not reproduced; the prompt text lives in
+`src/engine/idea/llm/prompts.ts`.
+
 Images added through the IDEA review are fetched from Wikimedia Commons or from sources indexed
 by Openverse under the licence each result declares (CC0, CC BY, CC BY-SA, or public domain).
 Each such image carries its own attribution in the page; this project reproduces the licence

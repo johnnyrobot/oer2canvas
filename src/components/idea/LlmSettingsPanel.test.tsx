@@ -43,3 +43,10 @@ test('a record that loads after mount fills the fields; forgetting empties them'
   rerender(<LlmSettingsPanel settings={undefined} onSave={vi.fn()} onForget={vi.fn()} />)
   expect(screen.getByLabelText('API key')).toHaveValue('')
 })
+
+test('the panel says the prompts follow the Crosswalk and links it in a new tab', () => {
+  render(<LlmSettingsPanel settings={undefined} onSave={vi.fn()} onForget={vi.fn()} />)
+  const link = screen.getByRole('link', { name: /IDEA Framework Gen-AI Crosswalk Instructions/ })
+  expect(link).toHaveAttribute('target', '_blank')
+  expect(screen.getByText(/Prompts follow OERI's/)).toBeInTheDocument()
+})

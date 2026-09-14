@@ -1,4 +1,4 @@
-import { FRAMEWORK_ATTRIBUTION, IDEA_CATEGORY_IDS, IDEA_FRAMEWORK, categoryById } from './framework'
+import { CROSSWALK_ATTRIBUTION, FRAMEWORK_ATTRIBUTION, IDEA_CATEGORY_IDS, IDEA_FRAMEWORK, categoryById } from './framework'
 
 test('the Framework has the eight categories in document order', () => {
   expect(IDEA_FRAMEWORK.map((c) => c.id)).toEqual(['7.1', '7.2', '7.3', '7.4', '7.5', '7.6', '7.7', '7.8'])
@@ -57,4 +57,10 @@ test('the attribution names the CC BY 4.0 licence', () => {
   expect(FRAMEWORK_ATTRIBUTION.license.name).toBe('CC BY 4.0')
   expect(FRAMEWORK_ATTRIBUTION.license.url).toMatch(/^https:\/\/creativecommons\.org\/licenses\/by\/4\.0/)
   expect(FRAMEWORK_ATTRIBUTION.url).toMatch(/^https:\/\/asccc-oeri\.org\//)
+})
+
+test('the Crosswalk is attributed beside the Framework, CC BY 4.0', () => {
+  expect(CROSSWALK_ATTRIBUTION.title).toBe('ASCCC OERI IDEA Framework Gen-AI Crosswalk Instructions, April 2026')
+  expect(CROSSWALK_ATTRIBUTION.license.name).toBe('CC BY 4.0')
+  expect(CROSSWALK_ATTRIBUTION.url).toMatch(/^https:\/\/asccc-oeri\.org\//)
 })

@@ -212,6 +212,11 @@ export const IDEA_COPY = {
       timeout: 'The provider did not answer in time.',
       aborted: 'Cancelled.',
     } as const,
+    crosswalk: {
+      sentence: "Prompts follow OERI's",
+      link: 'IDEA Framework Gen-AI Crosswalk Instructions',
+      licence: '(CC BY 4.0).',
+    },
     rubricDraft: {
       button: (label: string) => `Draft a Rubric 1 review with ${label}`,
       column: 'Model draft',

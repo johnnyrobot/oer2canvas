@@ -75,6 +75,19 @@ export const FRAMEWORK_ATTRIBUTION = {
   license: { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/' },
 } as const
 
+/**
+ * The method the model runs follow. Cited, not reproduced: the Framework is
+ * vendored because the assessor reads it while rating; the Crosswalk is a set
+ * of prompt shapes, quoted where a prompt uses them. The PDF carries no URL of
+ * its own; OERI publishes it from the Framework page.
+ */
+export const CROSSWALK_ATTRIBUTION = {
+  title: 'ASCCC OERI IDEA Framework Gen-AI Crosswalk Instructions, April 2026',
+  author: 'ASCCC Open Educational Resources Initiative',
+  url: 'https://asccc-oeri.org/asccc-oeri-inclusion-diversity-equity-and-anti-racism-idea-audit-framework/',
+  license: { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/' },
+} as const
+
 /** The "Not Applicable" box every Rubric 1 row carries. */
 export const RUBRIC_NA_TEXT = 'This category does not apply to this resource. Explain in notes.'
 /** Rubric 1's instructions for its two chapter-level free-text fields. */
