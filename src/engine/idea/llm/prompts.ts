@@ -13,7 +13,9 @@ import {
 } from '../framework'
 import type { ImageRow } from '../images'
 import type { MetadataRow } from '../metadata'
+import { RATING_LABEL, type IdeaReview } from '../review'
 import { blockElements } from '../text'
+import type { RubricDraft } from './parse'
 
 export type DraftableCategory = '7.1' | '7.2' | '7.3' | '7.4' | '7.5' | '7.6' | '7.7' | '7.7.1' | '7.8'
 /** The categories with an Ask-the-model zone — every one, since the Crosswalk has a prompt for each. 7.7.1 is a second button under 7.7, not a panel of its own. */
@@ -43,7 +45,7 @@ const SYSTEM =
   "Do not guess anyone’s race, ethnicity, gender, age, or disability from a name or an image description; describe only what the text states. " +
   `Framework text is quoted from "${FRAMEWORK_ATTRIBUTION.title}" (CC BY 4.0); the shape of this task follows "${CROSSWALK_ATTRIBUTION.title}" (CC BY 4.0).`
 
-function lens(c: CategoryId): string {
+export function lens(c: CategoryId): string {
   const cat = categoryById(c)
   return `FRAMEWORK CATEGORY ${cat.id} ${cat.title}\nRestorative requirements: ${cat.restorative}\nElements for consideration:\n${cat.elements.map((e) => `- ${e.text}`).join('\n')}` +
     (cat.resources.length ? `\nResources you may name (do not fetch): ${cat.resources.map((r) => `${r.label} <${r.url}>`).join('; ')}` : '')
@@ -98,7 +100,6 @@ export function categoryPrompt(category: DraftableCategory, input: SectionInput)
 
 export function rubricPrompt(chapterTitle: string, sections: SectionInput[]): Msg[] {
   const ids: CategoryId[] = ['7.1', '7.2', '7.3', '7.4', '7.5', '7.6', '7.7', '7.8']
-  const body = sections.map((s) => `## ${s.sectionTitle}\n${s.text}\n\nImages: ${s.images.map((r) => `alt="${r.alt ?? '(none)'}" caption="${r.caption ?? ''}"`).join(' | ') || '(none)'}`).join('\n\n')
   return [
     { role: 'system', content: SYSTEM },
     {
@@ -107,17 +108,71 @@ export function rubricPrompt(chapterTitle: string, sections: SectionInput[]): Ms
         `Chapter: ${chapterTitle}\n\nDraft a Rubric 1 review of this chapter using the IDEA Framework. For each row of each area, rate as one of: Not Applicable, Exclusive, Emerging Inclusive, Inclusive, and give notes per area that cite evidence from the text. The instructor will make the actual rating; yours is a draft.\n\n` +
         ids.map(lens).join('\n\n') +
         `\n\nRUBRIC 1 ROWS:\n${rubricRows()}\n\n` +
-        `CHAPTER TEXT:\n${body}\n\n` +
+        `CHAPTER TEXT:\n${sectionBody(sections)}\n\n` +
         'Respond with JSON only: {"areas": [{"area": string, "rows": [{"row": string, "rating": string}], "notes": string}]} with one entry per area 7.1 through 7.8, "area" beginning with the number, and one "rows" entry per row id listed above.',
     },
   ]
 }
 
+/** A chapter's sections as the rubric prompt sends them: text and image alt/captions. */
+export function sectionBody(sections: readonly SectionInput[]): string {
+  return sections.map((s) => `## ${s.sectionTitle}\n${s.text}\n\nImages: ${s.images.map((r) => `alt="${r.alt ?? '(none)'}" caption="${r.caption ?? ''}"`).join(' | ') || '(none)'}`).join('\n\n')
+}
+
 /** Every Rubric 1 row, quoted, so the model rates exactly what the assessor rates. */
-function rubricRows(): string {
+export function rubricRows(): string {
   return IDEA_FRAMEWORK.flatMap((c) => c.rows.map((r) =>
     `${r.id} (${c.rubricTitle}): Exclusive = "${r.exclusive}"; Emerging Inclusive = "${r.emerging}"; Inclusive = "${r.inclusive}"; Not Applicable = "${RUBRIC_NA_TEXT}"`,
   )).join('\n')
+}
+
+export interface BookChapterInput {
+  chapterKey: string
+  chapterTitle: string
+  review: IdeaReview
+  /** This session's Rubric 1 draft for the chapter, if any. */
+  rubricDraft?: RubricDraft
+  sections: SectionInput[]
+}
+
+const ALL_IDS: readonly CategoryId[] = ['7.1', '7.2', '7.3', '7.4', '7.5', '7.6', '7.7', '7.8']
+
+/** The instructor's ratings per row and notes per area, "not rated" stated rather than omitted. */
+function ratingsBlock(review: IdeaReview): string {
+  return IDEA_FRAMEWORK.map((c) => {
+    const r = review.categories[c.id]
+    const rows = c.rows.map((row) => `${row.id}: ${r.ratings.has(row.id) ? RATING_LABEL[r.ratings.get(row.id)!] : 'not rated'}`).join('; ')
+    return `${c.id} ${c.rubricTitle} — ${rows}${r.notes.trim() ? `\n  Notes: ${r.notes.trim()}` : ''}`
+  }).join('\n')
+}
+
+function draftBlock(draft: RubricDraft): string {
+  return draft.areas.map((a) => `${a.id} — ${a.rows.map((r) => `${r.id}: ${r.rating ? RATING_LABEL[r.rating] : 'no draft'}`).join('; ')}${a.notes ? `\n  Notes: ${a.notes}` : ''}`).join('\n')
+}
+
+/**
+ * Crosswalk Appendix B, "Full OER Review (chapter-level patterns)": one call
+ * over every prepared chapter of the book. Lenses and rows first, then each
+ * chapter's ratings, draft, and text in book order, then the task.
+ */
+export function bookPrompt(bookTitle: string, chapters: readonly BookChapterInput[], region: string): Msg[] {
+  const body = chapters.map((ch) =>
+    `# CHAPTER: ${ch.chapterTitle}\n\nINSTRUCTOR'S RUBRIC 1 RATINGS AND NOTES:\n${ratingsBlock(ch.review)}` +
+    (ch.rubricDraft ? `\n\nRUBRIC 1 DRAFT (model draft, unverified):\n${draftBlock(ch.rubricDraft)}` : '') +
+    `\n\nCHAPTER TEXT:\n${sectionBody(ch.sections)}`,
+  ).join('\n\n')
+  return [
+    { role: 'system', content: SYSTEM },
+    {
+      role: 'user',
+      content:
+        `Book: ${bookTitle}${region ? `\nRegion served: ${region}` : ''}\n\n` +
+        ALL_IDS.map(lens).join('\n\n') +
+        `\n\nRUBRIC 1 ROWS:\n${rubricRows()}\n\n${body}\n\n` +
+        'TASK:\nBased on the Rubric 1 evaluations above, summarize the chapter-level patterns across this book. Identify which elements of the IDEA Framework are consistently strong, which are inconsistently applied, and which are mostly unmet. Assess each area 7.1 through 7.8 for the book as a whole on the scale Not Applicable, Exclusive, Emerging Inclusive, Inclusive, with concrete and specific notes that cite chapters. Then suggest a prioritized list of revisions or supplements to move the book toward fuller compliance with Rubric 1. The instructor makes the actual ratings; yours is a draft.\n\n' +
+        'Respond with JSON only: {"summary": string, "areas": [{"area": string, "rating": string, "notes": string}], "revisions": [{"where": string, "revision": string, "rationale": string}]} with one "areas" entry per area 7.1 through 7.8, "area" beginning with the number, and "revisions" in priority order, "where" naming the chapter or section.',
+    },
+  ]
 }
 
 /** Block text, one blank line between blocks, no markup and no ids. */

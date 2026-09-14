@@ -6,6 +6,8 @@
  */
 import { complete } from './client'
 import { PROVIDERS } from './providers'
+import { bookPrompt } from './prompts'
+import { newReview } from '../review'
 
 const SENTINEL = 'sk-SENTINEL-do-not-leak-0123456789'
 
@@ -27,4 +29,12 @@ test('for every provider the sentinel appears only in the Authorization header',
     expect(headers.authorization).toBe(`Bearer ${SENTINEL}`)
     for (const [k, v] of Object.entries(headers)) if (k !== 'authorization') expect(v).not.toContain(SENTINEL)
   }
+})
+
+test('the book prompt is built without settings, so the sentinel cannot be in its body', async () => {
+  const msgs = bookPrompt('B', [{ chapterKey: 'k', chapterTitle: 'C', review: newReview(), sections: [] }], '')
+  expect(JSON.stringify(msgs)).not.toContain(SENTINEL)
+  const fetch = vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { content: '{}' } }] }), { status: 200 }))
+  await complete(PROVIDERS[0]!, { key: SENTINEL, model: 'm' }, msgs, new AbortController().signal, { fetch: fetch as unknown as typeof globalThis.fetch, timeoutMs: 180_000 })
+  expect(String((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].body)).not.toContain(SENTINEL)
 })

@@ -1,7 +1,8 @@
 import {
-  categoryPrompt, rubricPrompt, sectionText, DRAFTABLE, filesUnder, type SectionInput,
+  categoryPrompt, rubricPrompt, sectionText, bookPrompt, DRAFTABLE, filesUnder, type SectionInput,
 } from './prompts'
 import { categoryById } from '../framework'
+import { newReview, reduceReview } from '../review'
 
 const input: SectionInput = {
   sectionId: 's1', sectionTitle: '4.2 Nutrients', chapterTitle: '4: Nutrition', bookTitle: 'Biology',
@@ -108,4 +109,29 @@ test('7.7.1 sends headings and key blocks plus the section’s opening and closi
   expect(p).toMatch(/missing or lacking/)
   expect(filesUnder('7.7.1')).toBe('7.7')
   expect(filesUnder('7.2')).toBe('7.2')
+})
+
+test('the book prompt sends every chapter in order with ratings or "not rated", the model draft when there is one, and every section’s text', () => {
+  let rated = newReview()
+  rated = reduceReview(rated, { type: 'rate', categoryId: '7.6', rowId: '7.6.a', rating: 'emerging' })
+  rated = reduceReview(rated, { type: 'note', categoryId: '7.6', notes: 'two outdated terms' })
+  const chapters = [
+    { chapterKey: 'a', chapterTitle: '4: Nutrition', review: rated, sections: [input] },
+    { chapterKey: 'b', chapterTitle: '5: Digestion', review: newReview(), rubricDraft: { areas: [{ id: '7.1' as const, rows: [{ id: '7.1.a', rating: 'inclusive' as const }, { id: '7.1.b', rating: null }, { id: '7.1.c', rating: null }], notes: 'varied' }] }, sections: [{ ...input, sectionTitle: '5.1 Mouth', text: 'Saliva begins digestion.' }] },
+  ]
+  const p = bookPrompt('Human Biology', chapters, 'Central Valley').map((x) => x.content).join('\n')
+  expect(p.indexOf('4: Nutrition')).toBeLessThan(p.indexOf('5: Digestion'))
+  expect(p).toContain('7.6.a: Emerging Inclusive')
+  expect(p).toContain('two outdated terms')
+  expect(p).toContain('7.2.a: not rated')
+  expect(p).toMatch(/model draft, unverified/)
+  expect(p).toContain('7.1.a: Inclusive')
+  expect(p).toContain('Indian spices')
+  expect(p).toContain('Saliva begins digestion.')
+  expect(p).toContain('Region served: Central Valley')
+  expect(p).toMatch(/consistently strong/)
+  expect(p).toMatch(/"revisions"/)
+  // The lenses and rubric rows come first, as the rubric prompt sends them.
+  expect(p.indexOf('FRAMEWORK CATEGORY 7.1')).toBeLessThan(p.indexOf('4: Nutrition'))
+  expect(p).toContain('7.1.a (')
 })

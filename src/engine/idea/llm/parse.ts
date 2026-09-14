@@ -151,3 +151,27 @@ export function parseRubricResponse(text: string): RubricDraft {
     return { areas: [], raw: text }
   }
 }
+
+export interface BookDraft {
+  summary: string
+  /** One per area the model answered; unknown areas dropped, unreadable rating null. */
+  areas: { area: CategoryId; rating: Rating | null; notes: string }[]
+  /** In the model's priority order. */
+  revisions: { where: string; revision: string; rationale: string }[]
+}
+
+/**
+ * Unlike the category parsers this THROWS on non-JSON: there is no row to
+ * show a raw reply under, so the run fails with the client's "could not
+ * read the reply" state and the instructor sends again.
+ */
+export function parseBookResponse(text: string): BookDraft {
+  const j = extractJson(text) as { summary?: unknown; areas?: unknown; revisions?: unknown }
+  const areas = (Array.isArray(j.areas) ? j.areas : []).filter(isRecord).flatMap((x) => {
+    const m = /^(7\.[1-8])/.exec(str(x.area).trim())
+    return m ? [{ area: m[1] as CategoryId, rating: toRating(x.rating), notes: str(x.notes) }] : []
+  })
+  const revisions = (Array.isArray(j.revisions) ? j.revisions : []).filter(isRecord)
+    .map((x) => ({ where: str(x.where), revision: str(x.revision), rationale: str(x.rationale) }))
+  return { summary: str(j.summary), areas, revisions }
+}

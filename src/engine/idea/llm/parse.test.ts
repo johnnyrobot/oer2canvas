@@ -1,4 +1,4 @@
-import { draftsToFindings, parseCategoryResponse, parseRubricResponse } from './parse'
+import { draftsToFindings, parseBookResponse, parseCategoryResponse, parseRubricResponse } from './parse'
 
 test('a JSON response parses to items; a fenced one too', () => {
   const json = JSON.stringify({ summary: 'ok', items: [{ evidence: 'e', inference: 'i', suggestion: 's' }] })
@@ -87,4 +87,15 @@ test('7.7.1 drafts are observations filed under 7.7 with their own keys', () => 
   const f = draftsToFindings('7.7.1', 's1', '<p id="a">x</p>', { summary: 's', items: [{ evidence: 'e', inference: 'i', suggestion: 'add “redlining”', original: 'x', replacement: 'y' }] })
   expect(f.every((x) => x.category === '7.7' && x.kind === 'observation')).toBe(true)
   expect(f.map((x) => x.key)).toEqual(['s1::llm::7.7.1::summary', 's1::llm::7.7.1::0'])
+})
+
+test('the book parser is tolerant like the rubric parser and throws on prose', () => {
+  const ok = parseBookResponse(JSON.stringify({ summary: 's', areas: [{ area: '7.1 Illustrations', rating: 'Emerging Inclusive', notes: 'n' }, { area: '9.9', rating: 'Inclusive', notes: 'dropped' }, { area: '7.8', rating: 'meh', notes: 'c' }], revisions: [{ where: 'Ch 4', revision: 'r', rationale: 'why' }] }))
+  expect(ok.summary).toBe('s')
+  expect(ok.areas).toEqual([{ area: '7.1', rating: 'emerging', notes: 'n' }, { area: '7.8', rating: null, notes: 'c' }])
+  expect(ok.revisions).toEqual([{ where: 'Ch 4', revision: 'r', rationale: 'why' }])
+  const fenced = parseBookResponse('```json\n{"summary":"f","areas":[],"revisions":[]}\n```')
+  expect(fenced.summary).toBe('f')
+  expect(parseBookResponse('{"summary":"only"}')).toEqual({ summary: 'only', areas: [], revisions: [] })
+  expect(() => parseBookResponse('I think the book is fine.')).toThrow()
 })
