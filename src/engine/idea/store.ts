@@ -150,6 +150,7 @@ export function restore(value: unknown): {
     })
     const b = isRecord(value.header.benchmark) ? value.header.benchmark.bipocPercent : undefined
     if (typeof b === 'number') header = reduceHeader(header, { type: 'benchmark', bipocPercent: b })
+    if (typeof value.header.region === 'string') header = reduceHeader(header, { type: 'region', region: value.header.region })
   }
 
   const reviews = new Map<string, IdeaReview>()

@@ -51,7 +51,7 @@ test('the header is one per session, not per chapter', () => {
   expect(result.current.header.benchmark.bipocPercent).toBe(77)
   act(() => result.current.dispatchHeader({ type: 'assessor', assessor: { name: 'A. Lee' } }))
   act(() => result.current.dispatchHeader({ type: 'benchmark', bipocPercent: 62 }))
-  expect(result.current.header).toEqual({ assessor: { name: 'A. Lee', title: '', college: '' }, benchmark: { bipocPercent: 62 } })
+  expect(result.current.header).toEqual({ assessor: { name: 'A. Lee', title: '', college: '' }, benchmark: { bipocPercent: 62 }, region: '' })
 })
 
 test('a saved document is restored on mount', async () => {

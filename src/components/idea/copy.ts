@@ -38,6 +38,8 @@ export const IDEA_COPY = {
     name: 'Name',
     title: 'Title',
     college: 'College',
+    region: 'Region served',
+    regionHint: 'e.g. California Central Valley - used only to focus the model\'s suggestions. Not part of Rubric 1.',
   },
   benchmark: {
     label: 'BIPOC benchmark',

@@ -167,3 +167,14 @@ test('a document written before slice 5 restores with no assets', () => {
   const { assets: _drop, ...older } = toPersisted(newHeader(), new Map(), new Map())
   expect(restore(older)!.assets.size).toBe(0)
 })
+
+test('region round-trips; a document written before it existed restores as an empty string', () => {
+  let h = newHeader()
+  h = reduceHeader(h, { type: 'region', region: 'Inland Empire' })
+  const back = restore(toPersisted(h, new Map(), new Map()))!
+  expect(back.header.region).toBe('Inland Empire')
+  const old = restore({ version: 1, header: { assessor: { name: 'A', title: '', college: '' }, benchmark: { bipocPercent: 77 } }, reviews: new Map() })!
+  expect(old.header.region).toBe('')
+  const bad = restore({ version: 1, header: { region: 42 }, reviews: new Map() })!
+  expect(bad.header.region).toBe('')
+})

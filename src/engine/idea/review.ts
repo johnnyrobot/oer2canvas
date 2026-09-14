@@ -48,6 +48,12 @@ export interface IdeaHeader {
   assessor: Assessor
   /** Framework §9.0: 77% by default (CCCCO Data Mart, Fall 2022), adjustable per college. */
   benchmark: { bipocPercent: number }
+  /**
+   * Crosswalk 7.4's "[geographical region]": the area this course serves,
+   * free text, used only to focus the model's suggestions. Not a Rubric 1
+   * field, so it goes in no export header.
+   */
+  region: string
 }
 
 export interface CategoryReview {
@@ -80,6 +86,7 @@ export type IdeaReviewEvent =
 export type IdeaHeaderEvent =
   | { type: 'benchmark'; bipocPercent: number }
   | { type: 'assessor'; assessor: Partial<Assessor> }
+  | { type: 'region'; region: string }
 
 const emptyCategory = (): CategoryReview => ({ ratings: new Map(), notes: '', checklist: new Map() })
 
@@ -93,6 +100,7 @@ export function newHeader(): IdeaHeader {
   return {
     assessor: { name: '', title: '', college: '' },
     benchmark: { bipocPercent: DEFAULT_BIPOC_PERCENT },
+    region: '',
   }
 }
 
@@ -153,6 +161,8 @@ export function reduceHeader(header: IdeaHeader, event: IdeaHeaderEvent): IdeaHe
     }
     case 'assessor':
       return { ...header, assessor: { ...header.assessor, ...event.assessor } }
+    case 'region':
+      return { ...header, region: event.region }
   }
 }
 

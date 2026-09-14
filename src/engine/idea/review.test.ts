@@ -106,3 +106,12 @@ test('the reducers never mutate their input', () => {
   reduceHeader(header, { type: 'assessor', assessor: { name: 'x' } })
   expect(snap(header)).toBe(hsnap)
 })
+
+test('a new header has an empty region; the region event sets it and nothing else', () => {
+  const h = newHeader()
+  expect(h.region).toBe('')
+  const next = reduceHeader(h, { type: 'region', region: 'California Central Valley' })
+  expect(next.region).toBe('California Central Valley')
+  expect(next.assessor).toEqual(h.assessor)
+  expect(next.benchmark).toEqual(h.benchmark)
+})

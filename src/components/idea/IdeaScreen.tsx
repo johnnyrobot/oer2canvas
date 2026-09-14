@@ -359,6 +359,18 @@ export function IdeaScreen({
             </fieldset>
 
             <div className="flex flex-col gap-1">
+              <label htmlFor={`${ids}-region`} className="text-sm font-semibold">{IDEA_COPY.assessor.region}</label>
+              <input
+                id={`${ids}-region`}
+                type="text"
+                className={`${FIELD} ${TARGET} max-w-md`}
+                value={header.region}
+                onChange={(e) => onHeaderEvent({ type: 'region', region: e.target.value })}
+              />
+              <p className="m-0 text-xs text-neutral-600 dark:text-neutral-400">{IDEA_COPY.assessor.regionHint}</p>
+            </div>
+
+            <div className="flex flex-col gap-1">
               <label htmlFor={`${ids}-bench`} className="text-sm font-semibold">{IDEA_COPY.benchmark.label}</label>
               <div className="flex items-center gap-2">
                 <input

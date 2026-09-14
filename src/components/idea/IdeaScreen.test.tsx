@@ -317,3 +317,11 @@ test('a selection that goes from empty to prepared while the screen is mounted r
   view.rerender(<IdeaScreen {...props} chapters={[compiled('4: Nutrition')]} />)
   expect(screen.getByRole('heading', { name: '4: Nutrition' })).toBeInTheDocument()
 })
+
+test('the region field dispatches a region event and is not part of the assessor', () => {
+  const { onHeaderEvent } = renderScreen()
+  const field = screen.getByRole('textbox', { name: 'Region served' })
+  fireEvent.change(field, { target: { value: 'Central Valley' } })
+  expect(onHeaderEvent).toHaveBeenCalledWith({ type: 'region', region: 'Central Valley' })
+  expect(screen.getByText(/used only to focus the model/)).toBeInTheDocument()
+})
