@@ -187,3 +187,10 @@ test('a draft with a table column names the table in the plan prompt', () => {
   const p = planPrompt({ chapterTitle: 'Ch', bookTitle: 'B', licence: 'CC BY 4.0', region: '', review, applied: [], drafts }).map((x) => x.content).join('\n')
   expect(p).toContain('- [7.8] present: the Ohlone account — centred')
 })
+
+test('7.7 asks for both Crosswalk lists: missing or mislabeled terms, then concrete glossary entries, cross-references, and heading revisions', () => {
+  const p = categoryPrompt('7.7', input).map((x) => x.content).join('\n')
+  expect(p).toContain('"table": "missing" | "addition"')
+  expect(p).toContain('"kind"?: "glossary entry" | "cross-reference" | "heading revision"')
+  expect(p).toContain('discoverability')
+})
