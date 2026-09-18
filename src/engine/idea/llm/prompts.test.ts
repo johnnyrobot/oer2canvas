@@ -194,3 +194,9 @@ test('7.7 asks for both Crosswalk lists: missing or mislabeled terms, then concr
   expect(p).toContain('"kind"?: "glossary entry" | "cross-reference" | "heading revision"')
   expect(p).toContain('discoverability')
 })
+
+test('7.1 asks for an alternative image, alt text, or caption drawn from the named resources', () => {
+  const p = categoryPrompt('7.1', input).map((x) => x.content).join('\n')
+  expect(p).toContain('"alternative": string')
+  expect(p).toContain('resources listed above')
+})
