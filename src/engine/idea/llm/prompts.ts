@@ -91,7 +91,10 @@ const TASK: Record<DraftableCategory, (i: SectionInput) => string> = {
     const summaries = i.metadata.filter((m) => m.kind === 'heading' || m.kind === 'key-block')
     return `Evaluate this section's summaries and key concepts — the headings and key blocks below, and the section's opening and closing blocks — for whether they use the IDEA-related terms the section's content warrants. First, evaluate where important IDEA-related terms are used that connect to the specific elements of this section (put that in "summary"). Second, list summaries where IDEA-related terms are missing or lacking, and suggest terms that could be added based on the section's contents that would support a culturally-responsive review. Summaries are the publisher's structural text: suggest additions, do not rewrite.\n\nHEADINGS AND KEY BLOCKS:\n${summaries.map((m) => `- [${m.kind}] ${m.text}`).join('\n') || '(none)'}\n\nOPENING:\n${head || '(none)'}\n\nCLOSING:\n${tail || '(none)'}\n\n${ITEM_SHAPE}`
   },
-  '7.8': (i) => `Identify issues, events, and concepts in this text where perspectives of underrepresented groups are relevant, and whether they are present, balanced, and free of generalization.\n\nTEXT:\n${i.text}\n\n${ITEM_SHAPE}`,
+  '7.8': (i) =>
+    `Analyze how this text presents key issues, events, and concepts with relation to marginalized perspectives: do the authors incorporate the experiences of diverse populations where those may differ from the mainstream population? Produce two tables in one list. First, where such perspectives are missing: the place, the suggested change or addition, and the rationale. Second, where diverse perspectives and key issues are already discussed in relation to marginalized perspectives: the place and what is discussed.\n\nTEXT:\n${i.text}\n\n` +
+    'Respond with JSON only: {"summary": string, "items": [{"table": "missing" | "present", "where": string, "evidence": string, "inference": string, "suggestion": string, "rationale": string, "original"?: string, "replacement"?: string}]}. ' +
+    '"evidence" quotes the text exactly; for "present" rows "inference" is what is discussed and "suggestion" is empty. Include "original" and "replacement" ONLY when the suggestion is a direct wording substitution and "original" is copied verbatim from the text.',
 }
 
 export function categoryPrompt(category: DraftableCategory, input: SectionInput): Msg[] {
@@ -212,9 +215,11 @@ function draftLine(f: IdeaFinding): string {
   const c = f.columns
   const seen = c.evidence ?? c.summary ?? c.response
   const said = c.suggestion ?? c.inference
+  // A second Crosswalk table (7.7 additions, 7.8 present) is named so the plan does not read it as an issue.
+  const table = c.table ? `${c.table}: ` : ''
   // Model drafts carry evidence/suggestion; anything else is listed column by column so nothing is silently dropped.
   if (seen === undefined && said === undefined) return `- [${f.category}] ${Object.entries(c).map(([k, v]) => `${k}: ${v}`).join('; ')}`
-  return `- [${f.category}] ${seen ?? ''}${said ? ` — ${said}` : ''}`
+  return `- [${f.category}] ${table}${seen ?? ''}${said ? ` — ${said}` : ''}`
 }
 
 /**

@@ -5,6 +5,7 @@ import { categoryById } from '../framework'
 import { newReview, reduceReview } from '../review'
 import { ideaEditKey } from '../edits'
 import type { AppliedEdit } from '../applied'
+import type { IdeaFinding } from '../findings'
 
 const input: SectionInput = {
   sectionId: 's1', sectionTitle: '4.2 Nutrients', chapterTitle: '4: Nutrition', bookTitle: 'Biology',
@@ -168,4 +169,21 @@ test('a plan draft with no evidence/suggestion-like columns lists every column s
   ]
   const p = planPrompt({ chapterTitle: '4: Nutrition', bookTitle: 'Human Biology', licence: 'CC BY 4.0', region: '', review: newReview(), applied: [], drafts }).map((x) => x.content).join('\n')
   expect(p).toContain('text: his; alternative: their; context: p. 3')
+})
+
+test('7.8 asks for both Crosswalk tables: where perspectives are missing, and where they are already discussed', () => {
+  const p = categoryPrompt('7.8', input).map((x) => x.content).join('\n')
+  expect(p).toContain('"table": "missing" | "present"')
+  expect(p).toContain('rationale')
+  expect(p).toContain('already discussed')
+})
+
+test('a draft with a table column names the table in the plan prompt', () => {
+  const review = newReview()
+  const drafts: IdeaFinding[] = [{
+    kind: 'observation', key: 's1::llm::7.8::0', category: '7.8', sectionId: 's1', origin: 'draft',
+    columns: { table: 'present', where: 'para 4', evidence: 'the Ohlone account', inference: 'centred' },
+  }]
+  const p = planPrompt({ chapterTitle: 'Ch', bookTitle: 'B', licence: 'CC BY 4.0', region: '', review, applied: [], drafts }).map((x) => x.content).join('\n')
+  expect(p).toContain('- [7.8] present: the Ohlone account — centred')
 })

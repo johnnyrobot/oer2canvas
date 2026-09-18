@@ -112,6 +112,9 @@ export const IDEA_COPY = {
       decorative: 'Decorative',
       kind: 'Kind',
       detail: 'Detail',
+      table: 'Table',
+      where: 'Where',
+      rationale: 'Rationale',
     } as Readonly<Record<string, string>>,
   },
   applied: {
