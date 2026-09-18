@@ -87,6 +87,20 @@ when non-empty; never in any export header (it is not a Rubric 1 field).
 - `THIRD-PARTY-NOTICES.md` gains the Crosswalk entry beside the Framework's, stating what is
   quoted (its prompt shapes and stance sentences) and its licence.
 
+### 2.5 Second tables (added 2026-09-17)
+
+Three Appendix A prompts ask for two outputs; the first round asked for one.
+
+- **7.8**: a second table of where diverse perspectives are *already* discussed. Items carry
+  `table: "missing" | "present"`.
+- **7.7**: a second list of specific new glossary entries, cross-references, and heading revisions.
+  Items carry `table: "missing" | "addition"` and, for additions, `kind` and `text`.
+- **7.1**: each flagged image gets an `alternative` — an image source from the 7.1 resources, or
+  revised alt text or caption.
+
+No parser change: every string column is kept and rendered. `draftLine` names the table so the
+plan prompt does not read a "present" row as an issue.
+
 ## 3. Book-level review
 
 ### 3.1 Where

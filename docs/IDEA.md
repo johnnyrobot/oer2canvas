@@ -55,7 +55,9 @@ slice; the design is in `IDEA_REVIEW_SPEC.md`.
   nowhere else. No key ever transits the relay. Providers offered are those a browser origin was
   measured to reach directly (`docs/evidence/idea-llm-cors-2026-09-12.md`); a provider that fails
   that probe is not offered, and there is no relay fallback. What is sent is the section's block
-  text and its image and metadata inventories; for 7.1 only the image inventory. Every model
+  text and its image and metadata inventories; for 7.1 only the image inventory. Where the
+  Crosswalk asks for two tables (7.7's additions, 7.8's perspectives already present) both come
+  back as rows, the second marked *Table*. Every model
   output is `origin: 'draft'`; an item becomes an edit only when its quoted original is found
   verbatim in the section, and it then goes through the same edits map as a rule finding. The
   Rubric 1 draft is per row, rendered beside the human's radios, and cannot be copied into them;
