@@ -3,9 +3,6 @@
   "version": "1.0.0",
   "description": "Open textbook chapters into accessible Canvas pages",
   "type": "module",
-  "directories": {
-    "doc": "docs"
-  },
   "scripts": {
     "dev": "vite",
     "dev:relay": "wrangler dev",

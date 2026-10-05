@@ -5,8 +5,8 @@
  * IDEA reviews* leaves the key alone, and the copy says so.
  *
  * A provider the CORS probe failed is listed, disabled, with the sentence
- * that says why and a link to the measurement. Hiding it would leave the
- * user wondering why it is not there.
+ * that says why. Hiding it would leave the user wondering why it is not
+ * there.
  */
 import { useEffect, useId, useState } from 'react'
 import { Eye, EyeOff, ExternalLink } from 'lucide-react'
@@ -15,8 +15,6 @@ import { PROVIDERS, providerById, type ProviderId } from '../../engine/idea/llm/
 import type { LlmSettings } from '../../engine/idea/llm/settings'
 import { IDEA_COPY } from './copy'
 import { FIELD, TARGET } from './styles'
-
-const REPO = 'https://github.com/johnnyrobot/oer2canvas/blob/main/'
 
 export function LlmSettingsPanel({
   settings, onSave, onForget,
@@ -119,10 +117,7 @@ export function LlmSettingsPanel({
       </p>
       {PROVIDERS.filter((p) => !p.offered).map((p) => (
         <p key={p.id} className="m-0 text-xs text-neutral-600 dark:text-neutral-400">
-          {c.notOffered(p.label)}{' '}
-          <a href={`${REPO}${p.evidence}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline">
-            {c.evidence}<ExternalLink className="size-3" aria-hidden="true" /><span className="sr-only">({IDEA_COPY.opensNewTab})</span>
-          </a>
+          {c.notOffered(p.label)}
         </p>
       ))}
     </fieldset>

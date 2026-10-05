@@ -198,7 +198,6 @@ export const IDEA_COPY = {
     hideKey: 'Hide key',
     stored: 'Your key is stored in this browser on this device (not on any server) and stays until you choose Forget key. On a shared computer, forget it when you are done. Forget all IDEA reviews does not remove it.',
     notOffered: (label: string) => `${label} cannot be called from a browser directly, so it is not offered here.`,
-    evidence: 'measured',
     terms: (label: string) => `${label} terms`,
     none: 'No provider set. Add a key above to draft suggestions for this category, or use the checklist.',
     heading: 'Ask the model',

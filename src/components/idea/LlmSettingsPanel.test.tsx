@@ -25,7 +25,7 @@ test('says where the key is stored and offers Forget key when one is saved', () 
   expect(onForget).toHaveBeenCalled()
 })
 
-test('a provider that is not offered is listed as unavailable with the evidence link, and cannot be chosen', () => {
+test('a provider that is not offered is listed as unavailable and cannot be chosen', () => {
   const notOffered = PROVIDERS.find((p) => !p.offered)
   if (!notOffered) return // every provider passed the probe; nothing to assert
   render(<LlmSettingsPanel settings={undefined} onSave={vi.fn()} onForget={vi.fn()} />)

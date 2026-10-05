@@ -9,7 +9,7 @@
  * search returned.
  */
 import { createServer } from 'node:http'
-import { writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 
 const QUERY = 'students studying'
 const COMMONS = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(QUERY)}&gsrlimit=5&prop=imageinfo|categories&iiprop=url|extmetadata|size|mime&iiurlwidth=320&cllimit=50`
@@ -85,6 +85,7 @@ async function main() {
       '',
     ]
     const out = `docs/evidence/idea-image-api-${date}.md`
+    mkdirSync('docs/evidence', { recursive: true })
     writeFileSync(out, lines.join('\n'))
     console.log(lines.join('\n'))
     console.log(`\nwritten to ${out}`)

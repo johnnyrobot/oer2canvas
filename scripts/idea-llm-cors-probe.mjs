@@ -12,7 +12,7 @@
  * must never transit the server.
  */
 import { createServer } from 'node:http'
-import { writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 
 const PROVIDERS = [
   { id: 'gemini', label: 'Gemini AI Studio', url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', terms: 'https://ai.google.dev/gemini-api/terms' },
@@ -92,6 +92,7 @@ async function main() {
       '', 'Reproduce with `npm run verify:idea-llm-cors`. Update `src/engine/idea/llm/providers.ts` `offered` flags to match this table, and cite this file in the commit.', '',
     ]
     const out = `docs/evidence/idea-llm-cors-${date}.md`
+    mkdirSync('docs/evidence', { recursive: true })
     writeFileSync(out, lines.join('\n'))
     console.log(lines.join('\n'))
     console.log(`\nwritten to ${out}`)
